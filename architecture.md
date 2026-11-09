@@ -162,6 +162,11 @@ harness tanımında kalır.
 - Proje kapsamı bugün kapalı: iki sağlayıcı da `-g` alır, yani yalnız kullanıcı seviyesine yazar.
 - `status`/`plan` bir kurulumu yalnız sağlayıcının kendi envanteri doğruluyorsa "kurulu" sayar; `verify`
   tarifi olmayan sağlayıcıda `bilinmiyor` der ve plan öğeyi yeniden kurar.
+- `skill-lock` doğrulaması harness'e göre ayırmaz: lockfile'da hangi harness için kurulduğu yazmaz
+  (`~/.agents/.skill-lock.json`, öğe başına yalnız kaynak ve skill adı). `codex` için kurulmuş bir skill
+  `claude-code` için de `zaten kurulu` görünebilir; `~/.claude/skills/` ayrıca bakılmaz. Öğede `skill`
+  alanı yoksa kaynak repodan herhangi bir skill'in kayıtlı olması yeter (kısmi kurulum da "var" sayılır).
+  Lockfile konumu `$XDG_STATE_HOME` ile değişebilir; `verify` bunu okumaz.
 - Hook komutu değişirse eski girdi yerinde değiştirilir (kayıttaki `hookCommand` ile bulunur); komut elle
   değiştirilmişse eski girdi kalır — hook'lar harness şemasında kimlik taşımadığı için tek işaret bu.
 - Hook'ta `event`/`matcher`/`hookCommand` eksikse plan `error` der; config'e boş değer yazılmaz.

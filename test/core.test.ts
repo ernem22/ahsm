@@ -77,7 +77,7 @@ function fixture(): Data {
   };
 }
 
-function setup(home: string, results: Parameters<RecordingRunner['constructor']>[0] = []) {
+function setup(home: string, results: ConstructorParameters<typeof RecordingRunner>[0] = []) {
   const runner = new RecordingRunner([
     { code: 0, stdout: 'v22.1.0', stderr: '' },
     { code: 0, stdout: '', stderr: '' },
@@ -389,9 +389,9 @@ test('verify: MCP serverName tanımlıysa gerçekten o anahtara bakar', () => {
   const { ctx } = setup(home);
   fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { other: {} } }), 'utf8');
   const item = { ...data.items.get('mc')!, serverName: 'real-name' };
-  assert.equal(verifyInstalled(data.harnesses[0]!, item, data.providers[1], ctx), 'missing');
+  assert.equal(verifyInstalled(data.harnesses[0]!, item, data.providers.find((p) => p.id === 'add-mcp'), ctx), 'missing');
   fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { 'real-name': {} } }), 'utf8');
-  assert.equal(verifyInstalled(data.harnesses[0]!, item, data.providers[1], ctx), 'present');
+  assert.equal(verifyInstalled(data.harnesses[0]!, item, data.providers.find((p) => p.id === 'add-mcp'), ctx), 'present');
 });
 
 test('verify: skill adı verilmişse aynı repodan başka skill kanıt değildir', () => {
@@ -405,7 +405,7 @@ test('verify: skill adı verilmişse aynı repodan başka skill kanıt değildir
     'utf8',
   );
   const item = { ...data.items.get('sk')!, skill: 'wanted' };
-  assert.equal(verifyInstalled(data.harnesses[0]!, item, data.providers[0], ctx), 'missing');
+  assert.equal(verifyInstalled(data.harnesses[0]!, item, data.providers.find((p) => p.id === 'skills-cli'), ctx), 'missing');
 });
 
 test('plan: bilinmeyen platformda linux yükleyicisine düşmez', async () => {
@@ -422,7 +422,7 @@ test('plan: bilinmeyen platformda linux yükleyicisine düşmez', async () => {
 test('already: kayıt var ama skill-lock hedefte yoksa yeniden kurar', async () => {
   const home = tempHome();
   const data = fixture();
-  data.providers[0]!.verify = { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' };
+  data.providers.find((p) => p.id === 'skills-cli')!.verify = { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' };
   const { ctx } = setup(home);
 
   const installed = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
@@ -481,7 +481,7 @@ test('hook: eksik alan (matcher) sessizce boş yazılmaz, hata olur', async () =
 test('status: doğrulanabilen sağlayıcı için gerçeği söyler', async () => {
   const home = tempHome();
   const data = fixture();
-  data.providers[0]!.verify = { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' };
+  data.providers.find((p) => p.id === 'skills-cli')!.verify = { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' };
   const { ctx } = setup(home);
 
   await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk', 'mc'] }));
