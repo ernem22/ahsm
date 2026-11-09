@@ -50,7 +50,7 @@ export function readStatus(data: Data, ctx: Ctx): StatusReport {
       return { ...row, value: 'unknown' as const, detail: t.definitionMissing };
     }
     try {
-      const merged = mergeHook(readText(target.file), target.path, target.spec);
+      const merged = mergeHook(readText(target.file), target.path, target.spec, entry.hookCommand);
       return { ...row, value: merged.changed ? ('missing' as const) : ('up-to-date' as const) };
     } catch {
       return { ...row, value: 'unknown' as const, detail: t.hookTargetUnreadable };

@@ -6,7 +6,7 @@ import type { Data } from '../types.js';
 import type { Plan, PlanEntry } from './plan.js';
 import { entryDefs } from './entry.js';
 import { meetsRequirement } from './requirements.js';
-import { backupFile, readState, recordEntry } from './state.js';
+import { backupFile, readState, recordEntry, statePath } from './state.js';
 import { t } from '../i18n.js';
 
 export type ApplyStatus = 'ok' | 'already' | 'unsupported' | 'error';
@@ -74,6 +74,8 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
   const stored = readState(ctx);
   const warnings = stored.warning ? [stored.warning] : [];
   let state = stored.state;
+  // Recording over a damaged state.json would erase the user's history: keep a copy first (a failure aborts).
+  if (stored.damaged) backupFile(ctx, statePath(ctx));
 
   for (const entry of plan.entries) {
     const blocked = entryDefs(data, entry).provider?.requires?.find((id) => unmet.has(id));
@@ -83,6 +85,19 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       continue;
     }
     if (entry.action === 'already') {
+      // A hook found in place (written by hand or by an older run) still needs a record of its command,
+      // otherwise a later change cannot find and replace it.
+      const hookCommand = entry.hook?.target.spec.command;
+      const recorded = state.entries.find(
+        (candidate) => candidate.itemId === entry.itemId && candidate.harness === entry.harness,
+      );
+      if (hookCommand && recorded?.hookCommand !== hookCommand) {
+        state = recordEntry(ctx, state, {
+          ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId },
+          kind: entry.kind,
+          hookCommand,
+        });
+      }
       items.push({ entry, status: 'already' });
       continue;
     }

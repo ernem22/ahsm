@@ -9,6 +9,7 @@ import { detectHarnesses } from '../src/core/detect.js';
 import { buildPlan } from '../src/core/plan.js';
 import { readStatus } from '../src/core/status.js';
 import { readState, statePath } from '../src/core/state.js';
+import { verifyInstalled } from '../src/core/verify.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
 
@@ -275,21 +276,51 @@ test('bootstrap: yeniden kontrol min sürümü de uygular', async () => {
   assert.equal(outcome.items[0]?.status, 'error');
 });
 
-test('bozuk state.json sessizce sıfırlanmaz: yedeğe alınır ve uyarı döner', async () => {
+test('bozuk state.json: plan dosya yazmaz, apply ezmeden önce yedekler', async () => {
   const home = tempHome();
+  const data = fixture();
   const { ctx } = setup(home);
   fs.mkdirSync(path.join(home, '.agentenv'), { recursive: true });
   fs.writeFileSync(path.join(home, '.agentenv', 'state.json'), '{ bozuk', 'utf8');
+  const selection = { harnessIds: [HARNESS], itemIds: ['hk'] };
 
-  const plan = await buildPlan(fixture(), ctx, { harnessIds: [HARNESS], itemIds: ['hk'] });
+  const plan = await buildPlan(data, ctx, selection);
+  readStatus(data, ctx);
   assert.equal(plan.warnings.length, 1);
   assert.match(plan.warnings[0] ?? '', /state\.json/);
+  assert.equal(fs.existsSync(path.join(home, '.agentenv', 'backups')), false, 'plan/status yazmamalı');
+
+  await applyPlan(data, ctx, plan);
 
   const backups = fs.readdirSync(path.join(home, '.agentenv', 'backups'));
   assert.equal(backups.length, 1);
-  const saved = fs.readdirSync(path.join(home, '.agentenv', 'backups', backups[0]!));
-  assert.deepEqual(saved, ['state.json']);
   assert.equal(fs.readFileSync(path.join(home, '.agentenv', 'backups', backups[0]!, 'state.json'), 'utf8'), '{ bozuk');
+  assert.equal(readState(ctx).state.entries.length, 1);
+});
+
+test('verify: MCP serverName tanımlıysa gerçekten o anahtara bakar', () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { other: {} } }), 'utf8');
+  const item = { ...data.items.get('mc')!, serverName: 'real-name' };
+  assert.equal(verifyInstalled(data.harnesses[0]!, item, data.providers[1], ctx), 'missing');
+  fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { 'real-name': {} } }), 'utf8');
+  assert.equal(verifyInstalled(data.harnesses[0]!, item, data.providers[1], ctx), 'present');
+});
+
+test('verify: skill adı verilmişse aynı repodan başka skill kanıt değildir', () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  fs.mkdirSync(path.join(home, '.agents'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.agents', '.skill-lock.json'),
+    JSON.stringify({ skills: { other: { source: 'owner/repo' } } }),
+    'utf8',
+  );
+  const item = { ...data.items.get('sk')!, skill: 'wanted' };
+  assert.equal(verifyInstalled(data.harnesses[0]!, item, data.providers[0], ctx), 'missing');
 });
 
 test('plan: bilinmeyen platformda linux yükleyicisine düşmez', async () => {
@@ -383,4 +414,30 @@ test('status: doğrulanabilen sağlayıcı için gerçeği söyler', async () =>
 
   const after = readStatus(data, ctx).rows.map((row) => row.value);
   assert.deepEqual(after, ['up-to-date', 'up-to-date']);
+});
+
+test('hook elle yazılmışsa apply komutunu kaydeder; sonraki değişiklik eskisini yerinde değiştirir', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  const settings = path.join(home, '.claude', 'settings.json');
+  fs.writeFileSync(
+    settings,
+    JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo hi' }] }] } }),
+    'utf8',
+  );
+  const selection = { harnessIds: [HARNESS], itemIds: ['hk'] };
+
+  const first = await buildPlan(data, ctx, selection);
+  assert.equal(first.entries[0]?.action, 'already');
+  await applyPlan(data, ctx, first);
+  assert.equal(readState(ctx).state.entries[0]?.hookCommand, 'echo hi');
+
+  data.items.set('hk', { ...data.items.get('hk')!, hookCommand: 'echo new' });
+  assert.equal(readStatus(data, ctx).rows[0]?.value, 'missing');
+  await applyPlan(data, ctx, await buildPlan(data, ctx, selection));
+  const written = JSON.parse(fs.readFileSync(settings, 'utf8')) as {
+    hooks: { PreToolUse: { hooks: { command: string }[] }[] };
+  };
+  assert.deepEqual(written.hooks.PreToolUse.map((group) => group.hooks[0]?.command), ['echo new']);
 });

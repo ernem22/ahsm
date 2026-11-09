@@ -136,7 +136,7 @@ items: [emil-skills, context7, bash-log]
 1. **detect** — harness tanımlarındaki `detect` yolları; bulunanlar işaretli, bulunmayanlar soluk.
 2. **select** — paket seçilince öğeleri işaretli gelir; harness bazında ya da "hepsine". Çıktı:
    `(kind, öğe, harness)` üçlüleri.
-3. **plan** — her üçlü için sağlayıcı çözümlenir (`supports` içinde mi), komut/fark üretilir; kayıt varsa
+3. **plan** — her üçlü için sağlayıcı çözümlenir (`supports` içinde mi), komut (hook için yazılacak girdi) üretilir; kayıt varsa
    sağlayıcının `verify` tarifiyle gerçek kontrol edilir; eksik ön koşullar listelenir. Hiçbir şey yazılmaz.
 4. **bootstrap** — onaylanan ön koşullar platform komutuyla kurulur, sonra yeniden check.
 5. **apply** — yedek → sıralı uygulama → sonuç satırı (`kuruldu` / `zaten kurulu` / `kapsanmıyor` /
