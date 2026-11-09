@@ -26,8 +26,13 @@ export function sameCommand(a: string[] | undefined, b: string[] | undefined): b
   return a.every((part, index) => part === b[index]);
 }
 
-export function stateKey(itemId: string, harness: string): string {
+function stateKey(itemId: string, harness: string): string {
   return `${itemId}|${harness}`;
+}
+
+export function findEntry(state: State, itemId: string, harness: string): StateEntry | undefined {
+  const key = stateKey(itemId, harness);
+  return state.entries.find((entry) => stateKey(entry.itemId, entry.harness) === key);
 }
 
 export function stateDir(ctx: Ctx): string {

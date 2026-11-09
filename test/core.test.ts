@@ -8,7 +8,7 @@ import { applyPlan, exitCodeFor, type ApplyOutcome } from '../src/core/apply.js'
 import { detectHarnesses } from '../src/core/detect.js';
 import { buildPlan } from '../src/core/plan.js';
 import { readStatus } from '../src/core/status.js';
-import { readState, statePath } from '../src/core/state.js';
+import { findEntry, readState, statePath, type State } from '../src/core/state.js';
 import { verifyInstalled } from '../src/core/verify.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
@@ -574,4 +574,18 @@ test('exitCodeFor: failed item gives 1, warnings alone give 0', async () => {
   assert.equal(exitCodeFor(clean), 0);
   assert.equal(exitCodeFor({ ...clean, items: [...clean.items, { entry, status: 'error', message: 'x' }] }), 1);
   assert.equal(exitCodeFor({ ...clean, requirements: [{ id: 'node', ok: false }] }), 1);
+});
+
+test('findEntry matches on itemId and harness together and exposes the recorded hookCommand', () => {
+  const state: State = {
+    version: 1,
+    entries: [
+      { itemId: 'hk', kind: 'hook', harness: HARNESS, providerId: 'p', hookCommand: 'echo hi', at: 'now' },
+      { itemId: 'sk', kind: 'skill', harness: 'other', providerId: 'p', at: 'now' },
+    ],
+  };
+  assert.equal(findEntry(state, 'hk', HARNESS)?.hookCommand, 'echo hi');
+  assert.equal(findEntry(state, 'hk', 'other'), undefined);
+  assert.equal(findEntry(state, 'sk', HARNESS), undefined);
+  assert.equal(findEntry(state, 'nope', 'nope'), undefined);
 });

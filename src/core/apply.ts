@@ -6,7 +6,7 @@ import type { Data } from '../types.js';
 import type { Plan, PlanEntry } from './plan.js';
 import { entryDefs } from './entry.js';
 import { meetsRequirement } from './requirements.js';
-import { backupFile, readState, recordEntry, statePath } from './state.js';
+import { backupFile, findEntry, readState, recordEntry, statePath } from './state.js';
 import { t } from '../i18n.js';
 
 export type ApplyStatus = 'ok' | 'already' | 'unsupported' | 'error';
@@ -124,12 +124,10 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       // A hook found in place (written by hand or by an older run) still needs a record of its command,
       // otherwise a later change cannot find and replace it.
       const hookCommand = entry.hook?.target.spec.command;
-      const recorded = state.entries.find(
-        (candidate) => candidate.itemId === entry.itemId && candidate.harness === entry.harness,
-      );
+      const recorded = findEntry(state, entry.itemId, entry.harness);
       if (hookCommand && recorded?.hookCommand !== hookCommand) {
         record({
-          ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId },
+          ref: entry,
           kind: entry.kind,
           hookCommand,
         });
@@ -148,9 +146,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
 
     if (entry.hook) {
       const target = entry.hook.target;
-      const previous = state.entries.find(
-        (recorded) => recorded.itemId === entry.itemId && recorded.harness === entry.harness,
-      )?.hookCommand;
+      const previous = findEntry(state, entry.itemId, entry.harness)?.hookCommand;
       try {
         const merged = mergeHook(readText(target.file), target.path, target.spec, previous);
         if (!merged.changed) {
@@ -161,7 +157,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
         fs.mkdirSync(path.dirname(target.file), { recursive: true });
         fs.writeFileSync(target.file, merged.text, 'utf8');
         record({
-          ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId },
+          ref: entry,
           kind: entry.kind,
           hookCommand: target.spec.command,
         });
@@ -184,7 +180,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
     const result = await ctx.runner.run(entry.command);
     if (result.code === 0) {
       record({
-        ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId },
+        ref: entry,
         kind: entry.kind,
         command: entry.command,
       });

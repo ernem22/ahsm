@@ -5,7 +5,7 @@ import { t } from '../i18n.js';
 import type { Data, ItemDef, Kind, ProviderDef, Selection } from '../types.js';
 import { meetsRequirement } from './requirements.js';
 import { verifyInstalled } from './verify.js';
-import { readState, sameCommand, stateKey } from './state.js';
+import { findEntry, readState, sameCommand } from './state.js';
 
 export type PlanAction = 'run' | 'already' | 'unsupported' | 'error';
 
@@ -93,9 +93,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
           entries.push({ ...base, action: 'error', reason: t.hookItemIncomplete(itemId) });
           continue;
         }
-        const previous = state.entries.find(
-          (entry) => stateKey(entry.itemId, entry.harness) === stateKey(itemId, harnessId),
-        )?.hookCommand;
+        const previous = findEntry(state, itemId, harnessId)?.hookCommand;
         try {
           const merged = mergeHook(readText(target.file), target.path, target.spec, previous);
           entries.push({
@@ -122,7 +120,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
         harness: harness.id,
         item: item.id,
       });
-      const recorded = state.entries.find((entry) => stateKey(entry.itemId, entry.harness) === stateKey(itemId, harnessId));
+      const recorded = findEntry(state, itemId, harnessId);
       const matchesRecord = Boolean(recorded && sameCommand(recorded.command, command));
 
       // A record is not evidence: if the owner says it is gone, install it again.
