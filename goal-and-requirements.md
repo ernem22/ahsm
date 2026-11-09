@@ -35,7 +35,7 @@ sunucusu veya hook için dosyalar elle düzenleniyor. İki sonuç doğuyor:
 ## Capabilities
 
 - **Öğe kataloğu.** Her öğe bir kaynak tanımıdır — skills için git deposu/URL (istenirse tek skill
-  adıyla), MCP için sunucu paketi ve config şablonu, hook için dosya ve bağlama biçimi. Yanında ad,
+  adıyla), MCP için sunucu paketi ve config şablonu, hook için olay + eşleşme + komut. Yanında ad,
   hedef harness'lar, kısa not ve istenirse link bulunur.
 - **Paketler.** İsimli öğe listeleri tek bir YAML dosyasında tanımlanır; her paketin kendi notu ve
   linki olabilir. TUI'de paket seçildiğinde içeriği işaretli gelir, kullanıcı tek tek değiştirebilir.
@@ -56,9 +56,9 @@ sunucusu veya hook için dosyalar elle düzenleniyor. İki sonuç doğuyor:
   referansı ve gerekli değişken adları plan çıktısında görünür.
 - **Kaldırma.** Kurulan öğeler geri alınabilir: skills için `npx skills remove`, MCP/hook için agentenv'in
   kaydına dayanan geri alma. *(varsayım — ilk sürüm kapsamı sorusu atlandı)*
-- **Durum.** Kurulu öğelerin harness + kapsam haritası tek komutla görülebilir. Niyet kaydı ile
-  sağlayıcıların raporladığı gerçek karşılaştırılır: `güncel` / `farklı` / `eksik` / `bilinmiyor`; bekleyen
-  güncellemeler görünür.
+- **Durum.** Kurulu öğelerin harness + kapsam haritası tek komutla görülebilir. Kayıt ile
+  doğrulanabilen gerçek karşılaştırılır: `güncel` / `eksik` / `bilinmiyor`. Üç durum yeter: kayıtlı ama
+  içeriği değişmiş hook da `eksik` sayılır, doğrulanamayan skills/MCP `bilinmiyor` der.
 - **Sırlar.** MCP config'ine düz anahtar yazılmaz; `${ENV_VAR}` referansı yazılır ve TUI hangi
   değişkenin gerektiğini söyler.
 - **Genişletilebilirlik.** Yeni bir harness, yeni bir kapsam (ör. proje seviyesi) veya yeni bir öğe türü

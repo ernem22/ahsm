@@ -1,10 +1,11 @@
 import { expandPath, type Ctx } from '../context.js';
 import type { HarnessDef, ItemDef, ProviderDef } from '../types.js';
-import type { HookSpec } from './hook-merger.js';
+import { sectionPath, type HookSpec } from './hook-merger.js';
 
 export interface HookTarget {
   file: string;
-  section: string;
+  /** Edit path inside the file, e.g. `['hooks', 'PreToolUse']`. */
+  path: string[];
   spec: HookSpec;
 }
 
@@ -18,11 +19,11 @@ export function hookTarget(
   item: ItemDef,
   ctx: Ctx,
 ): HookTarget | undefined {
-  const sectionTemplate = harness.hooks?.section ?? provider?.writes?.section;
-  if (!sectionTemplate) return undefined;
+  const template = harness.hooks?.section ?? provider?.writes?.section;
+  if (!template) return undefined;
   return {
     file: expandPath(harness.hooks?.path ?? harness.config.path, ctx.home),
-    section: sectionTemplate.replace('{event}', item.event ?? ''),
+    path: sectionPath(template, item.event ?? ''),
     spec: {
       event: item.event ?? '',
       matcher: item.matcher ?? '',

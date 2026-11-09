@@ -5,6 +5,7 @@ import { detectHarnesses } from '../core/detect.js';
 import { buildPlan, type Plan } from '../core/plan.js';
 import { applyPlan, type ApplyOutcome } from '../core/apply.js';
 import { t } from '../i18n.js';
+import { outcomeLines, planLines, toneColor } from '../render.js';
 import type { Data } from '../types.js';
 
 type Step = 'harness' | 'packages' | 'items' | 'planning' | 'plan' | 'applying' | 'done';
@@ -97,6 +98,11 @@ export function App({ data, ctx }: Props): React.ReactElement {
           });
         }
       }
+      if (input === 'a') {
+        setSelectedHarnesses((previous) =>
+          previous.size === harnesses.length ? new Set() : new Set(harnesses.map((harness) => harness.def.id)),
+        );
+      }
       if (key.return && selectedHarnesses.size > 0) setStep('packages');
       return;
     }
@@ -134,7 +140,12 @@ export function App({ data, ctx }: Props): React.ReactElement {
   });
 
   const targetLine =
-    detected.length > 0 ? detected.map((harness) => harness.def.label ?? harness.def.id).join(', ') : t.noHarness;
+    selectedHarnesses.size > 0
+      ? harnesses
+          .filter((harness) => selectedHarnesses.has(harness.def.id))
+          .map((harness) => harness.def.label ?? harness.def.id)
+          .join(', ')
+      : t.noHarness;
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -195,25 +206,9 @@ export function App({ data, ctx }: Props): React.ReactElement {
       {step === 'plan' && plan && (
         <Box flexDirection="column" marginTop={1}>
           <Text bold>{t.planTitle}</Text>
-          {plan.entries.map((entry) => (
-            <Box key={`${entry.itemId}-${entry.harness}`} flexDirection="column">
-              <Text>{`${t.planActions[entry.action]}  ${entry.itemId} → ${entry.harness}`}</Text>
-              {entry.command ? <Text dimColor>{`    ${entry.command.join(' ')}`}</Text> : null}
-              {entry.writes ? <Text dimColor>{`    ${t.writePrefix}: ${entry.writes}`}</Text> : null}
-              {entry.adds ? <Text dimColor>{`    ${t.hookEntry}: ${entry.adds}`}</Text> : null}
-              {entry.reason ? <Text dimColor>{`    ${entry.reason}`}</Text> : null}
-            </Box>
-          ))}
-          {plan.requirements.map((requirement) => (
-            <Text key={requirement.id} color={requirement.present ? undefined : 'yellow'}>
-              {`${requirement.present ? t.ready : t.missing}  ${t.requirement} ${requirement.id}${
-                !requirement.present && requirement.installCommand ? ` → ${requirement.installCommand.join(' ')}` : ''
-              }`}
-            </Text>
-          ))}
-          {plan.warnings.map((warning) => (
-            <Text key={warning} color="yellow">
-              {warning}
+          {planLines(plan).map((line, index) => (
+            <Text key={index} color={toneColor(line.tone)} dimColor={line.tone === 'dim'}>
+              {line.text}
             </Text>
           ))}
           <Text dimColor>{t.keysPlan.join(' · ')}</Text>
@@ -225,16 +220,9 @@ export function App({ data, ctx }: Props): React.ReactElement {
       {step === 'done' && (
         <Box flexDirection="column" marginTop={1}>
           <Text bold>{t.resultTitle}</Text>
-          {outcome?.requirements
-            .filter((requirement) => !requirement.ok)
-            .map((requirement) => (
-              <Text key={requirement.id} color="red">{`${t.requirement} ${requirement.id}: ${requirement.message ?? t.missing}`}</Text>
-            ))}
-          {outcome?.items.map((result) => (
-            <Text key={`${result.entry.itemId}-${result.entry.harness}`} color={result.status === 'error' ? 'red' : undefined}>
-              {`${t.applyLabels[result.status]}  ${result.entry.itemId} → ${result.entry.harness}${
-                result.message ? ` (${result.message})` : ''
-              }`}
+          {(outcome ? outcomeLines(outcome) : []).map((line, index) => (
+            <Text key={index} color={toneColor(line.tone)}>
+              {line.text}
             </Text>
           ))}
           {error ? <Text color="red">{error}</Text> : null}

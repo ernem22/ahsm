@@ -1,5 +1,6 @@
 import type { ApplyStatus } from './core/apply.js';
 import type { PlanAction } from './core/plan.js';
+import type { StatusValue } from './core/status.js';
 
 /**
  * All user-facing strings live here, in English. Swapping in another locale means adding a second
@@ -16,7 +17,7 @@ export const t = {
   applying: 'applying…',
   harnesses: 'harnesses',
   notDetected: 'not detected',
-  keysHarness: ['↑/↓ move', 'space toggle', 'Enter next', 'q quit'] as string[],
+  keysHarness: ['↑/↓ move', 'space toggle', 'a all', 'Enter next', 'q quit'] as string[],
   keysPackages: [
     '↑/↓ move',
     'Enter open package',
@@ -42,7 +43,7 @@ export const t = {
     'up-to-date': 'up-to-date',
     missing: 'missing',
     unknown: 'unknown',
-  } as Record<string, string>,
+  } as Record<StatusValue, string>,
   applyLabels: {
     ok: 'installed',
     already: 'already installed',
@@ -64,6 +65,8 @@ export const t = {
   unknownRequirement: (id: string) => `unknown requirement: ${id}`,
   requirementFailed: (id: string, message: string) => `requirement ${id}: ${message}`,
   requirementUnmet: (id: string) => `requirement not met: ${id}`,
+  exitCode: (code: number) => `exit code ${code}`,
+  emptyCommand: 'empty command name',
   hookTargetMissing: 'hook target could not be resolved',
   hookTargetUnreadable: 'target file is not readable JSONC — nothing was written',
   commandMissing: 'command could not be built',
@@ -71,9 +74,11 @@ export const t = {
   recordedInstalled: 'recorded as installed',
   providerOwns: 'provider owns this',
   help: [
-    'agentenv                      TUI (pick a package, review, install)',
-    'agentenv plan [--package id]  print the plan only',
-    'agentenv apply --yes          apply the plan',
-    'agentenv status               show what is installed',
+    'agentenv                              TUI (pick harnesses and a package, review, install)',
+    'agentenv plan [--package id]          print the plan only',
+    'agentenv apply --yes [--package id]   apply the plan',
+    'agentenv status                       show what is installed',
+    '',
+    'flags: --package <id> (default: the package marked default) · --harness <id,id>',
   ],
 };

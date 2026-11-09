@@ -1,8 +1,9 @@
 import { expandArgs, type Ctx } from '../context.js';
-import { HookConfigError, mergeHook, readText } from '../apply/hook-merger.js';
-import { hookTarget } from '../apply/hook-target.js';
-import type { Data, ItemDef, Kind, ProviderDef, Selection } from '../types.js';
+import { HookConfigError, mergeHook, readText, type HookEntry } from '../apply/hook-merger.js';
+import { hookTarget, type HookTarget } from '../apply/hook-target.js';
 import { t } from '../i18n.js';
+import type { Data, ItemDef, Kind, ProviderDef, Selection } from '../types.js';
+import { meetsRequirement } from './requirements.js';
 import { readState, sameCommand, stateKey } from './state.js';
 
 export type PlanAction = 'run' | 'already' | 'unsupported' | 'error';
@@ -14,10 +15,8 @@ export interface PlanEntry {
   providerId?: string;
   action: PlanAction;
   command?: string[];
-  /** Human description of a config write (hooks). */
-  writes?: string;
-  /** The exact entry a hook write adds, so the plan can be reviewed before approval. */
-  adds?: string;
+  /** Present when this entry writes a hook into a config file. */
+  hook?: { target: HookTarget; entry: HookEntry };
   note?: string;
   reason?: string;
 }
@@ -43,21 +42,6 @@ export function pickProvider(data: Data, kind: Kind, harnessId: string): Provide
   return data.providers
     .filter((provider) => provider.kind === kind && provider.supports.includes(harnessId))
     .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))[0];
-}
-
-function parseVersion(output: string): string | undefined {
-  return output.match(/(\d+)\.(\d+)(?:\.(\d+))?/)?.[0];
-}
-
-function satisfies(found: string, min: string): boolean {
-  const a = found.split('.').map(Number);
-  const b = min.split('.').map(Number);
-  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
-    const left = a[i] ?? 0;
-    const right = b[i] ?? 0;
-    if (left !== right) return left > right;
-  }
-  return true;
 }
 
 /**
@@ -107,19 +91,17 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
           continue;
         }
         try {
-          const merged = mergeHook(readText(target.file), target.section, target.spec);
+          const merged = mergeHook(readText(target.file), target.path, target.spec);
           entries.push({
             ...base,
             action: merged.changed ? 'run' : 'already',
-            writes: `${target.file} → ${target.section}`,
-            adds: JSON.stringify(merged.entry),
+            hook: { target, entry: merged.entry },
             reason: merged.changed ? undefined : t.hookAlready,
           });
         } catch (error) {
           entries.push({
             ...base,
             action: 'error',
-            writes: target.file,
             reason: error instanceof HookConfigError ? t.hookTargetUnreadable : String(error),
           });
         }
@@ -158,10 +140,11 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
       continue;
     }
     const result = await ctx.runner.run(def.check.command);
-    const found = parseVersion(`${result.stdout}${result.stderr}`);
-    const present = result.code === 0 && (!def.check.min || (found !== undefined && satisfies(found, def.check.min)));
-    const installCommand = def.install[ctx.platform] ?? def.install.linux;
-    requirements.push({ id, present, installCommand });
+    requirements.push({
+      id,
+      present: meetsRequirement(def, result),
+      installCommand: def.install[ctx.platform] ?? def.install.linux,
+    });
   }
 
   return { selection, entries, requirements, warnings };

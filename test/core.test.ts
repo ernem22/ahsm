@@ -103,8 +103,9 @@ test('plan: her öğe için sağlayıcı ve komut üretir, {skill} boşsa düşe
   assert.deepEqual(plan.entries[0]?.command, ['npx', 'skills', 'add', 'owner/repo', '-g', '-a', HARNESS]);
   assert.deepEqual(plan.entries[1]?.command, ['npx', 'add-mcp', 'https://mcp.example.com', '-a', HARNESS]);
   assert.equal(plan.entries[2]?.action, 'run');
-  assert.match(plan.entries[2]?.adds ?? '', /"matcher":"Bash"/);
-  assert.match(plan.entries[2]?.adds ?? '', /echo hi/);
+  const added = JSON.stringify(plan.entries[2]?.hook?.entry ?? {});
+  assert.match(added, /"matcher":"Bash"/);
+  assert.match(added, /echo hi/);
   assert.equal(plan.requirements[0]?.present, true);
 });
 
@@ -236,4 +237,23 @@ test('bootstrap: kurulumdan sonra hâlâ eksikse bağımlı öğe çalıştırı
     ['install-node'],
     ['node', '--version'],
   ]);
+});
+
+test('bootstrap: yeniden kontrol min sürümü de uygular', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const runner = new RecordingRunner([
+    { code: 0, stdout: 'v18.4.0', stderr: '' },
+    { code: 0, stdout: '', stderr: '' },
+    { code: 0, stdout: 'v18.4.0', stderr: '' },
+  ]);
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  assert.equal(plan.requirements[0]?.present, false);
+
+  const outcome = await applyPlan(data, ctx, plan);
+
+  assert.equal(outcome.requirements[0]?.ok, false);
+  assert.equal(outcome.items[0]?.status, 'error');
 });

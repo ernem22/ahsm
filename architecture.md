@@ -56,7 +56,7 @@ id: skills-cli
 kind: skill
 supports: [claude-code, codex, opencode, pi]      # npx skills agent adları
 requires: [node]
-check:   [npx, skills, list, -g]
+priority: 10                                      # aynı tür için birden fazla sağlayıcı varsa sıra
 install: [npx, skills, add, "{source}", -g, -a, "{agentId}", -y, "--skill {skill}"]
 remove:  [npx, skills, remove, -g, -a, "{agentId}", "{skill}"]
 update:  [npx, skills, update, "{skill}"]
@@ -95,7 +95,8 @@ install:
 Komutlar **argv dizisi** olarak yazılır; bir elemanın `{değişken}`i boşsa o eleman düşer (ör. `skill`
 tanımlı değilse `--skill {skill}` hiç eklenmez). Öğe tanımları: `kind`, kaynak alanı (`source`+`skill` /
 `package` ya da `url` / `event`+`matcher`+`hookCommand`), `targets`, `note`, `link`. Paketler:
-`id`, `items[]`, `note`, `link` — hepsi tek nesne, dosya başına bir tanım.
+`id`, `items[]`, `note`, `link`, isteğe bağlı `default: true` (kimse paket adı vermezse o kurulur) — hepsi
+tek nesne, dosya başına bir tanım.
 
 ```yaml
 # harnesses/claude-code.yaml
@@ -154,5 +155,7 @@ harness tanımında kalır.
 - Hook birleştirme yalnız JSONC hedefler için yazıldı; başka bir biçim gerekirse `hook-merger`'a yeni bir
   biçim eklenir, çekirdek değişmez.
 - MCP sırları (`${VAR}` → `add-mcp --env KEY=${VAR}`) henüz uygulanmadı; öğe tanımında env alanı yok.
+- `status` üç durum bilir (`güncel` / `eksik` / `bilinmiyor`); kayıtlı ama komutu değişmiş hook `eksik`
+  sayılır — ayrı bir "farklı" durumu yok.
 - Dosya erişimi `Ctx` üzerinden enjekte edilmiyor: `plan` hedef dosyayı okuyor, testler geçici HOME ile
   bunu gerçek dosya sistemi üzerinden doğruluyor.

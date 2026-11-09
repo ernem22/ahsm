@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Ctx } from '../context.js';
 import { HookConfigError, mergeHook, readText } from '../apply/hook-merger.js';
-import { hookTarget } from '../apply/hook-target.js';
 import type { Data } from '../types.js';
 import type { Plan, PlanEntry } from './plan.js';
+import { meetsRequirement } from './requirements.js';
 import { backupFile, readState, recordEntry } from './state.js';
 import { t } from '../i18n.js';
 
@@ -63,7 +63,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
     // An installer (winget/brew/apt) does not touch this process's PATH: re-check before relying on it.
     const def = data.requires.find((candidate) => candidate.id === requirement.id);
     const recheck = def ? await ctx.runner.run(def.check.command) : undefined;
-    const ok = recheck !== undefined && recheck.code === 0;
+    const ok = def !== undefined && meetsRequirement(def, recheck);
     requirements.push({ id: requirement.id, ok, message: ok ? undefined : t.requirementUnmet(requirement.id) });
     if (!ok) unmet.add(requirement.id);
   }
@@ -93,17 +93,10 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       continue;
     }
 
-    if (entry.writes) {
-      const harness = data.harnesses.find((candidate) => candidate.id === entry.harness);
-      const provider = data.providers.find((candidate) => candidate.id === entry.providerId);
-      const item = data.items.get(entry.itemId);
-      const target = harness && item ? hookTarget(harness, provider, item, ctx) : undefined;
-      if (!target) {
-        items.push({ entry, status: 'error', message: t.hookTargetMissing });
-        continue;
-      }
+    if (entry.hook) {
+      const target = entry.hook.target;
       try {
-        const merged = mergeHook(readText(target.file), target.section, target.spec);
+        const merged = mergeHook(readText(target.file), target.path, target.spec);
         if (!merged.changed) {
           items.push({ entry, status: 'already' });
           continue;
@@ -144,7 +137,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       });
       items.push({ entry, status: 'ok' });
     } else {
-      items.push({ entry, status: 'error', message: tailLine(result.stderr, `exit code ${result.code}`) });
+      items.push({ entry, status: 'error', message: tailLine(result.stderr, t.exitCode(result.code)) });
     }
   }
 

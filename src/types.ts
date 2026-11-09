@@ -18,7 +18,6 @@ export interface ProviderDef {
   requires?: string[];
   priority?: number;
   /** argv templates; `{placeholder}` values come from the item/harness. */
-  check?: string[];
   install: string[];
   remove?: string[];
   update?: string[];

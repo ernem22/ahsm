@@ -22,29 +22,25 @@ export interface StatusRow {
 export function readStatus(data: Data, ctx: Ctx): StatusRow[] {
   const state = readState(ctx);
   return state.entries.map((entry) => {
-    if (entry.kind !== 'hook') {
-      return { itemId: entry.itemId, harness: entry.harness, kind: entry.kind, value: 'unknown' as const, detail: t.providerOwns };
-    }
+    const row = { itemId: entry.itemId, harness: entry.harness, kind: entry.kind };
     const harness = data.harnesses.find((candidate) => candidate.id === entry.harness);
     const provider = data.providers.find((candidate) => candidate.id === entry.providerId);
     const item = data.items.get(entry.itemId);
+
+    // A provider that writes config itself can be verified; a delegated one cannot, so we say so.
     if (!harness || !provider?.writes || !item) {
-      return { itemId: entry.itemId, harness: entry.harness, kind: entry.kind, value: 'unknown' as const, detail: t.definitionMissing };
+      return { ...row, value: 'unknown' as const, detail: provider ? t.providerOwns : t.definitionMissing };
     }
+
     const target = hookTarget(harness, provider, item, ctx);
     if (!target) {
-      return { itemId: entry.itemId, harness: entry.harness, kind: entry.kind, value: 'unknown' as const, detail: t.definitionMissing };
+      return { ...row, value: 'unknown' as const, detail: t.definitionMissing };
     }
     try {
-      const merged = mergeHook(readText(target.file), target.section, target.spec);
-      return {
-        itemId: entry.itemId,
-        harness: entry.harness,
-        kind: entry.kind,
-        value: merged.changed ? ('missing' as const) : ('up-to-date' as const),
-      };
+      const merged = mergeHook(readText(target.file), target.path, target.spec);
+      return { ...row, value: merged.changed ? ('missing' as const) : ('up-to-date' as const) };
     } catch {
-      return { itemId: entry.itemId, harness: entry.harness, kind: entry.kind, value: 'unknown' as const, detail: t.hookTargetUnreadable };
+      return { ...row, value: 'unknown' as const, detail: t.hookTargetUnreadable };
     }
   });
 }

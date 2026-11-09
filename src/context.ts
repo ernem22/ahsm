@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { t } from './i18n.js';
 
 export interface RunResult {
   code: number;
@@ -28,7 +29,7 @@ export class ProcessRunner implements Runner {
 
   run(argv: string[]): Promise<RunResult> {
     const [cmd, ...args] = argv;
-    if (!cmd) return Promise.resolve({ code: 1, stdout: '', stderr: 'empty command' });
+    if (!cmd) return Promise.resolve({ code: 1, stdout: '', stderr: t.emptyCommand });
 
     return new Promise((resolve) => {
       const child = spawn(cmd, args, {
@@ -46,7 +47,7 @@ export class ProcessRunner implements Runner {
   }
 }
 
-/** A runner that records commands instead of executing them (tests, --dry runs of apply). */
+/** A runner that records commands instead of executing them (used by tests). */
 export class RecordingRunner implements Runner {
   readonly calls: string[][] = [];
   constructor(private readonly results: RunResult[] = []) {}

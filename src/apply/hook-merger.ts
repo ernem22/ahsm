@@ -7,21 +7,22 @@ export interface HookSpec {
   command: string;
 }
 
-/** Typed failure so the UI layer can render the message in the user's language. */
+export interface HookEntry {
+  matcher: string;
+  hooks: Array<{ type: string; command: string }>;
+}
+
+/** Typed failure so the UI layer owns the message. */
 export class HookConfigError extends Error {
-  readonly reason: 'unreadable' = 'unreadable';
   constructor() {
     super('hook target is not readable JSONC');
     this.name = 'HookConfigError';
   }
 }
 
-/** `hooks.{event}` → `['hooks', 'PreToolUse']`. */
-export function sectionPath(section: string, event: string): string[] {
-  return section
-    .replace('{event}', event)
-    .split('.')
-    .filter(Boolean);
+/** Turns `hooks.{event}` into the edit path `['hooks', 'PreToolUse']`. */
+export function sectionPath(template: string, event: string): string[] {
+  return template.replace('{event}', event).split('.').filter(Boolean);
 }
 
 function getAt(root: unknown, segments: string[]): unknown {
@@ -34,27 +35,21 @@ function getAt(root: unknown, segments: string[]): unknown {
 }
 
 /**
- * Adds one hook entry to a JSONC document, preserving comments and trailing commas.
+ * Adds one hook entry at `path` in a JSONC document, preserving comments and trailing commas.
  * Throws HookConfigError on an unparsable document so nothing is ever silently rewritten.
  */
-export interface HookEntry {
-  matcher: string;
-  hooks: Array<{ type: string; command: string }>;
-}
-
 export function mergeHook(
   text: string,
-  section: string,
+  path: string[],
   spec: HookSpec,
 ): { changed: boolean; text: string; entry: HookEntry } {
-  const segments = sectionPath(section, spec.event);
   const source = text.trim().length > 0 ? text : '{}';
 
   const errors: ParseError[] = [];
   const root = parseJsonc(source, errors, { allowTrailingComma: true, disallowComments: false });
   if (errors.length > 0) throw new HookConfigError();
 
-  const existing = getAt(root, segments);
+  const existing = getAt(root, path);
   const list = Array.isArray(existing) ? (existing as Array<Record<string, unknown>>) : [];
   const existingEntry = list.find(
     (entry) =>
@@ -65,8 +60,7 @@ export function mergeHook(
   if (existingEntry) return { changed: false, text, entry: existingEntry };
 
   const added: HookEntry = { matcher: spec.matcher, hooks: [{ type: 'command', command: spec.command }] };
-  const next = [...list, added];
-  const edits = modify(source, segments, next, { formattingOptions: { insertSpaces: true, tabSize: 2 } });
+  const edits = modify(source, path, [...list, added], { formattingOptions: { insertSpaces: true, tabSize: 2 } });
   return { changed: true, text: applyEdits(source, edits), entry: added };
 }
 
