@@ -29,6 +29,12 @@ export interface ApplyOutcome {
   warnings: string[];
 }
 
+/** Process exit code for an outcome: 1 if anything failed, 0 otherwise (warnings alone do not fail). */
+export function exitCodeFor(outcome: ApplyOutcome): number {
+  const failed = outcome.items.some((item) => item.status === 'error') || outcome.requirements.some((r) => !r.ok);
+  return failed ? 1 : 0;
+}
+
 function tailLine(stderr: string, fallback: string): string {
   return (
     stderr
@@ -96,8 +102,15 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
   }
   const warnings = stateWarning ? [stateWarning] : [];
   let state = stored.state;
+  // A failed state write must never turn a finished install into an error or lose the report: warn once, stop recording.
   const record = (input: Parameters<typeof recordEntry>[2]): void => {
-    if (!recordingDisabled) state = recordEntry(ctx, state, input);
+    if (recordingDisabled) return;
+    try {
+      state = recordEntry(ctx, state, input);
+    } catch (error) {
+      recordingDisabled = true;
+      warnings.push(t.stateNotRecorded(statePath(ctx), error instanceof Error ? error.message : String(error)));
+    }
   };
 
   for (const entry of plan.entries) {

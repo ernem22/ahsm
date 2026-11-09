@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createContext, type Ctx } from './context.js';
 import { loadData } from './data.js';
-import { applyPlan, type ApplyOutcome } from './core/apply.js';
+import { applyPlan, exitCodeFor, type ApplyOutcome } from './core/apply.js';
 import { buildPlan, type Plan, type PlanAction } from './core/plan.js';
 import { resolveSelection } from './core/selection.js';
 import { readStatus } from './core/status.js';
@@ -72,7 +72,9 @@ async function main(): Promise<void> {
       console.log(t.applyHint);
       return;
     }
-    printOutcome(await applyPlan(data, ctx, plan));
+    const outcome = await applyPlan(data, ctx, plan);
+    printOutcome(outcome);
+    process.exitCode = exitCodeFor(outcome);
     return;
   }
 

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createContext, RecordingRunner } from '../src/context.js';
-import { applyPlan } from '../src/core/apply.js';
+import { applyPlan, exitCodeFor, type ApplyOutcome } from '../src/core/apply.js';
 import { detectHarnesses } from '../src/core/detect.js';
 import { buildPlan } from '../src/core/plan.js';
 import { readStatus } from '../src/core/status.js';
@@ -525,4 +525,53 @@ test('hook elle yazılmışsa apply komutunu kaydeder; sonraki değişiklik eski
     hooks: { PreToolUse: { hooks: { command: string }[] }[] };
   };
   assert.deepEqual(written.hooks.PreToolUse.map((group) => group.hooks[0]?.command), ['echo new']);
+});
+
+test('apply: state write failure after a successful install does not lose the report', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  fs.mkdirSync(`${statePath(ctx)}.tmp`, { recursive: true });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+
+  const outcome = await applyPlan(data, ctx, plan);
+
+  assert.equal(outcome.items[0]?.status, 'ok');
+  const stateWarnings = outcome.warnings.filter((warning) => warning.includes('state.json'));
+  assert.equal(stateWarnings.length, 1);
+  assert.ok(stateWarnings[0]?.includes(statePath(ctx)));
+});
+
+test('apply: hook written but state record fails stays ok', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  fs.mkdirSync(`${statePath(ctx)}.tmp`, { recursive: true });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['hk'] });
+
+  const outcome = await applyPlan(data, ctx, plan);
+
+  assert.equal(outcome.items[0]?.status, 'ok');
+  assert.match(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'), /echo hi/);
+  assert.equal(outcome.warnings.filter((warning) => warning.includes('state.json')).length, 1);
+});
+
+test('exitCodeFor: failed item gives 1, warnings alone give 0', async () => {
+  const data = fixture();
+  const { ctx } = setup(tempHome());
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  const entry = plan.entries[0]!;
+
+  const clean: ApplyOutcome = {
+    requirements: [{ id: 'node', ok: true }],
+    items: [
+      { entry, status: 'ok' },
+      { entry, status: 'already' },
+      { entry, status: 'unsupported' },
+    ],
+    warnings: ['something to note'],
+  };
+  assert.equal(exitCodeFor(clean), 0);
+  assert.equal(exitCodeFor({ ...clean, items: [...clean.items, { entry, status: 'error', message: 'x' }] }), 1);
+  assert.equal(exitCodeFor({ ...clean, requirements: [{ id: 'node', ok: false }] }), 1);
 });
