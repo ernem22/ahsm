@@ -10,3 +10,6 @@ config:
 hooks:
   path: ~/.claude/settings.json
   section: hooks.{event}
+mcp:
+  path: ~/.claude.json
+  key: mcpServers

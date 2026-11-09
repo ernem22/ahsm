@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Ctx } from '../context.js';
-import { HookConfigError, mergeHook, readText } from '../apply/hook-merger.js';
+import { mergeHook, readText } from '../apply/hook-merger.js';
 import type { Data } from '../types.js';
 import type { Plan, PlanEntry } from './plan.js';
 import { entryDefs } from './entry.js';
@@ -26,6 +26,7 @@ export interface RequirementResult {
 export interface ApplyOutcome {
   requirements: RequirementResult[];
   items: ApplyResult[];
+  warnings: string[];
 }
 
 function tailLine(stderr: string, fallback: string): string {
@@ -70,7 +71,9 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
   }
 
   const items: ApplyResult[] = [];
-  let state = readState(ctx);
+  const stored = readState(ctx);
+  const warnings = stored.warning ? [stored.warning] : [];
+  let state = stored.state;
 
   for (const entry of plan.entries) {
     const blocked = entryDefs(data, entry).provider?.requires?.find((id) => unmet.has(id));
@@ -94,8 +97,11 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
 
     if (entry.hook) {
       const target = entry.hook.target;
+      const previous = state.entries.find(
+        (recorded) => recorded.itemId === entry.itemId && recorded.harness === entry.harness,
+      )?.hookCommand;
       try {
-        const merged = mergeHook(readText(target.file), target.path, target.spec);
+        const merged = mergeHook(readText(target.file), target.path, target.spec, previous);
         if (!merged.changed) {
           items.push({ entry, status: 'already' });
           continue;
@@ -104,17 +110,16 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
         fs.mkdirSync(path.dirname(target.file), { recursive: true });
         fs.writeFileSync(target.file, merged.text, 'utf8');
         state = recordEntry(ctx, state, {
-          itemId: entry.itemId,
+          ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId },
           kind: entry.kind,
-          harness: entry.harness,
-          providerId: entry.providerId ?? '',
+          hookCommand: target.spec.command,
         });
         items.push({ entry, status: 'ok' });
       } catch (error) {
         items.push({
           entry,
           status: 'error',
-          message: error instanceof HookConfigError ? t.hookTargetUnreadable : String(error),
+          message: t.hookError(error),
         });
       }
       continue;
@@ -128,10 +133,8 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
     const result = await ctx.runner.run(entry.command);
     if (result.code === 0) {
       state = recordEntry(ctx, state, {
-        itemId: entry.itemId,
+        ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId },
         kind: entry.kind,
-        harness: entry.harness,
-        providerId: entry.providerId ?? '',
         command: entry.command,
       });
       items.push({ entry, status: 'ok' });
@@ -140,5 +143,5 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
     }
   }
 
-  return { requirements, items };
+  return { requirements, items, warnings };
 }

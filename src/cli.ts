@@ -25,15 +25,15 @@ function printOutcome(outcome: ApplyOutcome): void {
 }
 
 function printStatus(data: Data, ctx: Ctx): void {
-  const rows = readStatus(data, ctx);
-  if (rows.length === 0) {
+  const report = readStatus(data, ctx);
+  for (const warning of report.warnings) console.log(`! ${warning}`);
+  if (report.rows.length === 0) {
     console.log(t.statusEmpty);
     return;
   }
-  for (const row of rows) {
-    const label = t.statusLabels[row.value];
+  for (const row of report.rows) {
     const detail = row.detail ? ` — ${row.detail}` : '';
-    console.log(`${label}  ${row.itemId} → ${row.harness} [${row.kind}]${detail}`);
+    console.log(`${t.statusLabels[row.value]}  ${row.itemId} → ${row.harness} [${row.kind}]${detail}`);
   }
 }
 

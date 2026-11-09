@@ -1,4 +1,4 @@
-import type { Data, HarnessDef, ItemDef, ProviderDef } from '../types.js';
+import type { Data, EntryRef, HarnessDef, ItemDef, ProviderDef } from '../types.js';
 
 export interface EntryDefs {
   harness?: HarnessDef;
@@ -10,7 +10,7 @@ export interface EntryDefs {
  * Resolves a recorded entry back to the definitions it refers to. `apply` and `status` both need this,
  * and doing it twice is how they drift apart (one of them forgetting a provider that writes config).
  */
-export function entryDefs(data: Data, entry: { itemId: string; harness: string; providerId?: string }): EntryDefs {
+export function entryDefs(data: Data, entry: EntryRef): EntryDefs {
   return {
     harness: data.harnesses.find((candidate) => candidate.id === entry.harness),
     provider: data.providers.find((candidate) => candidate.id === entry.providerId),

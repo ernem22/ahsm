@@ -51,6 +51,8 @@ export function planLines(plan: Plan): Line[] {
 export function outcomeLines(outcome: ApplyOutcome): Line[] {
   const lines: Line[] = [];
 
+  for (const warning of outcome.warnings) lines.push({ text: `! ${warning}`, tone: 'warning' });
+
   for (const requirement of outcome.requirements) {
     if (!requirement.ok) {
       lines.push({ text: t.requirementFailed(requirement.id, requirement.message ?? t.missing), tone: 'error' });

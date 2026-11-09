@@ -1,3 +1,4 @@
+import { HookConfigError } from './apply/hook-merger.js';
 import type { ApplyStatus } from './core/apply.js';
 import type { PlanAction } from './core/plan.js';
 import type { StatusValue } from './core/status.js';
@@ -39,6 +40,7 @@ export const t = {
   actions: (runs: number, total: number) => `${runs} action(s), ${total} skipped`,
   applyHint: 'to run it: agentenv apply --yes',
   statusEmpty: 'record is empty — nothing installed yet',
+  hookError: (error: unknown) => (error instanceof HookConfigError ? t.hookTargetUnreadable : String(error)),
   statusLabels: {
     'up-to-date': 'up-to-date',
     missing: 'missing',
@@ -66,12 +68,16 @@ export const t = {
   requirementFailed: (id: string, message: string) => `requirement ${id}: ${message}`,
   requirementUnmet: (id: string) => `requirement not met: ${id}`,
   exitCode: (code: number) => `exit code ${code}`,
+  stateUnreadable: (where: string) => `state.json could not be read; the file was kept at ${where} and the record starts empty`,
   emptyCommand: 'empty command name',
   hookTargetMissing: 'hook target could not be resolved',
+  hookItemIncomplete: (id: string) => `hook ${id} is missing event, matcher or command`,
   hookTargetUnreadable: 'target file is not readable JSONC — nothing was written',
   commandMissing: 'command could not be built',
   definitionMissing: 'definition not found',
   recordedInstalled: 'recorded as installed',
+  recordNotInTarget: 'recorded but not found in the target — installing again',
+  recordUnverified: 'recorded, but this provider cannot be checked — installing again',
   providerOwns: 'provider owns this',
   help: [
     'agentenv                              TUI (pick harnesses and a package, review, install)',

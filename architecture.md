@@ -32,6 +32,9 @@ Değer kurulum yapmakta değil, üç türü tek pakette birleştirmekte ve tek d
 - Kapsam bugün sağlayıcı komutunda sabit (`-g` = kullanıcı seviyesi); proje kapsamı açılınca
   `{scope}` değişkeni olarak plana girer, ayrı kod yolu açılmaz.
 - Sıralı uygulama hatada durmaz: başarısız öğe `kurulamadı` olarak raporlanır, kalanlar devam eder.
+- **Kayıt kanıt değildir.** `already` yalnız sahibi "burada" dediğinde söylenir (`verify` tarifi: skill
+  lockfile'ı, harness'ın MCP config'i). Doğrulanamıyorsa öğe yeniden kurulur — yükleyiciler idempotent.
+- Okunamayan `state.json` sessizce sıfırlanmaz: dosya `backups/` altına kopyalanır ve uyarı gösterilir.
 
 ## Yerleşim
 
@@ -57,6 +60,7 @@ kind: skill
 supports: [claude-code, codex, opencode, pi]      # npx skills agent adları
 requires: [node]
 priority: 10                                      # aynı tür için birden fazla sağlayıcı varsa sıra
+verify: { strategy: skill-lock, file: "~/.agents/.skill-lock.json" }
 install: [npx, skills, add, "{source}", -g, -a, "{agentId}", -y, "--skill {skill}"]
 remove:  [npx, skills, remove, -g, -a, "{agentId}", "{skill}"]
 update:  [npx, skills, update, "{skill}"]
@@ -106,6 +110,7 @@ detect: [ "~/.claude", "path:claude" ]          # biri yeter
 agentId: claude-code                            # npx skills / add-mcp -a değeri
 config: { path: "~/.claude/settings.json", format: jsonc }
 hooks:  { path: "~/.claude/settings.json", section: "hooks.{event}" }
+mcp:    { path: "~/.claude.json", key: "mcpServers" }   # devredilen MCP kurulumunu doğrulamak için
 ```
 
 ```yaml
@@ -131,8 +136,8 @@ items: [emil-skills, context7, bash-log]
 1. **detect** — harness tanımlarındaki `detect` yolları; bulunanlar işaretli, bulunmayanlar soluk.
 2. **select** — paket seçilince öğeleri işaretli gelir; harness bazında ya da "hepsine". Çıktı:
    `(kind, öğe, harness)` üçlüleri.
-3. **plan** — her üçlü için sağlayıcı çözümlenir (`supports` içinde mi), komut/fark üretilir; eksik ön
-   koşullar listelenir. Hiçbir şey yazılmaz.
+3. **plan** — her üçlü için sağlayıcı çözümlenir (`supports` içinde mi), komut/fark üretilir; kayıt varsa
+   sağlayıcının `verify` tarifiyle gerçek kontrol edilir; eksik ön koşullar listelenir. Hiçbir şey yazılmaz.
 4. **bootstrap** — onaylanan ön koşullar platform komutuyla kurulur, sonra yeniden check.
 5. **apply** — yedek → sıralı uygulama → sonuç satırı (`kuruldu` / `zaten kurulu` / `kapsanmıyor` /
    `hata`).
@@ -152,6 +157,9 @@ harness tanımında kalır.
 - `npx` yoksa hiçbir sağlayıcı çalışmaz; plan bunu ön koşul olarak söyler (Node kurulumu önerilir).
 - Proje kapsamı bugün kapalı: iki sağlayıcı da `-g` alır, yani yalnız kullanıcı seviyesine yazar.
 - `status` skills/MCP için `bilinmiyor` der: gerçek onların elinde, doğrulamadan "güncel" demeyiz.
+- Hook komutu değişirse eski girdi yerinde değiştirilir (kayıttaki `hookCommand` ile bulunur); komut elle
+  değiştirilmişse eski girdi kalır — hook'lar harness şemasında kimlik taşımadığı için tek işaret bu.
+- Hook'ta `event`/`matcher`/`hookCommand` eksikse plan `error` der; config'e boş değer yazılmaz.
 - Hook birleştirme yalnız JSONC hedefler için yazıldı; başka bir biçim gerekirse `hook-merger`'a yeni bir
   biçim eklenir, çekirdek değişmez.
 - MCP sırları (`${VAR}` → `add-mcp --env KEY=${VAR}`) henüz uygulanmadı; öğe tanımında env alanı yok.

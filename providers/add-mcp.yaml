@@ -3,4 +3,5 @@ kind: mcp
 supports: [claude-code]
 requires: [node]
 priority: 10
+verify: { strategy: json-key }
 install: [npx, add-mcp, "{package}", -g, -a, "{agentId}", -y]

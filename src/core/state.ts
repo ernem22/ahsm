@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Ctx } from '../context.js';
-import type { Kind } from '../types.js';
+import { t } from '../i18n.js';
+import type { EntryRef, Kind } from '../types.js';
 
 export interface StateEntry {
   itemId: string;
@@ -10,6 +11,8 @@ export interface StateEntry {
   providerId: string;
   /** The exact argv that was run, kept as-is so a space inside an argument cannot corrupt it. */
   command?: string[];
+  /** For hooks: the command string we wrote, so a later change replaces it instead of adding a twin. */
+  hookCommand?: string;
   at: string;
 }
 
@@ -35,14 +38,35 @@ export function statePath(ctx: Ctx): string {
   return path.join(stateDir(ctx), 'state.json');
 }
 
-export function readState(ctx: Ctx): State {
+export interface StateRead {
+  state: State;
+  /** Set when the stored state could not be parsed; the file is preserved, never dropped silently. */
+  warning?: string;
+}
+
+export function readState(ctx: Ctx): StateRead {
   const file = statePath(ctx);
-  if (!fs.existsSync(file)) return { version: 1, entries: [] };
+  const empty: State = { version: 1, entries: [] };
+  if (!fs.existsSync(file)) return { state: empty };
+
+  let raw: string;
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as State;
-    return { version: 1, entries: Array.isArray(parsed.entries) ? parsed.entries : [] };
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (error) {
+    return { state: empty, warning: t.stateUnreadable(String(error)) };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as State;
+    if (!Array.isArray(parsed.entries)) throw new Error('entries missing');
+    return { state: { version: 1, entries: parsed.entries } };
   } catch {
-    return { version: 1, entries: [] };
+    // Keep the unreadable file: rewriting state on top of it would erase the user's history.
+    const stamp = ctx.now().toISOString().replace(/[:.]/g, '-');
+    const dest = path.join(stateDir(ctx), 'backups', stamp, 'state.json');
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, raw, 'utf8');
+    return { state: empty, warning: t.stateUnreadable(dest) };
   }
 }
 
@@ -55,11 +79,23 @@ export function writeState(ctx: Ctx, state: State): void {
   fs.renameSync(tmp, file);
 }
 
-export function recordEntry(ctx: Ctx, state: State, entry: Omit<StateEntry, 'at'>): State {
+export function recordEntry(
+  ctx: Ctx,
+  state: State,
+  input: { ref: EntryRef; kind: Kind; command?: string[]; hookCommand?: string },
+): State {
   const at = ctx.now().toISOString();
-  const key = stateKey(entry.itemId, entry.harness);
+  const key = stateKey(input.ref.itemId, input.ref.harness);
   const entries = state.entries.filter((existing) => stateKey(existing.itemId, existing.harness) !== key);
-  entries.push({ ...entry, at });
+  entries.push({
+    itemId: input.ref.itemId,
+    harness: input.ref.harness,
+    providerId: input.ref.providerId ?? '',
+    kind: input.kind,
+    command: input.command,
+    hookCommand: input.hookCommand,
+    at,
+  });
   const next: State = { version: 1, entries };
   writeState(ctx, next);
   return next;

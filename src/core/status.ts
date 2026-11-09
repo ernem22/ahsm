@@ -20,9 +20,15 @@ export interface StatusRow {
  * Compares our record with what we can actually verify. Skills and MCP installs belong to their
  * provider, so we report `unknown` rather than claiming a state we did not check.
  */
-export function readStatus(data: Data, ctx: Ctx): StatusRow[] {
-  const state = readState(ctx);
-  return state.entries.map((entry) => {
+export interface StatusReport {
+  rows: StatusRow[];
+  warnings: string[];
+}
+
+export function readStatus(data: Data, ctx: Ctx): StatusReport {
+  const stored = readState(ctx);
+  const warnings = stored.warning ? [stored.warning] : [];
+  const rows = stored.state.entries.map((entry) => {
     const row = { itemId: entry.itemId, harness: entry.harness, kind: entry.kind };
     const { harness, provider, item } = entryDefs(data, entry);
 
@@ -42,4 +48,6 @@ export function readStatus(data: Data, ctx: Ctx): StatusRow[] {
       return { ...row, value: 'unknown' as const, detail: t.hookTargetUnreadable };
     }
   });
+
+  return { rows, warnings };
 }

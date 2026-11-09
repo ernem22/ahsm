@@ -39,6 +39,7 @@ function fixture(): Data {
         agentId: HARNESS,
         config: { path: '~/.claude/settings.json', format: 'jsonc' },
         hooks: { path: '~/.claude/settings.json', section: 'hooks.{event}' },
+        mcp: { path: '~/.claude.json', key: 'mcpServers' },
       },
     ],
     providers: [
@@ -47,9 +48,16 @@ function fixture(): Data {
         kind: 'skill',
         supports: [HARNESS],
         requires: ['node'],
+        verify: { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' },
         install: ['npx', 'skills', 'add', '{source}', '-g', '-a', '{agentId}', '--skill {skill}'],
       },
-      { id: 'add-mcp', kind: 'mcp', supports: [HARNESS], install: ['npx', 'add-mcp', '{package}', '-a', '{agentId}'] },
+      {
+        id: 'add-mcp',
+        kind: 'mcp',
+        supports: [HARNESS],
+        verify: { strategy: 'json-key' },
+        install: ['npx', 'add-mcp', '{package}', '-a', '{agentId}'],
+      },
       {
         id: 'builtin-hooks',
         kind: 'hook',
@@ -157,12 +165,21 @@ test('apply: üç türü yazar, yedek alır, kaydı tutar; ikinci çalıştırma
   const backups = fs.readdirSync(path.join(home, '.agentenv', 'backups'));
   assert.equal(backups.length, 1);
 
-  assert.equal(readState(ctx).entries.length, 3);
+  assert.equal(readState(ctx).state.entries.length, 3);
   assert.ok(fs.existsSync(statePath(ctx)));
   assert.deepEqual(
-    readStatus(data, ctx).map((row) => row.value),
+    readStatus(data, ctx).rows.map((row) => row.value),
     ['unknown', 'unknown', 'up-to-date'],
   );
+
+  // the owners of the install now report it: lockfile for skills, harness config for MCP
+  fs.mkdirSync(path.join(home, '.agents'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.agents', '.skill-lock.json'),
+    JSON.stringify({ skills: { any: { source: 'owner/repo' } } }),
+    'utf8',
+  );
+  fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { mc: {} } }), 'utf8');
 
   const replan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk', 'mc', 'hk'] });
   assert.deepEqual(
@@ -194,7 +211,7 @@ test('apply: komut hata verirse o öğe hata, akış durmaz', async () => {
   assert.equal(outcome.items[0]?.message, 'kaynak bulunamadı');
   assert.equal(outcome.items[1]?.status, 'ok');
   assert.equal(outcome.items[2]?.status, 'ok');
-  assert.equal(readState(failing).entries.length, 2);
+  assert.equal(readState(failing).state.entries.length, 2);
 });
 
 test('apply: bozuk settings.json hiç yazılmaz', async () => {
@@ -256,4 +273,91 @@ test('bootstrap: yeniden kontrol min sürümü de uygular', async () => {
 
   assert.equal(outcome.requirements[0]?.ok, false);
   assert.equal(outcome.items[0]?.status, 'error');
+});
+
+test('bozuk state.json sessizce sıfırlanmaz: yedeğe alınır ve uyarı döner', async () => {
+  const home = tempHome();
+  const { ctx } = setup(home);
+  fs.mkdirSync(path.join(home, '.agentenv'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.agentenv', 'state.json'), '{ bozuk', 'utf8');
+
+  const plan = await buildPlan(fixture(), ctx, { harnessIds: [HARNESS], itemIds: ['hk'] });
+  assert.equal(plan.warnings.length, 1);
+  assert.match(plan.warnings[0] ?? '', /state\.json/);
+
+  const backups = fs.readdirSync(path.join(home, '.agentenv', 'backups'));
+  assert.equal(backups.length, 1);
+  const saved = fs.readdirSync(path.join(home, '.agentenv', 'backups', backups[0]!));
+  assert.deepEqual(saved, ['state.json']);
+  assert.equal(fs.readFileSync(path.join(home, '.agentenv', 'backups', backups[0]!, 'state.json'), 'utf8'), '{ bozuk');
+});
+
+test('plan: bilinmeyen platformda linux yükleyicisine düşmez', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  const exotic = createContext({ root: process.cwd(), home, runner: ctx.runner, platform: 'aix' as NodeJS.Platform });
+
+  const plan = await buildPlan(data, exotic, { harnessIds: [HARNESS], itemIds: ['sk'] });
+
+  assert.equal(plan.requirements[0]?.installCommand, undefined);
+});
+
+test('already: kayıt var ama skill-lock hedefte yoksa yeniden kurar', async () => {
+  const home = tempHome();
+  const data = fixture();
+  data.providers[0]!.verify = { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' };
+  const { ctx } = setup(home);
+
+  const installed = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  await applyPlan(data, ctx, installed);
+
+  // lock dosyası yok → gerçekte kurulu değil
+  const missing = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  assert.equal(missing.entries[0]?.action, 'run');
+  assert.match(missing.entries[0]?.reason ?? '', /not found/);
+
+  // lock dosyası kaynağı gösteriyor → zaten kurulu
+  fs.mkdirSync(path.join(home, '.agents'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.agents', '.skill-lock.json'),
+    JSON.stringify({ skills: { other: { source: 'owner/repo' } } }),
+    'utf8',
+  );
+  const present = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  assert.equal(present.entries[0]?.action, 'already');
+});
+
+test('hook: komut değişince eski girdi yerinde değişir, ikinci girdi kalmaz', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const settings = path.join(home, '.claude', 'settings.json');
+  const { ctx } = setup(home);
+
+  await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['hk'] }));
+
+  const hook = data.items.get('hk')!;
+  hook.hookCommand = 'echo bye';
+
+  const replan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['hk'] });
+  assert.equal(replan.entries[0]?.action, 'run');
+  await applyPlan(data, ctx, replan);
+
+  const parsed = JSON.parse(fs.readFileSync(settings, 'utf8')) as {
+    hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+  };
+  assert.equal(parsed.hooks.PreToolUse.length, 1);
+  assert.equal(parsed.hooks.PreToolUse[0]?.hooks[0]?.command, 'echo bye');
+});
+
+test('hook: eksik alan (matcher) sessizce boş yazılmaz, hata olur', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const hook = data.items.get('hk')!;
+  hook.matcher = '';
+
+  const plan = await buildPlan(data, setup(home).ctx, { harnessIds: [HARNESS], itemIds: ['hk'] });
+
+  assert.equal(plan.entries[0]?.action, 'error');
+  assert.match(plan.entries[0]?.reason ?? '', /hk/);
 });

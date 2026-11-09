@@ -1,9 +1,10 @@
 import { expandArgs, type Ctx } from '../context.js';
-import { HookConfigError, mergeHook, readText, type HookEntry } from '../apply/hook-merger.js';
+import { mergeHook, readText, type HookEntry } from '../apply/hook-merger.js';
 import { hookTarget, type HookTarget } from '../apply/hook-target.js';
 import { t } from '../i18n.js';
 import type { Data, ItemDef, Kind, ProviderDef, Selection } from '../types.js';
 import { meetsRequirement } from './requirements.js';
+import { verifyInstalled } from './verify.js';
 import { readState, sameCommand, stateKey } from './state.js';
 
 export type PlanAction = 'run' | 'already' | 'unsupported' | 'error';
@@ -51,7 +52,9 @@ export function pickProvider(data: Data, kind: Kind, harnessId: string): Provide
 export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Promise<Plan> {
   const warnings: string[] = [];
   const entries: PlanEntry[] = [];
-  const state = readState(ctx);
+  const stored = readState(ctx);
+  if (stored.warning) warnings.push(stored.warning);
+  const state = stored.state;
   const usedProviders = new Map<string, ProviderDef>();
 
   for (const itemId of selection.itemIds) {
@@ -87,11 +90,14 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
       if (provider.writes) {
         const target = hookTarget(harness, provider, item, ctx);
         if (!target) {
-          entries.push({ ...base, action: 'error', reason: t.hookTargetMissing });
+          entries.push({ ...base, action: 'error', reason: t.hookItemIncomplete(itemId) });
           continue;
         }
+        const previous = state.entries.find(
+          (entry) => stateKey(entry.itemId, entry.harness) === stateKey(itemId, harnessId),
+        )?.hookCommand;
         try {
-          const merged = mergeHook(readText(target.file), target.path, target.spec);
+          const merged = mergeHook(readText(target.file), target.path, target.spec, previous);
           entries.push({
             ...base,
             action: merged.changed ? 'run' : 'already',
@@ -102,7 +108,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
           entries.push({
             ...base,
             action: 'error',
-            reason: error instanceof HookConfigError ? t.hookTargetUnreadable : String(error),
+            reason: t.hookError(error),
           });
         }
         continue;
@@ -117,13 +123,20 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
         item: item.id,
       });
       const recorded = state.entries.find((entry) => stateKey(entry.itemId, entry.harness) === stateKey(itemId, harnessId));
-      const already = Boolean(recorded && sameCommand(recorded.command, command));
-      entries.push({
-        ...base,
-        action: already ? 'already' : 'run',
-        command,
-        reason: already ? t.recordedInstalled : undefined,
-      });
+      const matchesRecord = Boolean(recorded && sameCommand(recorded.command, command));
+
+      // A record is not evidence: if the owner says it is gone, install it again.
+      let already = false;
+      let reason: string | undefined;
+      if (matchesRecord) {
+        const verified = verifyInstalled(harness, item, provider, ctx);
+        already = verified === 'present';
+        if (verified === 'missing') reason = t.recordNotInTarget;
+        if (verified === 'unknown') reason = t.recordUnverified;
+        if (already) reason = t.recordedInstalled;
+      }
+
+      entries.push({ ...base, action: already ? 'already' : 'run', command, reason });
     }
   }
 
@@ -143,7 +156,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
     requirements.push({
       id,
       present: meetsRequirement(def, result),
-      installCommand: def.install[ctx.platform] ?? def.install.linux,
+      installCommand: def.install[ctx.platform],
     });
   }
 

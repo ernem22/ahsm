@@ -1,5 +1,12 @@
 export type Kind = 'skill' | 'mcp' | 'hook';
 
+/** Identifies one installed thing: the item, the harness it went to, and who installed it. */
+export interface EntryRef {
+  itemId: string;
+  harness: string;
+  providerId?: string;
+}
+
 export interface HarnessDef {
   id: string;
   label?: string;
@@ -9,6 +16,8 @@ export interface HarnessDef {
   agentId?: string;
   config: { path: string; format: 'jsonc' };
   hooks?: { path?: string; section: string };
+  /** Where this harness keeps MCP servers, so a delegated install can still be verified. */
+  mcp?: { path: string; key: string };
 }
 
 export interface ProviderDef {
@@ -21,6 +30,8 @@ export interface ProviderDef {
   install: string[];
   remove?: string[];
   update?: string[];
+  /** How to ask the owner whether the install is really there (skill lockfile, harness config). */
+  verify?: { strategy: 'skill-lock'; file: string } | { strategy: 'json-key' };
   /** Providers that write config themselves (hooks) instead of shelling out. */
   writes?: { path: string; section: string };
 }
@@ -43,6 +54,8 @@ export interface ItemDef {
   // mcp (biri yeterli: npm paketi veya uzak URL)
   package?: string;
   url?: string;
+  /** Server name in the harness config when it differs from the item id. */
+  serverName?: string;
   // hook
   event?: string;
   matcher?: string;

@@ -75,15 +75,16 @@ export function createContext(overrides: Partial<Ctx> = {}): Ctx {
   };
 }
 
-/** Turns an argv template into a concrete argv: empty placeholders drop the element. */
+/** Turns an argv template into a concrete argv: a placeholder with no value drops that whole element. */
 export function expandArgs(template: string[], vars: Record<string, string | undefined>): string[] {
   const out: string[] = [];
   for (const element of template) {
-    const names = [...element.matchAll(/\{(\w+)\}/g)].map((m) => m[1] as string);
+    const names = [...element.matchAll(/\{(\w+)\}/g)].map((match) => match[1] as string);
     if (names.some((name) => !vars[name])) continue;
-    const filled = element.replace(/\{(\w+)\}/g, (_all, name: string) => vars[name] as string);
-    if (filled.includes(' ')) out.push(...filled.split(' ').filter(Boolean));
-    else out.push(filled);
+    // Split the template, never the substituted value: "web design" must stay one argument.
+    for (const token of element.split(' ').filter(Boolean)) {
+      out.push(token.replace(/\{(\w+)\}/g, (_all, name: string) => vars[name] as string));
+    }
   }
   return out;
 }

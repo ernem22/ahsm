@@ -42,6 +42,7 @@ export function mergeHook(
   text: string,
   path: string[],
   spec: HookSpec,
+  previousCommand?: string,
 ): { changed: boolean; text: string; entry: HookEntry } {
   const source = text.trim().length > 0 ? text : '{}';
 
@@ -58,6 +59,28 @@ export function mergeHook(
       (entry.hooks as Array<Record<string, unknown>>).some((hook) => hook?.command === spec.command),
   ) as HookEntry | undefined;
   if (existingEntry) return { changed: false, text, entry: existingEntry };
+
+  // The entry we wrote before, now with a different command: replace it instead of leaving a twin.
+  if (previousCommand && previousCommand !== spec.command) {
+    const stale = list.find(
+      (entry) =>
+        entry?.matcher === spec.matcher &&
+        Array.isArray(entry?.hooks) &&
+        (entry.hooks as Array<Record<string, unknown>>).some((hook) => hook?.command === previousCommand),
+    ) as HookEntry | undefined;
+    if (stale) {
+      const replaced: HookEntry = {
+        matcher: spec.matcher,
+        hooks: stale.hooks.map((hook) => (hook.command === previousCommand ? { ...hook, command: spec.command } : hook)),
+      };
+      const replacedIndex = list.indexOf(stale as unknown as Record<string, unknown>);
+      const next = list.map((entry, index) => (index === replacedIndex ? replaced : entry));
+      const replacementEdits = modify(source, path, next, {
+        formattingOptions: { insertSpaces: true, tabSize: 2 },
+      });
+      return { changed: true, text: applyEdits(source, replacementEdits), entry: replaced };
+    }
+  }
 
   const added: HookEntry = { matcher: spec.matcher, hooks: [{ type: 'command', command: spec.command }] };
   const edits = modify(source, path, [...list, added], { formattingOptions: { insertSpaces: true, tabSize: 2 } });

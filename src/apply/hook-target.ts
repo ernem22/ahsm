@@ -21,13 +21,11 @@ export function hookTarget(
 ): HookTarget | undefined {
   const template = harness.hooks?.section ?? provider?.writes?.section;
   if (!template) return undefined;
+  // A hook with no event, matcher or command is a data defect: never write empty strings into config.
+  if (!item.event || !item.matcher || !item.hookCommand) return undefined;
   return {
     file: expandPath(harness.hooks?.path ?? harness.config.path, ctx.home),
-    path: sectionPath(template, item.event ?? ''),
-    spec: {
-      event: item.event ?? '',
-      matcher: item.matcher ?? '',
-      command: item.hookCommand ?? '',
-    },
+    path: sectionPath(template, item.event),
+    spec: { event: item.event, matcher: item.matcher, command: item.hookCommand },
   };
 }
