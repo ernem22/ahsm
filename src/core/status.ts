@@ -2,6 +2,7 @@ import type { Ctx } from '../context.js';
 import { mergeHook, readText } from '../apply/hook-merger.js';
 import { hookTarget } from '../apply/hook-target.js';
 import type { Data, Kind } from '../types.js';
+import { entryDefs } from './entry.js';
 import { readState } from './state.js';
 import { t } from '../i18n.js';
 
@@ -23,9 +24,7 @@ export function readStatus(data: Data, ctx: Ctx): StatusRow[] {
   const state = readState(ctx);
   return state.entries.map((entry) => {
     const row = { itemId: entry.itemId, harness: entry.harness, kind: entry.kind };
-    const harness = data.harnesses.find((candidate) => candidate.id === entry.harness);
-    const provider = data.providers.find((candidate) => candidate.id === entry.providerId);
-    const item = data.items.get(entry.itemId);
+    const { harness, provider, item } = entryDefs(data, entry);
 
     // A provider that writes config itself can be verified; a delegated one cannot, so we say so.
     if (!harness || !provider?.writes || !item) {

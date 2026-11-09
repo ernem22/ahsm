@@ -4,6 +4,7 @@ import type { Ctx } from '../context.js';
 import { HookConfigError, mergeHook, readText } from '../apply/hook-merger.js';
 import type { Data } from '../types.js';
 import type { Plan, PlanEntry } from './plan.js';
+import { entryDefs } from './entry.js';
 import { meetsRequirement } from './requirements.js';
 import { backupFile, readState, recordEntry } from './state.js';
 import { t } from '../i18n.js';
@@ -72,9 +73,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
   let state = readState(ctx);
 
   for (const entry of plan.entries) {
-    const blocked = data.providers
-      .find((provider) => provider.id === entry.providerId)
-      ?.requires?.find((id) => unmet.has(id));
+    const blocked = entryDefs(data, entry).provider?.requires?.find((id) => unmet.has(id));
 
     if (entry.action === 'run' && blocked) {
       items.push({ entry, status: 'error', message: t.requirementUnmet(blocked) });
