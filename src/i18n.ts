@@ -74,6 +74,9 @@ export const t = {
     `state.json at ${where} could not be read (permission or I/O error); it was left untouched and treated as empty`,
   stateBackedUp: (from: string, to: string) =>
     `state.json at ${from} could not be read; a copy was saved to ${to} and the record starts empty`,
+  stateFileUnreadable: 'the file could not be read',
+  stateNotRecorded: (where: string, reason: string) =>
+    `state.json at ${where} could not be backed up or read (${reason}); it was left untouched and this run's installs were not recorded`,
   emptyCommand: 'empty command name',
   hookTargetMissing: 'hook target could not be resolved',
   hookItemIncomplete: (id: string) => `hook ${id} is missing event, matcher or command`,

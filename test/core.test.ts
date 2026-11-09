@@ -334,6 +334,44 @@ test('unreadable (not corrupt) state.json: plan does not promise a backup', asyn
   assert.doesNotMatch(plan.warnings[0] ?? '', /back it up/);
 });
 
+test('state.json unreadable: apply still runs items, does not record, and warns', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  fs.mkdirSync(statePath(ctx), { recursive: true });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['hk'] });
+
+  const outcome = await applyPlan(data, ctx, plan);
+
+  assert.equal(outcome.items[0]?.status, 'ok');
+  assert.match(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'), /echo hi/);
+  assert.equal(fs.statSync(statePath(ctx)).isDirectory(), true);
+  const stateWarnings = outcome.warnings.filter((warning) => warning.includes('state.json'));
+  assert.equal(stateWarnings.length, 1);
+  assert.ok(stateWarnings[0]?.startsWith(`state.json at ${statePath(ctx)} could not be backed up or read`));
+  assert.equal(fs.existsSync(path.join(home, '.agentenv', 'backups')), false);
+});
+
+test('corrupt state.json whose backup fails: apply still runs, does not record', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  fs.mkdirSync(path.dirname(statePath(ctx)), { recursive: true });
+  fs.writeFileSync(statePath(ctx), '{ garbage', 'utf8');
+  fs.writeFileSync(path.join(home, '.agentenv', 'backups'), 'not a directory', 'utf8');
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['hk'] });
+
+  const outcome = await applyPlan(data, ctx, plan);
+
+  assert.equal(outcome.items[0]?.status, 'ok');
+  assert.match(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'), /echo hi/);
+  assert.equal(fs.readFileSync(statePath(ctx), 'utf8'), '{ garbage');
+  const stateWarnings = outcome.warnings.filter((warning) => warning.includes('state.json'));
+  assert.equal(stateWarnings.length, 1);
+  assert.ok(stateWarnings[0]?.startsWith(`state.json at ${statePath(ctx)} could not be backed up or read`));
+  assert.equal(fs.statSync(path.join(home, '.agentenv', 'backups')).isFile(), true);
+});
+
 test('missing state.json yields no warning', async () => {
   const home = tempHome();
   const data = fixture();

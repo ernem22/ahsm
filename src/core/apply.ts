@@ -73,14 +73,32 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
   const items: ApplyResult[] = [];
   const stored = readState(ctx);
   let stateWarning = stored.warning;
-  // Recording over a damaged state.json would erase the user's history: keep a copy first (a failure aborts).
+  // Recording over a damaged state.json would erase the user's history: keep a copy first. If that is not
+  // possible, never abort the installs; leave the file alone and skip recording instead.
+  let recordingDisabled = false;
   if (stored.damaged) {
     const file = statePath(ctx);
-    const dest = backupFile(ctx, file);
-    if (dest) stateWarning = t.stateBackedUp(file, dest);
+    let reason: string | undefined;
+    if (stored.damaged === 'read') {
+      reason = t.stateFileUnreadable;
+    } else {
+      try {
+        const dest = backupFile(ctx, file);
+        if (dest) stateWarning = t.stateBackedUp(file, dest);
+      } catch (error) {
+        reason = error instanceof Error ? error.message : String(error);
+      }
+    }
+    if (reason !== undefined) {
+      recordingDisabled = true;
+      stateWarning = t.stateNotRecorded(file, reason);
+    }
   }
   const warnings = stateWarning ? [stateWarning] : [];
   let state = stored.state;
+  const record = (input: Parameters<typeof recordEntry>[2]): void => {
+    if (!recordingDisabled) state = recordEntry(ctx, state, input);
+  };
 
   for (const entry of plan.entries) {
     const blocked = entryDefs(data, entry).provider?.requires?.find((id) => unmet.has(id));
@@ -97,7 +115,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
         (candidate) => candidate.itemId === entry.itemId && candidate.harness === entry.harness,
       );
       if (hookCommand && recorded?.hookCommand !== hookCommand) {
-        state = recordEntry(ctx, state, {
+        record({
           ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId },
           kind: entry.kind,
           hookCommand,
@@ -129,7 +147,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
         backupFile(ctx, target.file);
         fs.mkdirSync(path.dirname(target.file), { recursive: true });
         fs.writeFileSync(target.file, merged.text, 'utf8');
-        state = recordEntry(ctx, state, {
+        record({
           ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId },
           kind: entry.kind,
           hookCommand: target.spec.command,
@@ -152,7 +170,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
 
     const result = await ctx.runner.run(entry.command);
     if (result.code === 0) {
-      state = recordEntry(ctx, state, {
+      record({
         ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId },
         kind: entry.kind,
         command: entry.command,
