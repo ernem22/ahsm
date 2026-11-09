@@ -142,7 +142,10 @@ items: [emil-skills, context7, bash-log]
 5. **apply** — yedek → sıralı uygulama → sonuç satırı (`kuruldu` / `zaten kurulu` / `kapsanmıyor` /
    `hata`).
 6. **record** — `state.json`: öğe, harness, sağlayıcı, çalıştırılan komut, tarih. Her başarılı öğeden
-   sonra atomik yazılır (tmp + rename).
+   sonra atomik yazılır (tmp + rename). İstisna: hedefte zaten bulunan bir hook (elle ya da eski bir
+   çalıştırmadan) için komut çalışmaz; yalnız `hookCommand` kaydedilir (`command` boş), böylece komut
+   sonradan değişince eski girdi bulunup yerinde değiştirilir. Bu kayıt var olduğuna kanıt sayılmaz:
+   `status`/`plan` hedef dosyayı yine kendileri okur.
 7. **status** — kayıt + doğrulanabilen gerçek: `verify` tarifi olan sağlayıcılarda `güncel`/`eksik`,
    olmayanlarda `bilinmiyor`. Güncelleme komutları sağlayıcı tanımlarında duruyor (`update:`), henüz
    plana girmiyor.
