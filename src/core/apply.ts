@@ -72,10 +72,15 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
 
   const items: ApplyResult[] = [];
   const stored = readState(ctx);
-  const warnings = stored.warning ? [stored.warning] : [];
-  let state = stored.state;
+  let stateWarning = stored.warning;
   // Recording over a damaged state.json would erase the user's history: keep a copy first (a failure aborts).
-  if (stored.damaged) backupFile(ctx, statePath(ctx));
+  if (stored.damaged) {
+    const file = statePath(ctx);
+    const dest = backupFile(ctx, file);
+    if (dest) stateWarning = t.stateBackedUp(file, dest);
+  }
+  const warnings = stateWarning ? [stateWarning] : [];
+  let state = stored.state;
 
   for (const entry of plan.entries) {
     const blocked = entryDefs(data, entry).provider?.requires?.find((id) => unmet.has(id));

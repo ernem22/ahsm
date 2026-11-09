@@ -68,7 +68,10 @@ export const t = {
   requirementFailed: (id: string, message: string) => `requirement ${id}: ${message}`,
   requirementUnmet: (id: string) => `requirement not met: ${id}`,
   exitCode: (code: number) => `exit code ${code}`,
-  stateUnreadable: (where: string) => `state.json could not be read; the file was kept at ${where} and the record starts empty`,
+  stateUnreadable: (where: string) =>
+    `state.json at ${where} could not be read; it was left untouched and treated as empty. 'apply' will back it up before recording.`,
+  stateBackedUp: (from: string, to: string) =>
+    `state.json at ${from} could not be read; a copy was saved to ${to} and the record starts empty`,
   emptyCommand: 'empty command name',
   hookTargetMissing: 'hook target could not be resolved',
   hookItemIncomplete: (id: string) => `hook ${id} is missing event, matcher or command`,

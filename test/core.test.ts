@@ -298,6 +298,29 @@ test('bozuk state.json: plan dosya yazmaz, apply ezmeden önce yedekler', async 
   assert.equal(readState(ctx).state.entries.length, 1);
 });
 
+test('unreadable state.json warns without claiming a backup in plan, and backup path in apply', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  fs.mkdirSync(path.dirname(statePath(ctx)), { recursive: true });
+  fs.writeFileSync(statePath(ctx), '{ garbage', 'utf8');
+  const selection = { harnessIds: [HARNESS], itemIds: ['hk'] };
+
+  const plan = await buildPlan(data, ctx, selection);
+  assert.ok(plan.warnings.includes(t.stateUnreadable(statePath(ctx))));
+  assert.equal(fs.existsSync(path.join(home, '.agentenv', 'backups')), false);
+
+  const outcome = await applyPlan(data, ctx, plan);
+
+  const backups = path.join(home, '.agentenv', 'backups');
+  const stamp = fs.readdirSync(backups)[0]!;
+  const copy = path.join(backups, stamp, 'state.json');
+  const stateWarnings = outcome.warnings.filter((warning) => warning.includes('state.json'));
+  assert.deepEqual(stateWarnings, [t.stateBackedUp(statePath(ctx), copy)]);
+  assert.equal(fs.readFileSync(copy, 'utf8'), '{ garbage');
+  assert.doesNotThrow(() => JSON.parse(fs.readFileSync(statePath(ctx), 'utf8')));
+});
+
 test('verify: MCP serverName tanımlıysa gerçekten o anahtara bakar', () => {
   const home = tempHome();
   const data = fixture();
