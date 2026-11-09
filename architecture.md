@@ -34,7 +34,10 @@ Değer kurulum yapmakta değil, üç türü tek pakette birleştirmekte ve tek d
 - Sıralı uygulama hatada durmaz: başarısız öğe `kurulamadı` olarak raporlanır, kalanlar devam eder.
 - **Kayıt kanıt değildir.** `already` yalnız sahibi "burada" dediğinde söylenir (`verify` tarifi: skill
   lockfile'ı, harness'ın MCP config'i). Doğrulanamıyorsa öğe yeniden kurulur — yükleyiciler idempotent.
-- Okunamayan `state.json` sessizce sıfırlanmaz: dosya `backups/` altına kopyalanır ve uyarı gösterilir.
+- Bozuk `state.json` sessizce sıfırlanmaz: okunup ayrıştırılamayan dosya `apply` sırasında `backups/`
+  altına kopyalanır ve uyarı gösterilir. Hiç okunamayan (izin / G-Ç hatası) ya da yedeklenemeyen dosyaya
+  dokunulmaz: kurulumlar yine çalışır, bu çalıştırmanın kayıtları yazılmaz ve uyarı gösterilir. `plan` ve
+  `status` hiçbir durumda yazmaz.
 
 ## Yerleşim
 
@@ -140,7 +143,8 @@ items: [emil-skills, context7, bash-log]
    sağlayıcının `verify` tarifiyle gerçek kontrol edilir; eksik ön koşullar listelenir. Hiçbir şey yazılmaz.
 4. **bootstrap** — onaylanan ön koşullar platform komutuyla kurulur, sonra yeniden check.
 5. **apply** — yedek → sıralı uygulama → sonuç satırı (`kuruldu` / `zaten kurulu` / `kapsanmıyor` /
-   `hata`).
+   `hata`). CLI çıkış kodu: bir öğe `hata` verdiyse ya da bir ön koşul karşılanmadıysa 1, yalnız uyarı
+   varsa 0.
 6. **record** — `state.json`: öğe, harness, sağlayıcı, çalıştırılan komut, tarih. Her başarılı öğeden
    sonra atomik yazılır (tmp + rename). İstisna: hedefte zaten bulunan bir hook (elle ya da eski bir
    çalıştırmadan) için komut çalışmaz; yalnız `hookCommand` kaydedilir (`command` boş), böylece komut
