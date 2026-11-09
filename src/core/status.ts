@@ -3,6 +3,7 @@ import { mergeHook, readText } from '../apply/hook-merger.js';
 import { hookTarget } from '../apply/hook-target.js';
 import type { Data, Kind } from '../types.js';
 import { entryDefs } from './entry.js';
+import { verifyInstalled } from './verify.js';
 import { readState } from './state.js';
 import { t } from '../i18n.js';
 
@@ -32,9 +33,16 @@ export function readStatus(data: Data, ctx: Ctx): StatusReport {
     const row = { itemId: entry.itemId, harness: entry.harness, kind: entry.kind };
     const { harness, provider, item } = entryDefs(data, entry);
 
-    // A provider that writes config itself can be verified; a delegated one cannot, so we say so.
-    if (!harness || !provider?.writes || !item) {
-      return { ...row, value: 'unknown' as const, detail: provider ? t.providerOwns : t.definitionMissing };
+    if (!harness || !item) {
+      return { ...row, value: 'unknown' as const, detail: t.definitionMissing };
+    }
+
+    // A delegated install is verifiable only when its provider says how to look; otherwise say we don't know.
+    if (!provider?.writes) {
+      const verified = verifyInstalled(harness, item, provider, ctx);
+      if (verified === 'present') return { ...row, value: 'up-to-date' as const };
+      if (verified === 'missing') return { ...row, value: 'missing' as const };
+      return { ...row, value: 'unknown' as const, detail: t.providerOwns };
     }
 
     const target = hookTarget(harness, provider, item, ctx);

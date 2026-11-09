@@ -143,8 +143,9 @@ items: [emil-skills, context7, bash-log]
    `hata`).
 6. **record** — `state.json`: öğe, harness, sağlayıcı, çalıştırılan komut, tarih. Her başarılı öğeden
    sonra atomik yazılır (tmp + rename).
-7. **status** — kayıt + doğrulanabilen gerçek: hook'lar `güncel`/`eksik`, skills/MCP `bilinmiyor`.
-   Güncelleme komutları sağlayıcı tanımlarında duruyor (`update:`), henüz plana girmiyor.
+7. **status** — kayıt + doğrulanabilen gerçek: `verify` tarifi olan sağlayıcılarda `güncel`/`eksik`,
+   olmayanlarda `bilinmiyor`. Güncelleme komutları sağlayıcı tanımlarında duruyor (`update:`), henüz
+   plana girmiyor.
 
 ## Skill hedefleri ortak
 
@@ -156,7 +157,8 @@ harness tanımında kalır.
 
 - `npx` yoksa hiçbir sağlayıcı çalışmaz; plan bunu ön koşul olarak söyler (Node kurulumu önerilir).
 - Proje kapsamı bugün kapalı: iki sağlayıcı da `-g` alır, yani yalnız kullanıcı seviyesine yazar.
-- `status` skills/MCP için `bilinmiyor` der: gerçek onların elinde, doğrulamadan "güncel" demeyiz.
+- `status`/`plan` bir kurulumu yalnız sağlayıcının kendi envanteri doğruluyorsa "kurulu" sayar; `verify`
+  tarifi olmayan sağlayıcıda `bilinmiyor` der ve plan öğeyi yeniden kurar.
 - Hook komutu değişirse eski girdi yerinde değiştirilir (kayıttaki `hookCommand` ile bulunur); komut elle
   değiştirilmişse eski girdi kalır — hook'lar harness şemasında kimlik taşımadığı için tek işaret bu.
 - Hook'ta `event`/`matcher`/`hookCommand` eksikse plan `error` der; config'e boş değer yazılmaz.

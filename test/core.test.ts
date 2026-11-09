@@ -169,7 +169,7 @@ test('apply: üç türü yazar, yedek alır, kaydı tutar; ikinci çalıştırma
   assert.ok(fs.existsSync(statePath(ctx)));
   assert.deepEqual(
     readStatus(data, ctx).rows.map((row) => row.value),
-    ['unknown', 'unknown', 'up-to-date'],
+    ['missing', 'missing', 'up-to-date'],
   );
 
   // the owners of the install now report it: lockfile for skills, harness config for MCP
@@ -360,4 +360,27 @@ test('hook: eksik alan (matcher) sessizce boş yazılmaz, hata olur', async () =
 
   assert.equal(plan.entries[0]?.action, 'error');
   assert.match(plan.entries[0]?.reason ?? '', /hk/);
+});
+
+test('status: doğrulanabilen sağlayıcı için gerçeği söyler', async () => {
+  const home = tempHome();
+  const data = fixture();
+  data.providers[0]!.verify = { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' };
+  const { ctx } = setup(home);
+
+  await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk', 'mc'] }));
+
+  const before = readStatus(data, ctx).rows.map((row) => row.value);
+  assert.equal(before[0], 'missing', 'lock yok → eksik');
+
+  fs.mkdirSync(path.join(home, '.agents'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.agents', '.skill-lock.json'),
+    JSON.stringify({ skills: { any: { source: 'owner/repo' } } }),
+    'utf8',
+  );
+  fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { mc: {} } }), 'utf8');
+
+  const after = readStatus(data, ctx).rows.map((row) => row.value);
+  assert.deepEqual(after, ['up-to-date', 'up-to-date']);
 });
