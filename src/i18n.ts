@@ -70,6 +70,8 @@ export const t = {
   exitCode: (code: number) => `exit code ${code}`,
   stateUnreadable: (where: string) =>
     `state.json at ${where} could not be read; it was left untouched and treated as empty. 'apply' will back it up before recording.`,
+  stateNotReadable: (where: string) =>
+    `state.json at ${where} could not be read (permission or I/O error); it was left untouched and treated as empty`,
   stateBackedUp: (from: string, to: string) =>
     `state.json at ${from} could not be read; a copy was saved to ${to} and the record starts empty`,
   emptyCommand: 'empty command name',

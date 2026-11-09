@@ -321,6 +321,30 @@ test('unreadable state.json warns without claiming a backup in plan, and backup 
   assert.doesNotThrow(() => JSON.parse(fs.readFileSync(statePath(ctx), 'utf8')));
 });
 
+test('unreadable (not corrupt) state.json: plan does not promise a backup', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  fs.mkdirSync(statePath(ctx), { recursive: true });
+  const selection = { harnessIds: [HARNESS], itemIds: ['hk'] };
+
+  const plan = await buildPlan(data, ctx, selection);
+  assert.ok(plan.warnings.length >= 1);
+  assert.match(plan.warnings[0] ?? '', /state\.json/);
+  assert.doesNotMatch(plan.warnings[0] ?? '', /back it up/);
+});
+
+test('missing state.json yields no warning', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['hk'] });
+  assert.deepEqual(plan.warnings, []);
+  const read = readState(ctx);
+  assert.equal(read.warning, undefined);
+  assert.equal(read.damaged, undefined);
+});
+
 test('verify: MCP serverName tanımlıysa gerçekten o anahtara bakar', () => {
   const home = tempHome();
   const data = fixture();

@@ -42,22 +42,32 @@ export interface StateRead {
   state: State;
   /** Set when the stored state could not be read or parsed. The file itself is left untouched. */
   warning?: string;
-  /** True when the file exists but is unusable: a write would erase it, so apply backs it up first. */
-  damaged?: boolean;
+  /**
+   * Set when the file exists but is unusable, so a write would erase it.
+   * 'read': the file could not be read (permission or I/O error). 'parse': it was read but is not valid state.
+   */
+  damaged?: 'read' | 'parse';
 }
 
 /** Read-only: plan and status call this, so it never writes. Apply backs up a `damaged` file before recording. */
 export function readState(ctx: Ctx): StateRead {
   const file = statePath(ctx);
   const empty: State = { version: 1, entries: [] };
-  if (!fs.existsSync(file)) return { state: empty };
+
+  let raw: string;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { state: empty };
+    return { state: empty, warning: t.stateNotReadable(file), damaged: 'read' };
+  }
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as State;
+    const parsed = JSON.parse(raw) as State;
     if (!Array.isArray(parsed.entries)) throw new Error('entries missing');
     return { state: { version: 1, entries: parsed.entries } };
   } catch {
-    return { state: empty, warning: t.stateUnreadable(file), damaged: true };
+    return { state: empty, warning: t.stateUnreadable(file), damaged: 'parse' };
   }
 }
 
