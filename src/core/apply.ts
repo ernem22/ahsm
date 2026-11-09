@@ -35,6 +35,10 @@ export function exitCodeFor(outcome: ApplyOutcome): number {
   return failed ? 1 : 0;
 }
 
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function tailLine(stderr: string, fallback: string): string {
   return (
     stderr
@@ -78,29 +82,27 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
 
   const items: ApplyResult[] = [];
   const stored = readState(ctx);
-  let stateWarning = stored.warning;
-  // Recording over a damaged state.json would erase the user's history: keep a copy first. If that is not
-  // possible, never abort the installs; leave the file alone and skip recording instead.
+  const warnings: string[] = [];
   let recordingDisabled = false;
-  if (stored.damaged) {
-    const file = statePath(ctx);
-    let reason: string | undefined;
-    if (stored.damaged === 'read') {
-      reason = t.stateFileUnreadable;
-    } else {
-      try {
-        const dest = backupFile(ctx, file);
-        if (dest) stateWarning = t.stateBackedUp(file, dest);
-      } catch (error) {
-        reason = error instanceof Error ? error.message : String(error);
-      }
-    }
-    if (reason !== undefined) {
-      recordingDisabled = true;
-      stateWarning = t.stateNotRecorded(file, reason);
+  // Never abort the installs over state.json: warn, leave the file alone and skip recording.
+  const disableRecording = (reason: string): void => {
+    recordingDisabled = true;
+    warnings.push(t.stateNotRecorded(statePath(ctx), reason));
+  };
+  // Recording over a damaged state.json would erase the user's history: keep a copy first.
+  // A damaged state has exactly one warning (backed up or not recorded), never stored.warning as well.
+  if (stored.damaged === 'read') {
+    disableRecording(t.stateFileUnreadable);
+  } else if (stored.damaged === 'parse') {
+    try {
+      const dest = backupFile(ctx, statePath(ctx));
+      // No file left to back up: keep the unreadable-state warning.
+      const warning = dest ? t.stateBackedUp(statePath(ctx), dest) : stored.warning;
+      if (warning) warnings.push(warning);
+    } catch (error) {
+      disableRecording(errorText(error));
     }
   }
-  const warnings = stateWarning ? [stateWarning] : [];
   let state = stored.state;
   // A failed state write must never turn a finished install into an error or lose the report: warn once, stop recording.
   const record = (input: Parameters<typeof recordEntry>[2]): void => {
@@ -108,8 +110,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
     try {
       state = recordEntry(ctx, state, input);
     } catch (error) {
-      recordingDisabled = true;
-      warnings.push(t.stateNotRecorded(statePath(ctx), error instanceof Error ? error.message : String(error)));
+      disableRecording(errorText(error));
     }
   };
 
