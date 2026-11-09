@@ -49,8 +49,8 @@ sunucusu veya hook için dosyalar elle düzenleniyor. İki sonuç doğuyor:
 - **Sağlayıcı modeli.** Her öğe türü için birden fazla sağlayıcı tanımlanabilir; her sağlayıcı hangi
   harness'ları desteklediğini bildirir. Desteklenmeyen ikili sessizce atlanmaz, "kapsanmıyor" olarak
   gösterilir.
-- **Hook'lar.** Çok-harness bir hook kurucusu yok; agentenv hook'ları `settings.json`'a birleştirir — fark
-  gösterilir, onay istenir, yedek alınır, dosyadaki diğer ayarlar korunur.
+- **Hook'lar.** Çok-harness bir hook kurucusu yok; agentenv hook'ları `settings.json`'a birleştirir —
+  hedef dosya ve yazılacak girdi gösterilir, onay istenir, yedek alınır, dosyadaki diğer ayarlar korunur.
 - **Ön koşullar.** Eksik olan araçlar (Node/npx, uv, gerekli harness binary'si) plan aşamasında
   listelenir ve onay sonrası kurulur; kurulum tarifi platform başına veridir.
 - **Doğru formata yazma.** Her harness kendi formatını alır; MCP anahtarı düz metin yazılmaz, `${VAR}`
