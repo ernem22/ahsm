@@ -1,0 +1,9 @@
+id: skills-cli
+kind: skill
+supports: [claude-code]
+requires: [node]
+priority: 10
+check: [npx, skills, list, -g]
+install: [npx, skills, add, "{source}", -g, -a, "{agentId}", -y, "--skill {skill}"]
+remove: [npx, skills, remove, -g, -a, "{agentId}", "{skill}"]
+update: [npx, skills, update, "{skill}"]

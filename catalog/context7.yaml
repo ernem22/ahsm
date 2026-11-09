@@ -1,0 +1,6 @@
+id: context7
+kind: mcp
+url: https://mcp.context7.com/mcp
+targets: "*"
+note: "Kütüphane dokümanlarını güncel haliyle çeker"
+link: https://github.com/upstash/context7

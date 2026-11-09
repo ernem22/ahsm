@@ -1,0 +1,7 @@
+id: bash-log
+kind: hook
+event: PreToolUse
+matcher: Bash
+hookCommand: "cat >> \"$HOME/.agentenv-bash.log\""
+targets: [claude-code]
+note: "Hook girdisini (JSON, stdin) loglar"

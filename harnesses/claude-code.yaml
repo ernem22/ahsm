@@ -1,0 +1,12 @@
+id: claude-code
+label: Claude Code
+detect:
+  - ~/.claude
+  - path:claude
+agentId: claude-code
+config:
+  path: ~/.claude/settings.json
+  format: jsonc
+hooks:
+  path: ~/.claude/settings.json
+  section: hooks.{event}

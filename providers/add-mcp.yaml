@@ -1,0 +1,6 @@
+id: add-mcp
+kind: mcp
+supports: [claude-code]
+requires: [node]
+priority: 10
+install: [npx, add-mcp, "{package}", -g, -a, "{agentId}", -y]

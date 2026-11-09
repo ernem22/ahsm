@@ -1,0 +1,5 @@
+id: base
+default: true
+note: "Her makinede istediğim çekirdek set"
+link: https://github.com/emilkowalski/skills
+items: [emil-skills, context7, bash-log]

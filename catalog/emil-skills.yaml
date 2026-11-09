@@ -1,0 +1,6 @@
+id: emil-skills
+kind: skill
+source: emilkowalski/skills
+targets: "*"
+note: "Emil Kowalski'nin UI/motion skill seti"
+link: https://github.com/emilkowalski/skills

@@ -1,0 +1,8 @@
+id: node
+check:
+  command: [node, --version]
+  min: "20"
+install:
+  win32: [winget, install, OpenJS.NodeJS.LTS, --silent]
+  darwin: [brew, install, node]
+  linux: [bash, -lc, "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt install -y nodejs"]
