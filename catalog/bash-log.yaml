@@ -2,6 +2,6 @@ id: bash-log
 kind: hook
 event: PreToolUse
 matcher: Bash
-hookCommand: "cat >> \"$HOME/.agentenv-bash.log\""
+hookCommand: "node -e \"require('fs').appendFileSync(require('os').homedir()+'/.agentenv-bash.log',require('fs').readFileSync(0))\""
 targets: [claude-code]
-note: "Hook girdisini (JSON, stdin) loglar"
+note: "Hook girdisini (JSON, stdin) loglar — cmd.exe ve bash'te aynı çalışır"
