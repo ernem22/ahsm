@@ -90,7 +90,8 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
     warnings.push(t.stateNotRecorded(statePath(ctx), reason));
   };
   // Recording over a damaged state.json would erase the user's history: keep a copy first.
-  // A damaged state has exactly one warning (backed up or not recorded), never stored.warning as well.
+  // readState sets `warning` only together with `damaged`, so a non-damaged warning cannot reach here:
+  // a damaged state has exactly one warning (backed up or not recorded), never stored.warning as well.
   if (stored.damaged === 'read') {
     disableRecording(t.stateFileUnreadable);
   } else if (stored.damaged === 'parse') {
