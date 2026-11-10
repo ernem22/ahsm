@@ -114,6 +114,14 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       disableRecording(errorText(error));
     }
   };
+  // A hook already in place still needs its command recorded, so a later change can find and replace it.
+  const recordHook = (entry: PlanEntry): void => {
+    const hookCommand = entry.hook?.target.spec.command;
+    const recorded = findEntry(state, entry.itemId, entry.harness);
+    if (hookCommand && recorded?.hookCommand !== hookCommand) {
+      record({ ref: entry, kind: entry.kind, hookCommand });
+    }
+  };
 
   for (const entry of plan.entries) {
     const blocked = entryDefs(data, entry).provider?.requires?.find((id) => unmet.has(id));
@@ -123,17 +131,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       continue;
     }
     if (entry.action === 'already') {
-      // A hook found in place (written by hand or by an older run) still needs a record of its command,
-      // otherwise a later change cannot find and replace it.
-      const hookCommand = entry.hook?.target.spec.command;
-      const recorded = findEntry(state, entry.itemId, entry.harness);
-      if (hookCommand && recorded?.hookCommand !== hookCommand) {
-        record({
-          ref: entry,
-          kind: entry.kind,
-          hookCommand,
-        });
-      }
+      recordHook(entry);
       items.push({ entry, status: 'already' });
       continue;
     }
@@ -152,6 +150,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       try {
         const merged = mergeHook(readText(target.file), target.path, target.spec, previous);
         if (!merged.changed) {
+          recordHook(entry);
           items.push({ entry, status: 'already' });
           continue;
         }

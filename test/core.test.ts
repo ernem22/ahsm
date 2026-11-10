@@ -10,6 +10,7 @@ import { buildPlan } from '../src/core/plan.js';
 import { readStatus } from '../src/core/status.js';
 import { findEntry, readState, statePath, type State } from '../src/core/state.js';
 import { verifyInstalled } from '../src/core/verify.js';
+import { mergeHook, readText } from '../src/apply/hook-merger.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
 
@@ -229,6 +230,23 @@ test('apply: bozuk settings.json hiç yazılmaz', async () => {
   const outcome = await applyPlan(data, ctx, plan);
   assert.equal(outcome.items[0]?.status, 'error');
   assert.equal(fs.readFileSync(settings, 'utf8'), '{ bozuk');
+});
+
+test('apply: hook appears between plan and apply -> already is recorded for later replacement', async () => {
+  const home = tempHome();
+  const settings = path.join(home, '.claude', 'settings.json');
+  const data = fixture();
+  const { ctx } = setup(home);
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['hk'] });
+  assert.equal(plan.entries[0]?.action, 'run');
+
+  const target = plan.entries[0]!.hook!.target;
+  fs.writeFileSync(settings, mergeHook(readText(target.file), target.path, target.spec).text, 'utf8');
+
+  const outcome = await applyPlan(data, ctx, plan);
+  assert.equal(outcome.items[0]?.status, 'already');
+  assert.equal(findEntry(readState(ctx).state, 'hk', HARNESS)?.hookCommand, 'echo hi');
 });
 
 test('bootstrap: kurulumdan sonra hâlâ eksikse bağımlı öğe çalıştırılmaz', async () => {
