@@ -308,6 +308,7 @@ test('unreadable state.json warns without claiming a backup in plan, and backup 
 
   const plan = await buildPlan(data, ctx, selection);
   assert.ok(plan.warnings.includes(t.stateUnreadable(statePath(ctx))));
+  assert.match(plan.warnings[0] ?? '', /will try to back it up/);
   assert.equal(fs.existsSync(path.join(home, '.agentenv', 'backups')), false);
 
   const outcome = await applyPlan(data, ctx, plan);

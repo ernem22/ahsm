@@ -69,7 +69,7 @@ export const t = {
   requirementUnmet: (id: string) => `requirement not met: ${id}`,
   exitCode: (code: number) => `exit code ${code}`,
   stateUnreadable: (where: string) =>
-    `state.json at ${where} could not be read; it was left untouched and treated as empty. 'apply' will back it up before recording.`,
+    `state.json at ${where} could not be read; it was left untouched and treated as empty. 'apply' will try to back it up before recording.`,
   stateNotReadable: (where: string) =>
     `state.json at ${where} could not be read (permission or I/O error); it was left untouched and treated as empty`,
   stateBackedUp: (from: string, to: string) =>
