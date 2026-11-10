@@ -41,7 +41,8 @@ sunucusu veya hook için dosyalar elle düzenleniyor. İki sonuç doğuyor:
   linki olabilir. TUI'de paket seçildiğinde içeriği işaretli gelir, kullanıcı tek tek değiştirebilir.
 - **TUI.** Harness'ları ve öğeleri listeler, paket notlarını gösterir, seçim alır. Kurulum öncesi
   yapılacak işi (çalışacak komut, hook için yazılacak girdi) gösterip onay ister; hedef dosyanın farkı gösterilmez,
-  çünkü skills/MCP dosyasını sağlayıcı yazar. Üzerine yazarken eski dosyayı yedekler.
+  çünkü skills/MCP dosyasını sağlayıcı yazar. Yalnız kendi yazdığı hook dosyasını, üzerine yazmadan önce
+  yedekler.
 - **Tek seferde çoklu kurulum.** Seçilenler tek bir harness'a ya da tüm harness'lara birden yazılabilir.
 - **Kurulumu devretme (skills + MCP).** Skill dosyalarını ve MCP kayıtlarını agentenv yazmaz; sağlayıcı
   araçları çağırır (`npx skills add <kaynak> -g -a <harness>`, `npx add-mcp <paket>`). Symlink/kopya,

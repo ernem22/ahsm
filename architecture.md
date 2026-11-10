@@ -27,11 +27,12 @@ Değer kurulum yapmakta değil, üç türü tek pakette birleştirmekte ve tek d
   **kod değişikliği gerektirmez**.
 - **Plan yan etkisizdir** ve ön koşulları da içerir. `apply` yalnız planı uygular.
 - Bir hedef için sağlayıcı yoksa plan `kapsanmıyor` der; sessizce atlanmaz.
-- Onaysız yazma ve onaysız ön koşul kurulumu yok; her yazma öncesi yedek alınır.
+- Onaysız yazma ve onaysız ön koşul kurulumu yok. agentenv'in kendi yazdığı hook dosyası ile bozuk
+  `state.json`, yazılmadan önce yedeklenir; skills/MCP dosyalarını sağlayıcı yazar.
 - Skills ve MCP dosyalarını agentenv yazmaz (sağlayıcı yazar); hook birleştirmesi bizim.
 - Kapsam bugün sağlayıcı komutunda sabit (`-g` = kullanıcı seviyesi); proje kapsamı açılınca
   `{scope}` değişkeni olarak plana girer, ayrı kod yolu açılmaz.
-- Sıralı uygulama hatada durmaz: başarısız öğe `kurulamadı` olarak raporlanır, kalanlar devam eder.
+- Sıralı uygulama hatada durmaz: başarısız öğe `hata` olarak raporlanır, kalanlar devam eder.
 - **Kayıt kanıt değildir.** `already` yalnız sahibi "burada" dediğinde söylenir (`verify` tarifi: skill
   lockfile'ı, harness'ın MCP config'i). Doğrulanamıyorsa öğe yeniden kurulur — yükleyiciler idempotent.
 - Bozuk `state.json` sessizce sıfırlanmaz: okunup ayrıştırılamayan dosya `apply` sırasında `backups/`
@@ -142,12 +143,14 @@ items: [emil-skills, context7, bash-log]
 3. **plan** — her üçlü için sağlayıcı çözümlenir (`supports` içinde mi), komut (hook için yazılacak girdi) üretilir; kayıt varsa
    sağlayıcının `verify` tarifiyle gerçek kontrol edilir; eksik ön koşullar listelenir. Hiçbir şey yazılmaz.
 4. **bootstrap** — onaylanan ön koşullar platform komutuyla kurulur, sonra yeniden check.
-5. **apply** — yedek → sıralı uygulama → sonuç satırı (`kuruldu` / `zaten kurulu` / `kapsanmıyor` /
-   `hata`). CLI çıkış kodu: bir öğe `hata` verdiyse ya da bir ön koşul karşılanmadıysa 1, yalnız uyarı
-   varsa 0.
+5. **apply** — sıralı uygulama; her hook yazımından önce hedef dosya, bozuk `state.json` kaydından önce
+   o dosya yedeklenir. Sonuç satırı: `kuruldu` / `zaten kurulu` / `kapsanmıyor` / `hata`. CLI
+   (`apply --yes`) çıkış kodu: bir öğe `hata` verdiyse ya da bir ön koşul karşılanmadıysa 1, yalnız
+   uyarı varsa 0; etkileşimli TUI çıkış kodu ayarlamaz.
 6. **record** — `state.json`: öğe, harness, sağlayıcı, çalıştırılan komut, tarih. Her başarılı öğeden
-   sonra atomik yazılır (tmp + rename). İstisna: hedefte zaten bulunan bir hook (elle ya da eski bir
-   çalıştırmadan) için komut çalışmaz; yalnız `hookCommand` kaydedilir (`command` boş), böylece komut
+   sonra atomik yazılır (tmp + rename); kayıt devre dışıysa (`state.json` okunamıyorsa, bozuk dosya
+   yedeklenemiyorsa ya da kayıt yazılamıyorsa) yazılmaz. İstisna: hedefte zaten bulunan bir hook (elle
+   ya da eski bir çalıştırmadan) için komut çalışmaz; yalnız `hookCommand` kaydedilir (`command` boş), böylece komut
    sonradan değişince eski girdi bulunup yerinde değiştirilir. Bu kayıt var olduğuna kanıt sayılmaz:
    `status`/`plan` hedef dosyayı yine kendileri okur.
 7. **status** — kayıt + doğrulanabilen gerçek: `verify` tarifi olan sağlayıcılarda `güncel`/`eksik`,
