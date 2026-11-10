@@ -249,6 +249,46 @@ test('apply: hook appears between plan and apply -> already is recorded for late
   assert.equal(findEntry(readState(ctx).state, 'hk', HARNESS)?.hookCommand, 'echo hi');
 });
 
+test('apply: a command that throws is reported as an error, not a rejected plan', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const { ctx } = setup(home);
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk', 'hk'] });
+
+  ctx.runner = {
+    run: async () => {
+      throw new Error('boom');
+    },
+  };
+  const outcome = await applyPlan(data, ctx, plan);
+
+  assert.equal(outcome.items[0]?.status, 'error');
+  assert.equal(outcome.items[0]?.message, 'boom');
+  assert.equal(outcome.items[1]?.status, 'ok');
+  assert.equal(exitCodeFor(outcome), 1);
+});
+
+test('apply: an install command that throws blocks dependents instead of rejecting', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const runner = new RecordingRunner([{ code: 1, stdout: '', stderr: '' }]);
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk', 'hk'] });
+  assert.equal(plan.requirements[0]?.present, false);
+
+  ctx.runner = {
+    run: async () => {
+      throw new Error('install boom');
+    },
+  };
+  const outcome = await applyPlan(data, ctx, plan);
+
+  assert.equal(outcome.requirements[0]?.ok, false);
+  assert.match(outcome.requirements[0]?.message ?? '', /install boom/);
+  assert.equal(outcome.items[0]?.status, 'error');
+  assert.equal(outcome.items[1]?.status, 'ok');
+});
+
 test('bootstrap: kurulumdan sonra hâlâ eksikse bağımlı öğe çalıştırılmaz', async () => {
   const home = tempHome();
   const data = fixture();

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Ctx } from '../context.js';
+import type { Ctx, RunResult } from '../context.js';
 import { mergeHook, readText } from '../apply/hook-merger.js';
 import type { Data } from '../types.js';
 import type { Plan, PlanEntry } from './plan.js';
@@ -39,6 +39,15 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** A runner that throws must not cost the whole report: treat it like an exit-1 result. */
+async function runSafe(ctx: Ctx, argv: string[]): Promise<RunResult> {
+  try {
+    return await ctx.runner.run(argv);
+  } catch (error) {
+    return { code: 1, stdout: '', stderr: errorText(error) };
+  }
+}
+
 function tailLine(stderr: string, fallback: string): string {
   return (
     stderr
@@ -65,7 +74,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       continue;
     }
 
-    const install = await ctx.runner.run(requirement.installCommand);
+    const install = await runSafe(ctx, requirement.installCommand);
     if (install.code !== 0) {
       requirements.push({ id: requirement.id, ok: false, message: tailLine(install.stderr, t.missing) });
       unmet.add(requirement.id);
@@ -74,7 +83,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
 
     // An installer (winget/brew/apt) does not touch this process's PATH: re-check before relying on it.
     const def = data.requires.find((candidate) => candidate.id === requirement.id);
-    const recheck = def ? await ctx.runner.run(def.check.command) : undefined;
+    const recheck = def ? await runSafe(ctx, def.check.command) : undefined;
     const ok = def !== undefined && meetsRequirement(def, recheck);
     requirements.push({ id: requirement.id, ok, message: ok ? undefined : t.requirementUnmet(requirement.id) });
     if (!ok) unmet.add(requirement.id);
@@ -178,7 +187,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       continue;
     }
 
-    const result = await ctx.runner.run(entry.command);
+    const result = await runSafe(ctx, entry.command);
     if (result.code === 0) {
       record({
         ref: entry,
