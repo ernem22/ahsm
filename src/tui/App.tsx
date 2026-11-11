@@ -30,8 +30,8 @@ export function App({ data, ctx }: Props): React.ReactElement {
   const [itemIndex, setItemIndex] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [plan, setPlan] = useState<Plan | undefined>();
-  // Marked prerequisite updates: the plan shows the offers, and 'y' runs only what is marked.
-  const [markUpdates, setMarkUpdates] = useState(true);
+  // Marked prerequisite updates start unmarked: the plan shows the offers, and 'y' runs only what is marked.
+  const [markUpdates, setMarkUpdates] = useState(false);
   const [outcome, setOutcome] = useState<ApplyOutcome | undefined>();
   const [error, setError] = useState<string | undefined>();
 
@@ -63,7 +63,7 @@ export function App({ data, ctx }: Props): React.ReactElement {
   useEffect(() => {
     if (step !== 'applying' || !plan) return;
     let cancelled = false;
-    applyPlan(data, ctx, plan, { updates: markUpdates ? undefined : [] })
+    applyPlan(data, ctx, plan, { updates: markUpdates ? plan.requirements.map((requirement) => requirement.id) : [] })
       .then((result) => {
         if (!cancelled) {
           setOutcome(result);

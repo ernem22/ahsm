@@ -4,7 +4,7 @@ import type { Ctx, RunResult } from '../context.js';
 import { mergeHook, readText } from '../apply/hook-merger.js';
 import { writeConfigFile } from '../apply/config-writer.js';
 import type { Data } from '../types.js';
-import type { Plan, PlanEntry } from './plan.js';
+import { requirementState, type Plan, type PlanEntry } from './plan.js';
 import { requiredIds } from './entry.js';
 import { meetsRequirement } from './requirements.js';
 import { backupFile, findEntry, readState, recordEntry, statePath } from './state.js';
@@ -32,9 +32,9 @@ export interface ApplyOutcome {
 
 export interface ApplyOptions {
   /**
-   * The requirement ids the user marked in the plan. Omitted means the whole plan was approved (today's
-   * `apply --yes`), so every offered update runs. An id left out is not installed: the requirement stays
-   * unmet and the items that need it are reported blocked — the rest of the run is untouched.
+   * The requirement ids whose offered update the user marked. Omitted means nothing was marked: an
+   * outdated requirement stays unmet and its items are reported blocked. A missing requirement (no
+   * usable version was read) is bootstrapped either way, so the node bootstrap path keeps working.
    */
   updates?: string[];
 }
@@ -82,7 +82,8 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan, options: Apply
       unmet.add(requirement.id);
       continue;
     }
-    if (options.updates && !options.updates.includes(requirement.id)) {
+    // Only an outdated requirement waits for a mark; missing ones are bootstrapped without one.
+    if (requirementState(requirement) === 'outdated' && !options.updates?.includes(requirement.id)) {
       requirements.push({ id: requirement.id, ok: false, message: t.updateNotMarked(requirement.id) });
       unmet.add(requirement.id);
       continue;

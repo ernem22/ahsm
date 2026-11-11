@@ -44,6 +44,17 @@ export interface PlanRequirement {
   installCommand?: string[];
 }
 
+export type RequirementState = 'ready' | 'missing' | 'outdated';
+
+/**
+ * The two unmet states apply must tell apart: `missing` (no usable version was read, so bootstrap it)
+ * and `outdated` (a version was read and it is below `check.min`, so only a marked update touches it).
+ */
+export function requirementState(requirement: PlanRequirement): RequirementState {
+  if (requirement.present) return 'ready';
+  return requirement.version !== undefined ? 'outdated' : 'missing';
+}
+
 export interface Plan {
   selection: Selection;
   entries: PlanEntry[];

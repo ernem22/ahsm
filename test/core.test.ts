@@ -1012,3 +1012,46 @@ test('apply: markalanmayan güncelleme çalışmaz, bağımlı öğe bloklanır 
   assert.ok(findEntry(readState(ctx).state, 'sk', 'other'), 'diğer harness kaydedilmedi');
   assert.equal(exitCodeFor(outcome), 1);
 });
+
+test('apply: --update verilmezse eski harness güncellenmez; eksik ön koşul yine kurulur', async () => {
+  const home = tempHome();
+  const data = twoHarnesses();
+  const { runner, calls } = scripted({
+    'node --version': [{ code: 0, stdout: 'v22.1.0', stderr: '' }],
+    'claude --version': [{ code: 0, stdout: '1.4.0', stderr: '' }],
+    'other --version': [{ code: 0, stdout: '1.5.0', stderr: '' }],
+    [HARNESS_UPDATE.join(' ')]: [{ code: 0, stdout: '', stderr: '' }],
+  });
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
+
+  const outcome = await applyPlan(data, ctx, plan);
+
+  assert.equal(calls.some((call) => call.join(' ') === HARNESS_UPDATE.join(' ')), false, 'işaretsiz güncelleme çalıştı');
+  const requirement = outcome.requirements.find((candidate) => candidate.id === HARNESS);
+  assert.equal(requirement?.ok, false);
+  assert.equal(requirement?.message, t.updateNotMarked(HARNESS));
+  assert.equal(outcome.items.find((item) => item.entry.harness === HARNESS)?.status, 'error');
+  assert.equal(outcome.items.find((item) => item.entry.harness === 'other')?.status, 'ok', 'diğer harness devam etmedi');
+  assert.equal(exitCodeFor(outcome), 1);
+});
+
+test('apply: eksik ön koşul işaretsiz de kurulur (bootstrap yolu)', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const runner = new RecordingRunner([
+    { code: 1, stdout: '', stderr: '' },
+    { code: 0, stdout: '', stderr: '' },
+    { code: 0, stdout: 'v22.1.0', stderr: '' },
+  ]);
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  assert.equal(plan.requirements[0]?.present, false);
+  assert.equal(plan.requirements[0]?.version, undefined, 'eksik ön koşul sürüm taşımamalı');
+
+  const outcome = await applyPlan(data, ctx, plan);
+
+  assert.deepEqual(runner.calls.slice(0, 3), [['node', '--version'], ['install-node'], ['node', '--version']]);
+  assert.equal(outcome.requirements[0]?.ok, true);
+  assert.equal(outcome.items[0]?.status, 'ok');
+});

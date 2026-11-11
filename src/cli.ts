@@ -46,11 +46,11 @@ function selectionFromArgs(data: Data, ctx: Ctx, argv: string[]) {
   });
 }
 
-/** `--update` absent means the whole plan was approved; `none` marks no update; a list names them. */
-function markedUpdates(argv: string[]): string[] | undefined {
+/** `--update` absent or `none` marks nothing; `all` marks every offer; a list names the ones to run. */
+function markedUpdates(argv: string[], plan: Plan): string[] {
   const flag = valueOf(argv, '--update');
-  if (!flag || flag === 'all') return undefined;
-  if (flag === 'none') return [];
+  if (!flag || flag === 'none') return [];
+  if (flag === 'all') return plan.requirements.map((requirement) => requirement.id);
   return flag
     .split(',')
     .map((id) => id.trim())
@@ -79,7 +79,7 @@ async function main(): Promise<void> {
       console.log(t.applyHint);
       return;
     }
-    const outcome = await applyPlan(data, ctx, plan, { updates: markedUpdates(argv) });
+    const outcome = await applyPlan(data, ctx, plan, { updates: markedUpdates(argv, plan) });
     printOutcome(outcome);
     process.exitCode = exitCodeFor(outcome);
     return;

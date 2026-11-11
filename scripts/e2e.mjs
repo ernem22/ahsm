@@ -108,6 +108,28 @@ install:
   return root;
 }
 
+/** A root whose requirement is absent until its install command writes the version the check reads. */
+function missingRoot() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-root-'));
+  fs.cpSync(offlineRoot, root, { recursive: true });
+  const check = JSON.stringify(path.join(root, 'bin', 'fake-missing-version.mjs'));
+  const update = JSON.stringify(path.join(root, 'bin', 'fake-update.mjs'));
+  fs.writeFileSync(
+    path.join(root, 'requires', 'node.yaml'),
+    `id: node
+check:
+  command: [node, ${check}]
+  min: "20"
+install:
+  win32: [node, ${update}]
+  darwin: [node, ${update}]
+  linux: [node, ${update}]
+`,
+    'utf8',
+  );
+  return root;
+}
+
 function updatesRan(home) {
   const log = path.join(home, '.fake-updates.log');
   return fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).length : 0;
@@ -209,24 +231,35 @@ check('plan eski harness\'ı sürüm, asgari ve güncelleme komutuyla gösterir,
   assert(updatesRan(old) === 0, 'güncelleme plan sırasında çalıştı');
 });
 
-check('markalanmayan güncelleme çalışmaz: öğeler bloklu kalır, hiçbiri kurulmaz', () => {
+check('--update yok: eski harness güncellenmez, öğeler bloklu kalır, hiçbiri kurulmaz', () => {
   const blocked = sandbox();
   const root = versionedRoot();
   const before = treeHash(blocked);
-  const { out, code } = run(blocked, ['apply', '--yes', '--update', 'none'], root);
+  const { out, code } = run(blocked, PASS, root);
   assert(code === 1, `çıkış kodu 1 değil: ${code}: ${out}`);
   assert(/the fake update was not marked, so it was not run/.test(out), `sebep yok: ${out}`);
   const reasons = (out.match(/requirement not met: fake/g) ?? []).length;
   assert(reasons === 3, `bloklu öğe sayısı ${reasons}: ${out}`);
   assert(updatesRan(blocked) === 0, 'markalanmayan güncelleme çalıştı');
+  assert(!fs.existsSync(path.join(blocked, '.fake-updates.log')), 'güncelleme günlüğü oluşturuldu');
   assert(!fs.existsSync(path.join(blocked, '.fake', 'skills', 'alpha.md')), 'bloklu skill kuruldu');
   assert(treeHash(blocked) === before, 'hiçbir şey kurulmamalı');
 });
 
-check('markalanan güncelleme bir kez çalışır, sürüm yeniden okunur, öğeler aynı çalıştırmada kurulur', () => {
+check('eksik ön koşul işaretsiz apply --yes ile kurulur, öğeler devam eder', () => {
+  const bootstrapped = sandbox();
+  const root = missingRoot();
+  const { out, code } = run(bootstrapped, PASS, root);
+  assert(code === 0, `çıkış kodu ${code}: ${out}`);
+  assert(updatesRan(bootstrapped) === 1, `kurulum ${updatesRan(bootstrapped)} kez çalıştı`);
+  assert(fs.readFileSync(path.join(bootstrapped, '.fake-version'), 'utf8').trim() === '99.0.0', 'kurulum sürümü yazmadı');
+  assert((out.match(/^installed {2}/gm) ?? []).length === 3, `üç kurulum yok: ${out}`);
+});
+
+check('--update all işaretlenen güncellemeyi bir kez çalıştırır, sürüm yeniden okunur, öğeler kurulur', () => {
   const fixed = sandbox();
   const root = versionedRoot();
-  const { out, code } = run(fixed, ['apply', '--yes', '--update', 'fake'], root);
+  const { out, code } = run(fixed, ['apply', '--yes', '--update', 'all'], root);
   assert(code === 0, `çıkış kodu ${code}: ${out}`);
   assert((out.match(/^installed {2}/gm) ?? []).length === 3, `üç kurulum yok: ${out}`);
   assert(updatesRan(fixed) === 1, `güncelleme ${updatesRan(fixed)} kez çalıştı`);

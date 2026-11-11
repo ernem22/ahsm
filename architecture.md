@@ -153,10 +153,13 @@ items: [emil-skills, context7, bash-log]
    okunan sürümü, tanımın asgarisini (`check.min`) ve eksikse güncelleme komutunu taşır; bir harness'ın
    asgari sürümü karşılanmıyorsa satır `çok eski` der (status ile aynı sözcük). O ön koşula bağlı öğeler
    `bloklu` olarak ve sebebiyle gösterilir; başka bir harness'ın öğeleri etkilenmez. Hiçbir şey yazılmaz.
-4. **bootstrap** — yalnız **işaretlenen** ön koşullar platform komutuyla bir kez kurulur, sonra sürüm
-   yeniden check edilir. `apply --yes` işaretsiz çağrıldığında planın tamamı onaylanmış sayılır (bugünkü
-   davranış); `--update <id,id>` yalnız adı geçenleri, `--update none` hiçbirini işaretler. İşaretlenmeyen
-   ön koşul kurulmaz, bağımlı öğeler sebebiyle birlikte `hata` olarak raporlanır.
+4. **bootstrap** — ön koşullar planın bildirdiği iki duruma göre ele alınır: **eksik** (check kullanılabilir
+   sürüm üretmedi) her zaman platform komutuyla bir kez kurulur; **eski** (sürüm okundu ama `check.min`in
+   altında) yalnız kullanıcı işaretlediyse güncellenir. Kurulumdan sonra sürüm yeniden check edilir.
+   `apply --yes` varsayılanı hiçbir eski ön koşulu işaretlemez; `--update <id,id>` yalnız adı geçenleri,
+   `--update all` bütün teklifleri işaretler, `--update none` hiçbirini. İşaretlenmeyen eski ön koşul
+   güncellenmez, bağımlı öğeler sebebiyle birlikte `hata` olarak raporlanır; eksikler, diğer harness'lar ve
+   engellenmemiş öğeler devam eder.
 5. **apply** — sıralı uygulama; her hook yazımından önce hedef dosya, bozuk `state.json` kaydından önce
    o dosya yedeklenir. Sonuç satırı: `kuruldu` / `zaten kurulu` / `kapsanmıyor` / `hata`. CLI
    (`apply --yes`) çıkış kodu: bir öğe `hata` verdiyse ya da bir ön koşul karşılanmadıysa 1, yalnız
@@ -188,11 +191,12 @@ harness tanımında kalır.
 ## Test
 
 - `npm test` — birim/entegrasyon: `node:test`, geçici HOME + kayıt eden runner, ağ yok.
-- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 17 senaryo: kurulum, idempotens,
+- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 18 senaryo: kurulum, idempotens,
   doğrulama, kendini onarma, bozuk JSONC, bozuk state, eksik ön koşul, plan/status'un yazmaması,
   status'un harness bölümü (hazır / çok eski + güncelleme komutu / yok), eski harness'ın planda
-  sürüm/asgari/güncelleme komutuyla görünüp öğelerini bloklaması, markalanmayan güncellemenin
-  çalışmaması ve markalananın bir kez çalışıp aynı çalıştırmada öğeleri kurması.
+  sürüm/asgari/güncelleme komutuyla görünüp öğelerini bloklaması, `--update` verilmeden güncellemenin
+  çalışmaması, eksik ön koşulun işaretsiz bootstrap edilmesi ve `--update all`ın güncellemeyi bir kez
+  çalıştırıp aynı çalıştırmada öğeleri kurması.
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 

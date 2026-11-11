@@ -2,7 +2,7 @@ import { t } from './i18n.js';
 import type { ApplyOutcome } from './core/apply.js';
 import type { HarnessStatus, HarnessStatusRow, StatusReport } from './core/status.js';
 import type { RemoveOutcome, RemovePlan } from './core/remove.js';
-import type { Plan, PlanAction } from './core/plan.js';
+import { requirementState, type Plan, type PlanAction } from './core/plan.js';
 
 export type Tone = 'normal' | 'dim' | 'error' | 'warning';
 
@@ -47,7 +47,8 @@ export function planLines(plan: Plan): Line[] {
     const offered =
       !requirement.present && requirement.installCommand ? ` → ${requirement.installCommand.join(' ')}` : '';
     // "too old" is the same word status uses: an unmet minimum is a requirement, not a detection failure.
-    const state = requirement.present ? t.ready : requirement.version ? t.harnessLabels['too-old'] : t.missing;
+    const current = requirementState(requirement);
+    const state = current === 'ready' ? t.ready : current === 'outdated' ? t.harnessLabels['too-old'] : t.missing;
     lines.push({
       text: `${state}  ${t.requirement} ${name}${version}${minimum}${offered}`,
       tone: requirement.present ? 'normal' : 'warning',

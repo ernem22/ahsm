@@ -41,7 +41,7 @@ export const t = {
   blocked: 'blocked',
   actions: (runs: number, skipped: number, blocked: number) =>
     `${runs} action(s), ${skipped} skipped, ${blocked} blocked`,
-  applyHint: 'to run it: agentenv apply --yes (add --update <ids|none> to choose prerequisite updates)',
+  applyHint: 'to run it: agentenv apply --yes (add --update <ids|all> to mark outdated prerequisites; default: none)',
   statusEmpty: 'record is empty — nothing installed yet',
   itemsTitle: 'items',
   harnessLabels: {
@@ -121,10 +121,11 @@ export const t = {
   help: [
     'agentenv                              TUI (pick harnesses and a package, review, install)',
     'agentenv plan [--package id]          print the plan only',
-    'agentenv apply --yes [--package id]   apply the plan (--update <ids|none> marks prerequisite updates)',
+    'agentenv apply --yes [--package id]   apply the plan (--update <ids|all> marks outdated prerequisites; default: none)',
     'agentenv status                       show what is installed',
     'agentenv remove [--package id]        remove every recorded item (all harnesses)',
     '',
-    'flags: --package <id> (default: the package marked default) · --harness <id,id> · --update <ids|none>',
+    'flags: --package <id> (default: the package marked default) · --harness <id,id>',
+    '       --update <ids|all|none> marks outdated prerequisite updates (default: none — they stay blocked)',
   ],
 };
