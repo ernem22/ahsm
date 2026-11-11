@@ -7,6 +7,7 @@ import { createContext, RecordingRunner } from '../src/context.js';
 import { applyPlan, exitCodeFor, type ApplyOutcome } from '../src/core/apply.js';
 import { detectHarnesses } from '../src/core/detect.js';
 import { buildPlan } from '../src/core/plan.js';
+import { applyRemovePlan, buildRemovePlan } from '../src/core/remove.js';
 import { readStatus } from '../src/core/status.js';
 import { findEntry, readState, statePath, type State } from '../src/core/state.js';
 import { verifyInstalled } from '../src/core/verify.js';
@@ -52,6 +53,7 @@ function fixture(): Data {
         requires: ['node'],
         verify: { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' },
         install: ['npx', 'skills', 'add', '{source}', '-g', '-a', '{agentId}', '--skill {skill}'],
+        remove: ['npx', 'skills', 'remove', '-g', '{skill}'],
       },
       {
         id: 'add-mcp',
@@ -699,4 +701,44 @@ test('verify: codex MCP girdisi TOML config içinde okunur', () => {
 
   fs.writeFileSync(path.join(home, '.codex', 'config.toml'), '[features]\nx = 1\n', 'utf8');
   assert.equal(verifyInstalled(codex, item, provider, ctx), 'missing');
+});
+
+test('remove: planlanmışken state bozulursa yedekleyip öyle yazar', async () => {
+  const home = tempHome();
+  const data = fixture();
+  data.items.get('sk')!.skill = 'alpha';
+  const { ctx } = setup(home);
+  await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] }));
+
+  const plan = buildRemovePlan(data, ctx);
+  assert.equal(plan.entries.length, 1);
+
+  fs.writeFileSync(path.join(home, '.agentenv', 'state.json'), '{ bozuk', 'utf8');
+  const outcome = await applyRemovePlan(data, ctx, plan);
+
+  assert.equal(outcome.results[0]?.status, 'removed');
+  const backups = fs.readdirSync(path.join(home, '.agentenv', 'backups')).filter((stamp) => stamp.includes('T'));
+  const stateBackup = backups
+    .map((stamp) => path.join(home, '.agentenv', 'backups', stamp, 'state.json'))
+    .find((file) => fs.existsSync(file));
+  assert.ok(stateBackup, 'bozuk state yedeklenmedi');
+  assert.equal(fs.readFileSync(stateBackup, 'utf8'), '{ bozuk');
+});
+
+test('remove: etkilenen skill dizinleri harness tanımından gelir', async () => {
+  const home = tempHome();
+  const data = fixture();
+  data.harnesses[0]!.skills = { path: '~/.fake/skills' };
+  data.items.get('sk')!.skill = 'alpha';
+  const { ctx } = setup(home);
+  await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] }));
+
+  const plan = buildRemovePlan(data, ctx);
+  const paths = plan.entries[0]?.paths ?? [];
+
+  assert.ok(
+    paths.some((entry) => entry.endsWith(path.join('.fake', 'skills'))),
+    `harness skill dizini yok: ${paths.join(', ')}`,
+  );
+  assert.ok(paths.every((entry) => !entry.startsWith('~')), 'yol açılmamış');
 });

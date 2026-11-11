@@ -8,6 +8,8 @@ requires: [pi]
 config:
   path: ~/.pi/agent/settings.json
   format: jsonc
+skills:
+  path: ~/.pi/agent/skills
 mcp:
   path: ~/.pi/agent/mcp.json
   key: mcpServers

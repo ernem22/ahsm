@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Ctx, RunResult } from '../context.js';
 import { mergeHook, readText } from '../apply/hook-merger.js';
+import { writeConfigFile } from '../apply/config-writer.js';
 import type { Data } from '../types.js';
 import type { Plan, PlanEntry } from './plan.js';
 import { entryDefs } from './entry.js';
@@ -163,9 +164,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
           items.push({ entry, status: 'already' });
           continue;
         }
-        backupFile(ctx, target.file);
-        fs.mkdirSync(path.dirname(target.file), { recursive: true });
-        fs.writeFileSync(target.file, merged.text, 'utf8');
+        writeConfigFile(ctx, target.file, merged.text);
         record({
           ref: entry,
           kind: entry.kind,

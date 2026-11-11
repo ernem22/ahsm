@@ -3,5 +3,5 @@ kind: hook
 event: PreToolUse
 matcher: Bash
 hookCommand: "node -e \"require('fs').appendFileSync(require('os').homedir()+'/.agentenv-bash.log',require('fs').readFileSync(0))\""
-targets: [claude-code]
+targets: [claude-code, codex]
 note: "Hook girdisini (JSON, stdin) loglar — cmd.exe ve bash'te aynı çalışır"

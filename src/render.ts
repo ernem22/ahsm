@@ -83,7 +83,7 @@ export function removePlanLines(plan: RemovePlan): Line[] {
   const lines: Line[] = [];
   for (const entry of plan.entries) {
     lines.push({
-      text: `- ${entry.itemId} [${entry.kind}] → ${entry.action === 'remove' ? t.removeTitle : entry.action}`,
+      text: `- ${entry.itemId} [${entry.kind}] → ${t.removePlanLabels[entry.action]}`,
       tone: entry.action === 'error' ? 'error' : 'normal',
     });
     if (entry.harnesses.length > 0) lines.push({ text: `    ${t.removeAffects(entry.harnesses)}`, tone: 'dim' });

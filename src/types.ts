@@ -20,6 +20,8 @@ export interface HarnessDef {
   requires?: string[];
   config: { path: string; format: ConfigFormat };
   hooks?: { path?: string; section: string };
+  /** Where this harness keeps its own skills (the shared store is the provider's lockfile dir). */
+  skills?: { path: string };
   /** Where this harness keeps MCP servers, so a delegated install can still be verified. */
   mcp?: { path: string; key: string; format?: ConfigFormat };
 }
@@ -30,8 +32,8 @@ export interface ProviderDef {
   supports: string[];
   requires?: string[];
   priority?: number;
-  /** argv templates; `{placeholder}` values come from the item/harness. */
-  install: string[];
+  /** argv templates; `{placeholder}` values come from the item/harness. Absent for write-only providers. */
+  install?: string[];
   remove?: string[];
   update?: string[];
   /** How to ask the owner whether the install is really there (skill lockfile, harness config). */

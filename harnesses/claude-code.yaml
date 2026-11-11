@@ -11,6 +11,8 @@ config:
 hooks:
   path: ~/.claude/settings.json
   section: hooks.{event}
+skills:
+  path: ~/.claude/skills
 mcp:
   path: ~/.claude.json
   key: mcpServers

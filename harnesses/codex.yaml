@@ -11,6 +11,8 @@ config:
 hooks:
   path: ~/.codex/hooks.json
   section: hooks.{event}
+skills:
+  path: ~/.codex/skills
 mcp:
   path: ~/.codex/config.toml
   key: mcp_servers

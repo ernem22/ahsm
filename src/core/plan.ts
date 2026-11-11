@@ -3,6 +3,7 @@ import { mergeHook, readText, type HookEntry } from '../apply/hook-merger.js';
 import { hookTarget, type HookTarget } from '../apply/hook-target.js';
 import { t } from '../i18n.js';
 import type { Data, ItemDef, Kind, ProviderDef, RequirementDef, Selection } from '../types.js';
+import { pickProvider } from './providers.js';
 import { meetsRequirement } from './requirements.js';
 import { verifyInstalled } from './verify.js';
 import { findEntry, readState, sameCommand } from './state.js';
@@ -39,12 +40,6 @@ export function itemTargets(item: ItemDef, harnessId: string): boolean {
   return item.targets === '*' || item.targets.includes(harnessId);
 }
 
-export function pickProvider(data: Data, kind: Kind, harnessId: string): ProviderDef | undefined {
-  return data.providers
-    .filter((provider) => provider.kind === kind && provider.supports.includes(harnessId))
-    .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))[0];
-}
-
 /**
  * Side-effect free: reads files and check commands, produces the exact work apply would do.
  * A missing provider is reported as `unsupported`, never silently skipped.
@@ -71,7 +66,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
       }
       if (!itemTargets(item, harnessId)) continue;
 
-      const provider = pickProvider(data, item.kind, harnessId);
+      const provider = pickProvider(data, item.kind, { harnessId });
       if (!provider) {
         entries.push({
           itemId,
@@ -112,7 +107,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
         continue;
       }
 
-      const command = expandArgs(provider.install, {
+      const command = expandArgs(provider.install ?? [], {
         source: item.source,
         skill: item.skill,
         package: item.package ?? item.url,

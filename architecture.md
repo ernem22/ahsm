@@ -66,7 +66,7 @@ requires: [node]
 priority: 10                                      # aynı tür için birden fazla sağlayıcı varsa sıra
 verify: { strategy: skill-lock, file: "~/.agents/.skill-lock.json" }
 install: [npx, skills, add, "{source}", -g, -a, "{agentId}", -y, "--skill {skill}"]
-remove:  [npx, skills, remove, -g, -a, "{agentId}", "{skill}"]
+remove:  [npx, skills, remove, -g, -y, "{skill}"]         # kaldırma her harness'ı kapsar
 update:  [npx, skills, update, "{skill}"]
 ```
 
@@ -86,7 +86,7 @@ install: [npx, add-mcp, "{package}", -g, -a, "{agentId}", -y]
 # providers/builtin-hooks.yaml
 id: builtin-hooks
 kind: hook
-supports: [claude-code]
+supports: [claude-code, codex]
 writes: { path: "{harness.config}", section: "hooks.{event}" }
 ```
 
@@ -167,7 +167,7 @@ harness tanımında kalır.
 ## Test
 
 - `npm test` — birim/entegrasyon: `node:test`, geçici HOME + kayıt eden runner, ağ yok.
-- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 10 senaryo: kurulum, idempotens,
+- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 11 senaryo: kurulum, idempotens,
   doğrulama, kendini onarma, bozuk JSONC, bozuk state, eksik ön koşul, plan/status'un yazmaması.
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.

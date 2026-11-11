@@ -1,5 +1,6 @@
 import { HookConfigError } from './apply/hook-merger.js';
 import type { ApplyStatus } from './core/apply.js';
+import type { RemoveAction } from './core/remove.js';
 import type { PlanAction } from './core/plan.js';
 import type { StatusValue } from './core/status.js';
 
@@ -75,9 +76,14 @@ export const t = {
   removeNoSkills: (source: string) => `the skills lockfile lists no skill from ${source}`,
   removeNoRecord: 'no recorded command for this hook, nothing to delete safely',
   removeHookMissing: (item: string, file: string) => `${item}: the recorded hook was not in ${file}`,
+  removePlanLabels: {
+    remove: 'will be removed',
+    'not-covered': 'not covered',
+    manual: 'needs a name — remove by hand',
+    error: 'error',
+  } as Record<RemoveAction, string>,
   removeLabels: { removed: 'removed', 'not-covered': 'not covered', error: 'error' },
   removeHint: 'to run it: agentenv remove --yes',
-  removeDone: 'removal finished',
   stateUnreadable: (where: string) =>
     `state.json at ${where} could not be read; it was left untouched and treated as empty. 'apply' will try to back it up before recording.`,
   stateNotReadable: (where: string) =>

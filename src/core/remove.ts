@@ -2,14 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expandArgs, expandPath, type Ctx } from '../context.js';
 import { hookTarget } from '../apply/hook-target.js';
+import { writeConfigFile } from '../apply/config-writer.js';
 import { HookConfigError, removeHook, readText } from '../apply/hook-merger.js';
 import { failureLine } from './apply.js';
 import { entryDefs } from './entry.js';
-import { backupFile, readState, writeState, type State, type StateEntry } from './state.js';
+import { pickProvider, serverName } from './providers.js';
+import { backupFile, readState, statePath, writeState, type State, type StateEntry } from './state.js';
 import { t } from '../i18n.js';
 import type { Data, Kind, ProviderDef } from '../types.js';
 
-export type RemoveAction = 'remove' | 'not-covered' | 'error';
+export type RemoveAction = 'remove' | 'not-covered' | 'manual' | 'error';
 
 export interface RemoveEntry {
   itemId: string;
@@ -42,6 +44,23 @@ export interface RemoveOutcome {
   warnings: string[];
 }
 
+/** The shared store the lockfile owns, plus each recorded harness's own skills directory. */
+function skillPaths(data: Data, ctx: Ctx, harnesses: string[]): string[] {
+  const shared = data.providers
+    .map((provider) => provider.verify)
+    .find((verify) => verify?.strategy === 'skill-lock');
+  const paths = new Set<string>();
+  if (shared && shared.strategy === 'skill-lock') {
+    paths.add(path.dirname(expandPath(shared.file, ctx.home)));
+    paths.add(path.join(path.dirname(expandPath(shared.file, ctx.home)), 'skills'));
+  }
+  for (const harness of data.harnesses) {
+    if (!harnesses.includes(harness.id) || !harness.skills) continue;
+    paths.add(expandPath(harness.skills.path, ctx.home));
+  }
+  return [...paths];
+}
+
 function lockSources(file: string): Record<string, { source?: string }> | undefined {
   if (!fs.existsSync(file)) return undefined;
   try {
@@ -50,12 +69,6 @@ function lockSources(file: string): Record<string, { source?: string }> | undefi
   } catch {
     return undefined;
   }
-}
-
-function removeProvider(data: Data, kind: Kind): ProviderDef | undefined {
-  return data.providers
-    .filter((provider) => provider.kind === kind && provider.remove)
-    .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))[0];
 }
 
 /**
@@ -86,9 +99,7 @@ export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): Remov
 
     // Hooks are our own writes: no external command removes them, the merger does.
     if (item.kind === 'hook') {
-      const provider = data.providers
-        .filter((candidate) => candidate.kind === 'hook' && candidate.writes)
-        .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))[0];
+      const provider = pickProvider(data, 'hook', { capability: 'writes' });
       if (!provider) {
         entries.push({ ...base, paths: [], action: 'not-covered', reason: t.removeNotCovered(item.kind) });
         continue;
@@ -108,7 +119,7 @@ export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): Remov
       continue;
     }
 
-    const provider = removeProvider(data, item.kind);
+    const provider = pickProvider(data, item.kind, { capability: 'remove' });
     if (!provider) {
       entries.push({ ...base, paths: [], action: 'not-covered', reason: t.removeNotCovered(item.kind) });
       continue;
@@ -116,7 +127,7 @@ export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): Remov
 
     const vars = {
       skill: item.skill,
-      serverName: item.serverName ?? item.id,
+      serverName: serverName(item),
       package: item.package ?? item.url,
       source: item.source,
       root: ctx.root,
@@ -134,10 +145,10 @@ export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): Remov
         .filter(([, value]) => value.source === item.source)
         .map(([name]) => name);
       if (names.length === 0) {
-        entries.push({ ...base, providerId: provider.id, paths: [], action: 'not-covered', reason: t.removeNoSkills(item.source ?? item.id) });
+        entries.push({ ...base, providerId: provider.id, paths: [], action: 'manual', reason: t.removeNoSkills(item.source ?? item.id) });
         continue;
       }
-      entries.push({ ...base, providerId: provider.id, paths: [`~/.agents/skills`], action: 'remove', command: [...command, ...names] });
+      entries.push({ ...base, providerId: provider.id, paths: skillPaths(data, ctx, harnesses), action: 'remove', command: [...command, ...names] });
       continue;
     }
 
@@ -146,7 +157,7 @@ export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): Remov
         ? data.harnesses
             .filter((harness) => harnesses.includes(harness.id) && harness.mcp)
             .map((harness) => expandPath(harness.mcp!.path, ctx.home))
-        : ['~/.agents/skills'];
+        : skillPaths(data, ctx, harnesses);
 
     entries.push({ ...base, providerId: provider.id, paths, action: 'remove', command });
   }
@@ -161,7 +172,7 @@ export async function applyRemovePlan(data: Data, ctx: Ctx, plan: RemovePlan): P
   const removedItems = new Set<string>();
 
   for (const entry of plan.entries) {
-    if (entry.action === 'not-covered') {
+    if (entry.action === 'not-covered' || entry.action === 'manual') {
       results.push({ entry, status: 'not-covered', message: entry.reason });
       continue;
     }
@@ -186,9 +197,7 @@ export async function applyRemovePlan(data: Data, ctx: Ctx, plan: RemovePlan): P
             warnings.push(t.removeHookMissing(entry.itemId, target.file));
             continue;
           }
-          backupFile(ctx, target.file);
-          fs.mkdirSync(path.dirname(target.file), { recursive: true });
-          fs.writeFileSync(target.file, stripped.text, 'utf8');
+          writeConfigFile(ctx, target.file, stripped.text);
         }
         removedItems.add(entry.itemId);
         results.push({ entry, status: 'removed' });
@@ -211,10 +220,27 @@ export async function applyRemovePlan(data: Data, ctx: Ctx, plan: RemovePlan): P
     results.push({ entry, status: 'removed' });
   }
 
-  const remaining = readState(ctx);
+  if (removedItems.size === 0) return { results, warnings };
+
+  const stored = readState(ctx);
+  if (stored.damaged === 'read') {
+    warnings.push(t.stateNotRecorded(t.stateFileUnreadable, ''));
+    return { results, warnings };
+  }
+  if (stored.damaged === 'parse') {
+    // Recording over a damaged state would erase the history: keep a copy before writing.
+    try {
+      const dest = backupFile(ctx, statePath(ctx));
+      if (dest) warnings.push(t.stateBackedUp(statePath(ctx), dest));
+    } catch (error) {
+      warnings.push(t.stateNotRecorded(statePath(ctx), String(error)));
+      return { results, warnings };
+    }
+  }
+
   const next: State = {
     version: 1,
-    entries: remaining.state.entries.filter((record) => !removedItems.has(record.itemId)),
+    entries: stored.state.entries.filter((record) => !removedItems.has(record.itemId)),
   };
   writeState(ctx, next);
 

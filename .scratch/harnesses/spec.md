@@ -21,12 +21,13 @@ non-JSON file. Removal is the missing half of installation.
 
 ## Acceptance
 
-- `plan` on a machine with all four harnesses shows one row per (item, harness) pair, with codex rows
-  `not covered` for hook items and covered for skills/MCP.
+- `plan` on a machine with all four harnesses shows one row per (item, harness) pair: hook items are
+  covered for claude-code and codex, and `not covered` for pi and opencode.
 - Codex MCP verification reads `config.toml`: present → `already installed`, missing → reinstall.
 - `remove` prints the affected dirs before writing, then leaves the skills lockfile without the source
   and the hook config without our entry; `status` shows an empty record afterwards.
-- `npm test` and `npm run e2e` stay green; e2e gains a TOML-verify scenario and a remove scenario.
+- `npm test` and `npm run e2e` stay green; remove has an offline e2e scenario, TOML verification is
+  covered by a unit test (the offline fixture harness is JSON-only).
 
 ## Out of scope
 
