@@ -173,7 +173,7 @@ export const t = {
     'agentenv list                         list every skill the provider inventory reports (read-only)',
     'agentenv stale                        mark each installed skill up-to-date / stale / unknown (read-only)',
     'agentenv update [--yes]               install every stale skill again (same install path and record)',
-    'agentenv remove [--package id] [--skill name,name] remove every recorded item and/or the named skills (all harnesses)',
+    'agentenv remove [--package id]        remove recorded items (add --skill <name,name> for named skills)',
     '',
     'flags: --package <id> (default: the package marked default) · --harness <id,id>',
     '       --update <ids|all|none> marks outdated prerequisite updates (default: none — they stay blocked)',

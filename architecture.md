@@ -31,8 +31,9 @@ Değer kurulum yapmakta değil, üç türü tek pakette birleştirmekte ve tek d
   `state.json`, yazılmadan önce yedeklenir; skills/MCP dosyalarını sağlayıcı yazar.
 - Skills ve MCP dosyalarını agentenv yazmaz (sağlayıcı yazar); hook birleştirmesi bizim.
 - Doğrulama hızlı kaynaktan okunur: skills için lockfile (~1 ms), MCP için harness config'i. `listSkills()`
-  plan için kullanılmaz — 103 skill'de ~7 s sürüyor; API kurulum/kaldırma yolunda ve yalnız açık `list`
-  komutunda kullanılır. `plan`, `status` ve `stale` onu hiç çağırmaz.
+  plan için kullanılmaz — 103 skill'de ~7 s sürüyor; API kurulum/kaldırma yolunda, açık `list`
+  komutunda ve `remove --skill`in kayıtta karşılığı olmayan adlarında kullanılır. `plan`, `status` ve
+  `stale` onu hiç çağırmaz.
 - Kapsam bugün sağlayıcı komutunda sabit (`-g` = kullanıcı seviyesi); proje kapsamı açılınca
   `{scope}` değişkeni olarak plana girer, ayrı kod yolu açılmaz.
 - Sıralı uygulama hatada durmaz: başarısız öğe `hata` olarak raporlanır, kalanlar devam eder.
@@ -218,6 +219,17 @@ items: [emil-skills, context7, bash-log]
     hiçbir skill'e dokunulmaz: `güncel` ve `bilinmiyor` satırları plana hiç girmez. Katalogda öğesi olmayan,
     kaydında harness bulunmayan ya da o harness burada tanımlı olmayan bayat skill sessizce atlanmaz — satır
     sebebiyle birlikte (`not covered` anlamında) yazılır.
+11. **remove** — açık komut (`agentenv remove`, `src/core/remove.ts`): iki duruma **aynı kurallarla** cevap
+    verir. Kayıtlı her öğe kaldırılır (`--package` ile daraltılabilir); `--skill <ad,ad>` ise adı verilen
+    skill'i kaldırır, agentenv onu kurmamış olsa bile. Tek kapı `planRemoval`dır: kayıt adı zaten kapsıyorsa
+    kayıtlı kurallar (aynı sağlayıcı, aynı yollar, aynı kayıt temizliği) işler; kapsamıyorsa plan `list`in
+    okuduğu envanteri okur ve harness'ları/dizinleri oradan doldurur. Envanter yalnız ad kayıtta yoksa
+    okunur. Kaldırma her harness'ı kapsar (skill dizinleri ortak) ve plan önce etkilenen harness'ları,
+    dizinleri ve komutu yazar; `--yes` yoksa hiçbir şey yazılmaz. Kaldırılamayan şey satırdır, durma değil:
+    sağlayıcısı yoksa `not covered`, adaptör envanterde bulamazsa `not installed`, sağlayıcı hata verirse
+    `error` — kalanlar yine çalışır. Kaydı olmayan ad `state.json`ı hiç yazmaz, kayıttan giden öğe kaydını
+    temizler: sonrasında `status` hayalet göstermez. Envanter okuması başarısız olursa uyarı yazılır ve ad
+    yine planlanır.
 
 ## Skill hedefleri ortak
 
@@ -250,6 +262,11 @@ harness tanımında kalır.
   skill yokken hiçbir şey yapmaması ve ağacın değişmemesi, planın bayat skill'i kurulum satırı olarak
   göstermesi ve hiçbir şey yazmaması, `--yes` ile skill'in gerçekten bir kez kurulması (elle silinen dosya
   geri gelir) ve işaretsiz MCP öğesine dokunulmaması, ardından `status`un `güncel` demesi.
+- `node scripts/e2e-remove.mjs` — `remove` için ayrı, ağsız beş senaryo (`npm run e2e`'ye bağlı): planın
+  etkilenen harness'ları ve dizinleri onaydan önce göstermesi ve hiçbir şey yazmaması, `--yes` ile her
+  kayıtlı öğenin kalkması ve kaydın boşalması, agentenv'in kurmadığı skill'in adıyla kaldırılması (kayıt
+  yaratmadan), bir adın sağlayıcı hatasıyla raporlanıp diğerinin yine kaldırılması ve sağlayıcısı olmayan
+  adın `not covered` demesi.
 - `scripts/check-syntax.mjs` (`npm run check:scripts`) — `scripts/*.mjs` ve `test/fixtures/offline/bin/*.mjs`
   dosyalarını `node --check` ile ayrıştırır: bu programları e2e `spawn` ile çalıştırdığı için typecheck
   onları hiç görmez.
