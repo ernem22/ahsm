@@ -7,3 +7,6 @@ verify: { strategy: skill-lock, file: "~/.agents/.skill-lock.json" }
 install: [npx, skills, add, "{source}", -g, -a, "{agentId}", -y, "--skill {skill}"]
 remove: [npx, skills, remove, -g, -y, "{skill}"]
 update: [npx, skills, update, "{skill}"]
+# The package exposes no in-process update check: `skills check` is the one comparison it computes
+# (recorded folder hash against what the source holds now). It installs nothing on its own.
+check: [npx, skills, check, -g]

@@ -62,3 +62,10 @@ _Avoid_: check, validation, health
 **Not covered (kapsanmıyor)**:
 No provider supports this item type for this harness. The plan says so; it never skips silently.
 _Avoid_: unsupported, skipped
+
+**Stale (bayat)**:
+An installed item whose source now offers a different copy — a newer one, or none at all. Decided by the
+provider's own comparison (recorded hash against what the source holds now), never by a timestamp. Its
+opposite is **up-to-date**, and where the provider cannot compare the answer is **unknown**, which is not
+up-to-date.
+_Avoid_: outdated, old, dirty, drifted

@@ -7,9 +7,9 @@ this ticket, because the skills package exposes no ready-made update check.
 
 **Blocked by:** 05
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Installed skills are compared with their source and marked up-to-date / stale / unknown
-- [ ] A run of the check leaves the home directory byte-identical
-- [ ] An unreachable or changed source yields unknown, never a false "up-to-date"
-- [ ] The output reuses the plan's vocabulary (installation, verification, not covered)
+- [x] Installed skills are compared with their source and marked up-to-date / stale / unknown
+- [x] A run of the check leaves the home directory byte-identical
+- [x] An unreachable or changed source yields unknown, never a false "up-to-date"
+- [x] The output reuses the plan's vocabulary (installation, verification, not covered)

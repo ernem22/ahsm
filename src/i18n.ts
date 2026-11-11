@@ -4,6 +4,7 @@ import type { RemoveAction } from './core/remove.js';
 import type { PlanAction } from './core/plan.js';
 import type { HarnessStatus, StatusValue } from './core/status.js';
 import type { InventoryScope } from './core/list.js';
+import type { StaleValue } from './core/stale.js';
 
 /**
  * All user-facing strings live here, in English. Swapping in another locale means adding a second
@@ -53,6 +54,26 @@ export const t = {
   listNoHarness: 'no harness reports it',
   listCount: (count: number) => `${count} skill(s) — inventory read only, nothing written`,
   listHint: 'agentenv list reads the skills provider inventory; it never writes and does not depend on the record',
+  staleTitle: 'skills (provider update check)',
+  staleLabels: {
+    'up-to-date': 'up-to-date',
+    stale: 'stale',
+    unknown: 'unknown',
+  } as Record<StaleValue, string>,
+  staleEmpty: 'the provider lockfile records no installation to compare',
+  staleCount: (count: number) => `${count} skill(s) — verification only, nothing was installed`,
+  staleHint:
+    'agentenv stale asks the provider whether each installed skill is still what its source offers; it runs no installation and writes nothing',
+  staleNotCovered: 'not covered — no provider offers an update check',
+  staleNoLock: 'the provider records no skill lockfile — nothing to compare',
+  staleLockUnreadable: (where: string) => `the skill lockfile at ${where} could not be read — nothing was compared`,
+  staleNoSource: 'the lockfile records no source for it — nothing to compare',
+  staleNoHash: 'the lockfile records no folder hash for it — nothing to compare',
+  staleNotComparable: 'the provider cannot check this one automatically — verification unknown',
+  staleUnreachable: (source: string) => `${source} could not be reached — verification unknown`,
+  staleNotRun: 'the provider update check did not finish — verification unknown',
+  staleNewer: 'the source has a newer copy — an installation would replace it',
+  staleGone: 'the source no longer offers it — an installation would not restore it',
   harnessLabels: {
     ready: 'ready',
     'too-old': 'too old',
@@ -135,6 +156,7 @@ export const t = {
     'agentenv apply --yes [--package id]   apply the plan (--update <ids|all> marks outdated prerequisites; default: none)',
     'agentenv status                       show what is installed',
     'agentenv list                         list every skill the provider inventory reports (read-only)',
+    'agentenv stale                        mark each installed skill up-to-date / stale / unknown (read-only)',
     'agentenv remove [--package id]        remove every recorded item (all harnesses)',
     '',
     'flags: --package <id> (default: the package marked default) · --harness <id,id>',

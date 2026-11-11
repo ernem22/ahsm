@@ -9,8 +9,9 @@ import { resolveSelection } from './core/selection.js';
 import { applyRemovePlan, buildRemovePlan } from './core/remove.js';
 import { readStatus } from './core/status.js';
 import { readSkillInventory } from './core/list.js';
+import { readStaleSkills } from './core/stale.js';
 import { t } from './i18n.js';
-import { listLines, outcomeLines, planLines, removeOutcomeLines, removePlanLines, statusLines } from './render.js';
+import { listLines, outcomeLines, planLines, removeOutcomeLines, removePlanLines, staleLines, statusLines } from './render.js';
 import type { Data } from './types.js';
 
 /** `AGENTENV_ROOT` points the CLI at another data root (fixtures, e2e sandboxes). */
@@ -38,6 +39,12 @@ async function printStatus(data: Data, ctx: Ctx): Promise<void> {
 async function printInventory(data: Data, ctx: Ctx): Promise<void> {
   const report = await readSkillInventory(data, ctx);
   for (const line of listLines(report)) console.log(line.text);
+}
+
+/** `agentenv stale`: the provider's own update check, read-only — nothing is installed, nothing written. */
+async function printStale(data: Data, ctx: Ctx): Promise<void> {
+  const report = await readStaleSkills(data, ctx);
+  for (const line of staleLines(report)) console.log(line.text);
 }
 
 function valueOf(argv: string[], flag: string): string | undefined {
@@ -117,6 +124,11 @@ ${t.removeTitle}`);
 
   if (command === 'list') {
     await printInventory(data, ctx);
+    return;
+  }
+
+  if (command === 'stale') {
+    await printStale(data, ctx);
     return;
   }
 

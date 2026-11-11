@@ -3,6 +3,7 @@ import type { ApplyOutcome } from './core/apply.js';
 import type { HarnessStatus, HarnessStatusRow, StatusReport } from './core/status.js';
 import type { RemoveOutcome, RemovePlan } from './core/remove.js';
 import type { SkillInventoryReport } from './core/list.js';
+import type { StaleReport } from './core/stale.js';
 import { requirementState, type Plan, type PlanAction, type PlanRequirement } from './core/plan.js';
 
 export type Tone = 'normal' | 'dim' | 'error' | 'warning';
@@ -151,9 +152,35 @@ export function listLines(report: SkillInventoryReport): Line[] {
   return lines;
 }
 
-function harnessStatus(row: HarnessStatusRow): HarnessStatus {
-  if (!row.present) return 'absent';
+function harnessStatus(row: HarnessStatusRow): HarnessStatus {  if (!row.present) return 'absent';
   return row.usable ? 'ready' : 'too-old';
+}
+
+/**
+ * The one freshness formatter: the verdict the provider's own update check supports, or `unknown`
+ * with the reason the comparison could not be made. Nothing here is an installation.
+ */
+export function staleLines(report: StaleReport): Line[] {
+  const lines: Line[] = report.warnings.map((warning) => ({ text: `! ${warning}`, tone: 'warning' as Tone }));
+  lines.push({ text: t.staleTitle, tone: 'dim' });
+  if (!report.covered) {
+    lines.push({ text: t.staleNotCovered, tone: 'warning' });
+    return lines;
+  }
+  if (report.rows.length === 0) {
+    lines.push({ text: t.staleEmpty, tone: 'dim' });
+    return lines;
+  }
+  for (const row of report.rows) {
+    const source = row.source ? ` [${row.source}]` : '';
+    const detail = row.detail ? ` — ${row.detail}` : '';
+    lines.push({
+      text: `${t.staleLabels[row.value]}  ${row.name}${source}${detail}`,
+      tone: row.value === 'stale' ? 'warning' : 'normal',
+    });
+  }
+  lines.push({ text: t.staleCount(report.rows.length), tone: 'dim' });
+  return lines;
 }
 
 /**

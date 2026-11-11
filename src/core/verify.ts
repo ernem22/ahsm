@@ -15,12 +15,31 @@ function readJson(file: string): unknown {
   }
 }
 
+/**
+ * One lockfile entry, as far as anything here reads it. The lockfile is the provider's own record of
+ * what it installed; a missing field means the provider did not record enough to compare.
+ */
+export interface SkillLockEntry {
+  source?: string;
+  sourceUrl?: string;
+  sourceType?: string;
+  skillPath?: string;
+  skillFolderHash?: string;
+}
+
+/** The lockfile keyed by skill name; `undefined` when there is no lockfile or it holds no `skills`. */
+export function readSkillLock(file: string): Record<string, SkillLockEntry | undefined> | undefined {
+  const lock = readJson(file) as { skills?: unknown } | undefined;
+  if (!lock || typeof lock.skills !== 'object' || lock.skills === null) return undefined;
+  return lock.skills as Record<string, SkillLockEntry | undefined>;
+}
+
 /** The lockfile is keyed by skill name; an item naming one skill must match that key, not just the repo. */
 function lockHasSkill(file: string, item: ItemDef): Verified {
   if (!item.source) return 'unknown';
-  const lock = readJson(file) as { skills?: Record<string, { source?: string }> } | undefined;
-  if (!lock?.skills) return 'missing';
-  const candidates = item.skill ? [lock.skills[item.skill]] : Object.values(lock.skills);
+  const skills = readSkillLock(file);
+  if (!skills) return 'missing';
+  const candidates = item.skill ? [skills[item.skill]] : Object.values(skills);
   return candidates.some((entry) => entry?.source === item.source) ? 'present' : 'missing';
 }
 

@@ -18,8 +18,8 @@
     "typecheck:test": "tsc -p tsconfig.test.json",
     "check": "npm run check:eol && npm run check:scripts && npm run typecheck && npm run typecheck:test && npm test && npm run e2e",
     "check:eol": "node scripts/check-eol.mjs",
-    "check:scripts": "node --check scripts/check-eol.mjs && node --check scripts/e2e.mjs && node --check scripts/e2e-list.mjs",
-    "e2e": "npm run build && node scripts/e2e.mjs && node scripts/e2e-list.mjs",
+    "check:scripts": "node --check scripts/check-eol.mjs && node --check scripts/e2e.mjs && node --check scripts/e2e-list.mjs && node --check scripts/e2e-stale.mjs",
+    "e2e": "npm run build && node scripts/e2e.mjs && node scripts/e2e-list.mjs && node scripts/e2e-stale.mjs",
     "e2e:network": "npm run build && node scripts/e2e.mjs --network"
   },
   "dependencies": {

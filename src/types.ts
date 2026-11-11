@@ -36,6 +36,8 @@ export interface ProviderDef {
   install?: string[];
   remove?: string[];
   update?: string[];
+  /** argv template that asks the provider whether an installed item is still what its source offers. */
+  check?: string[];
   /** Built-in in-process implementation, used instead of argv templates (currently `skills-api`). */
   adapter?: 'skills-api';
   /** How to ask the owner whether the install is really there (skill lockfile, harness config). */

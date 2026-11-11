@@ -32,7 +32,7 @@ Değer kurulum yapmakta değil, üç türü tek pakette birleştirmekte ve tek d
 - Skills ve MCP dosyalarını agentenv yazmaz (sağlayıcı yazar); hook birleştirmesi bizim.
 - Doğrulama hızlı kaynaktan okunur: skills için lockfile (~1 ms), MCP için harness config'i. `listSkills()`
   plan için kullanılmaz — 103 skill'de ~7 s sürüyor; API kurulum/kaldırma yolunda ve yalnız açık `list`
-  komutunda kullanılır. `plan` ve `status` onu hiç çağırmaz.
+  komutunda kullanılır. `plan`, `status` ve `stale` onu hiç çağırmaz.
 - Kapsam bugün sağlayıcı komutunda sabit (`-g` = kullanıcı seviyesi); proje kapsamı açılınca
   `{scope}` değişkeni olarak plana girer, ayrı kod yolu açılmaz.
 - Sıralı uygulama hatada durmaz: başarısız öğe `hata` olarak raporlanır, kalanlar devam eder.
@@ -63,7 +63,10 @@ src/cli.ts          komutlar + TUI girişi
 
 Bir sağlayıcı argv yerine gömülü bir adaptör bildirebilir: `adapter: skills-api` (öncelik 5). Bu,
 skills paketinin programatik API'sini kullanır (`installSkills` / `removeSkills`); `skills-cli`
-(öncelik 10) aynı işi komutla yapan yedek yoldur.
+(öncelik 10) aynı işi komutla yapan yedek yoldur. `check:` yalnız `skills-cli`'da durur: paket
+programatik bir güncelleme kontrolü sunmuyor (`resolveSource` içeriği vermez), karşılaştırmayı yapan
+tek yüzey `skills check` alt komutudur. Bu yüzden `stale` sağlayıcıyı yetenekle seçer
+(`pickProvider(data, 'skill', { capability: 'check' })`), kurulum yolundan bağımsız olarak.
 
 ```yaml
 # providers/skills-cli.yaml
@@ -76,6 +79,7 @@ verify: { strategy: skill-lock, file: "~/.agents/.skill-lock.json" }
 install: [npx, skills, add, "{source}", -g, -a, "{agentId}", -y, "--skill {skill}"]
 remove:  [npx, skills, remove, -g, -y, "{skill}"]         # kaldırma her harness'ı kapsar
 update:  [npx, skills, update, "{skill}"]
+check:   [npx, skills, check, -g]
 ```
 
 ```yaml
@@ -195,6 +199,15 @@ items: [emil-skills, context7, bash-log]
    görünür. Kayıt okunmaz (ADR-0002) ve hiçbir şey yazılmaz: bozuk `state.json` listeyi değiştirmez, yedek
    bile alınmaz ve hiçbir komut çalıştırılmaz. Kapsam bugün yalnız kullanıcı seviyesidir (sağlayıcı `-g`),
    satır bunu söyler. Envanter yavaş olduğu için bu okuma `plan`/`status`'a girmez — `list` tek kapıdır.
+9. **stale** — açık komut (`agentenv stale`, `src/core/stale.ts`): her kayıtlı skill için "kaynak hâlâ aynı
+   şeyi mi sunuyor?" sorusuna `güncel` / `bayat` / `bilinmiyor` cevabı verilir. Karşılaştırma bizim değil,
+   sağlayıcının kendi hesabıdır: `skills check -g` (sağlayıcı tanımındaki `check:` argv'si) kurulumda
+   kaydedilen `skillFolderHash`i kaynağın bugünkü ağaç özetiyle karşılaştırır ve hiçbir şey kurmaz.
+   Biz yalnız lockfile'ı (~1 ms) okuruz; `listSkills()` yine çağrılmaz, `state.json` hiç okunmaz ve hiçbir
+   şey yazılmaz (ne kurulum, ne lockfile, ne kayıt). Üç durum dürüstçe ayrılır: `bayat` yalnız sağlayıcı
+   o skill için güncelleme/silinme bildirdiğinde, `güncel` yalnız kontrol o kaynağın skill'leri için
+   tamamlandığında, gerisi `bilinmiyor` (kaynağa ulaşılamadı, komut bitmedi, kayıtta hash/kaynak yok).
+   Sağlayıcı `check:` sunmuyorsa satırlar değil "not covered" yazılır.
 
 ## Skill hedefleri ortak
 
@@ -213,10 +226,16 @@ harness tanımında kalır.
   çalıştırıp aynı çalıştırmada öğeleri kurması, bu platformda kurulum komutu olmayan tanımın plan ve
   apply'da `no install command` demesi, kurulamayan bir harness'ın diğer harness'ın öğelerini
   bırakmaması ve hiçbir şey yazmayan bir skill kurulumunun `kuruldu` sayılmaması.
-- `node scripts/e2e-list.mjs` — `list` için ayrı, ağsız dört senaryo (henüz `npm run check`'e bağlı değil):
+- `node scripts/e2e-list.mjs` — `list` için ayrı, ağsız dört senaryo (`npm run e2e`'ye bağlı):
   elle kurulmuş skill'in adı ve kapsamıyla görünmesi, hiçbir şey yazmaması, bozuk `state.json` ile
   çalışmaya devam etmesi ve `plan`/`status`'un envanteri hiç okumaması. Envanter makinenin gerçek
   `~/.agents` deposunu da okuduğu için bu senaryolar tam liste yerine davranışı doğrular.
+- `node scripts/e2e-stale.mjs` — `stale` için ayrı, ağsız yedi senaryo (`npm run e2e`'ye bağlı): fixture
+  `check` komutuyla güncelleme bildiriminin `bayat` olması, kontrol tamamlandığında `güncel` ve ağacın
+  hiç değişmemesi, envanterin hiç okunmaması, kaynağa ulaşılamazken sağlayıcı "all up to date" dese de
+  `bilinmiyor` olması, kontrol hiç bitmezse `bilinmiyor`, hash kayıtlı değilse karşılaştırma yapılmaması
+  ve bozuk `state.json`ın sonucu değiştirmemesi. Ağsız bir `check` "kaynağa ulaşılamıyor" demektir; bu,
+  `bilinmiyor`un gerçek senaryosudur.
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 
@@ -268,7 +287,23 @@ plugin/keşif işi geldiğinde geçerli olacak.
   (`~/.agents/.skill-lock.json`, öğe başına yalnız kaynak ve skill adı). `codex` için kurulmuş bir skill
   `claude-code` için de `zaten kurulu` görünebilir; `~/.claude/skills/` ayrıca bakılmaz. Öğede `skill`
   alanı yoksa kaynak repodan herhangi bir skill'in kayıtlı olması yeter (kısmi kurulum da "var" sayılır).
-  Lockfile konumu `$XDG_STATE_HOME` ile değişebilir; `verify` bunu okumaz.
+  Lockfile konumu `$XDG_STATE_HOME` ile değişebilir; `verify` ve `stale` bunu okumaz.
+- `stale` bizim değil sağlayıcının karşılaştırmasını raporlar: kayıtlı `skillFolderHash` ile kaynağın
+  bugünkü ağaç özeti. Sınırları:
+  - GitHub'ın hızlı (tree/blob) yolunda kaynak bir skill'i artık sunmuyorsa `skills check` onu hiç
+    bildirmez — o satır `güncel` kalır. Silinme yalnız klon yolunda ("deleted upstream") yakalanır.
+    Skill taşınmışsa aynı sessizlik geçerli.
+  - Kurulu kopyadaki elle değişiklik karşılaştırılmaz; global kapsamda yalnız "disk üzerinde var mı"
+    bakılır (proje kapsamındaki `computedHash` karşılaştırması devrede değil).
+  - Kayıtta `skillPath`/`skillFolderHash` yoksa (hash öncesi kurulumlar, yerel kaynaklar) → `bilinmiyor`.
+  - Kaynağa ulaşılamazsa `skills check` yine `✓ All global skills are up to date` basıp 0 döner; `stale`
+    bu özeti değil `✗ Failed to check skills from …` satırını esas alır ve o kaynağın skill'lerini
+    `bilinmiyor` yazar. Kontrol hiç bitmezse (komut yok, çökme, çıktı biçimi değişti) özet satırı
+    görülmez ve hiçbir satır `güncel` olmaz — bilinmeyenin varsayılan olması bilinçli.
+  - Sağlayıcı çıktısı düz metindir (`check` alt komutunun `--json`u yok); okunamayan çıktı `bilinmiyor`a
+    düşer, yanlış bir `güncel`e değil.
+  - `npx` kendi indirme önbelleğini yazabilir; "hiçbir şey yazmaz" garantisi agentenv'in kendi dosyaları,
+    sağlayıcının lockfile'ı ve kurulu skill dizinleri içindir.
 - Hook komutu değişirse eski girdi yerinde değiştirilir (kayıttaki `hookCommand` ile bulunur); komut elle
   değiştirilmişse eski girdi kalır — hook'lar harness şemasında kimlik taşımadığı için tek işaret bu.
 - Hook'ta `event`/`matcher`/`hookCommand` eksikse plan `error` der; config'e boş değer yazılmaz.
