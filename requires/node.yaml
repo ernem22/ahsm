@@ -1,7 +1,7 @@
 id: node
 check:
   command: [node, --version]
-  min: "20"
+  min: "22.20"
 install:
   win32: [winget, install, OpenJS.NodeJS.LTS, --silent]
   darwin: [brew, install, node]

@@ -25,6 +25,7 @@ export function planLines(plan: Plan): Line[] {
       tone: entry.action === 'error' ? 'error' : 'normal',
     });
     if (entry.command) lines.push({ text: `    ${t.runPrefix}: ${entry.command.join(' ')}`, tone: 'dim' });
+    else if (entry.via) lines.push({ text: `    ${t.runPrefix}: ${entry.via}`, tone: 'dim' });
     if (entry.hook) {
       const where = `${entry.hook.target.file} → ${entry.hook.target.path.join('.')}`;
       lines.push({ text: `    ${t.writePrefix}: ${where}`, tone: 'dim' });

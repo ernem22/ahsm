@@ -13,9 +13,9 @@ export function pickProvider(
     .filter((provider) => provider.kind === kind)
     .filter((provider) => (harnessId ? provider.supports.includes(harnessId) : true))
     .filter((provider) => {
-      if (capability === 'remove') return Boolean(provider.remove);
+      if (capability === 'remove') return Boolean(provider.remove || provider.adapter);
       if (capability === 'writes') return Boolean(provider.writes);
-      return Boolean((provider.install?.length ?? 0) > 0 || provider.writes);
+      return Boolean(provider.adapter || (provider.install?.length ?? 0) > 0 || provider.writes);
     })
     .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))[0];
 }

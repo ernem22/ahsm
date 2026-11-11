@@ -88,7 +88,7 @@ Aynı işin parçalarını yapan araçlar var; hiçbiri dördünü birden kapatm
 | Harness tanımları | Veri dosyaları (`harnesses/*.yaml`): algılama yolları (`~/klasör` veya `path:binary`), sağlayıcıların beklediği `agentId`, hook bölümü | Yeni harness = yeni dosya; çekirdek kod harness adı bilmez. |
 | Öğe türleri | Her tür için bir yerleşim tanımı: `skill` = `npx skills`, `mcp` = `npx add-mcp`, `hook` = `settings.json` birleştirme | Yeni tür eklemek yeni tanım eklemek olur, `if` zinciri değil. |
 | Sağlayıcılar | Tür başına birden fazla sağlayıcı, her biri desteklediği harness'ları ve komutlarını bildirir | `add-mcp` desteklemediği harness'ta `mcpm`'e, ya da ileride başka bir araca düşülebilsin |
-| Skill yerleşimi | `npx skills add` (devredilir) | Symlink/kopya, check/update/remove ve lockfile zaten orada; yeniden yazmak bakım yükü. |
+| Skill kurulumu | `skills` paketinin programatik API'si (`installSkills`/`removeSkills`), birincil; `npx skills` yedek | Yapısal sonuç (`failed[]`), doğru kaldırma semantiği (paylaşılan kopya başka agent kullanıyorsa kalır) ve alt süreç yok. Node ≥22.20 gerektirir. |
 | Paketler | `packages/*.yaml`: `id`, `items[]`, `note`, `link` — dosya başına tek paket | İnsan tarafından okunur/düzenlenir; TUI notu ve linki buradan gösterir. |
 | Kurulum durumu | `~/.agentenv/state.json` (öğe, harness, sağlayıcı, komut, tarih) + doğrulanabilen hedef; hook'lar `güncel`/`eksik`, skills/MCP `bilinmiyor` | Doğrulamadığımız şeye "güncel" dememek, kaydı gerçeğin yerine koymamak için. |
 | Kapsam | Bugün yalnız kullanıcı seviyesi: iki sağlayıcı komutuna `-g` sabit yazılı | Proje kapsamı açılınca `{scope}` değişkeni olur; ayrı kod yolu açılmaz. |

@@ -1,0 +1,7 @@
+id: skills-api
+kind: skill
+supports: [claude-code, codex, opencode, pi]
+requires: [node]
+priority: 5
+adapter: skills-api
+verify: { strategy: skill-lock, file: "~/.agents/.skill-lock.json" }

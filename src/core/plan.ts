@@ -17,6 +17,12 @@ export interface PlanEntry {
   providerId?: string;
   action: PlanAction;
   command?: string[];
+  /** Set when a built-in adapter performs the work instead of a shell command. */
+  adapter?: 'skills-api';
+  /** Human description of what an adapter will do (no argv to show). */
+  via?: string;
+  /** What to store in the record for an adapter entry (a fingerprint, not an argv). */
+  record?: string[];
   /** Present when this entry writes a hook into a config file. */
   hook?: { target: HookTarget; entry: HookEntry };
   note?: string;
@@ -104,6 +110,23 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
             reason: t.hookError(error),
           });
         }
+        continue;
+      }
+
+      if (provider.adapter === 'skills-api') {
+        const record = ['skills-api', item.source ?? item.id, item.skill ?? '*'];
+        const recordedEntry = findEntry(state, itemId, harnessId);
+        const matchesRecord = Boolean(recordedEntry && sameCommand(recordedEntry.command, record));
+        // The lockfile answers in milliseconds; listSkills() scans every skill dir (~7s for 103).
+        const present = verifyInstalled(harness, item, provider, ctx) === 'present';
+        entries.push({
+          ...base,
+          action: matchesRecord && present ? 'already' : 'run',
+          adapter: 'skills-api',
+          via: `skills-api → ${item.source}${item.skill ? ` (${item.skill})` : ''} → ${harness.agentId ?? harness.id}`,
+          record,
+          reason: present ? t.recordedInstalled : undefined,
+        });
         continue;
       }
 

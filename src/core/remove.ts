@@ -22,6 +22,8 @@ export interface RemoveEntry {
   paths: string[];
   providerId?: string;
   action: RemoveAction;
+  /** Set when a built-in adapter removes the item instead of a shell command. */
+  adapter?: 'skills-api';
   command?: string[];
   reason?: string;
 }
@@ -125,6 +127,18 @@ export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): Remov
       continue;
     }
 
+    if (provider.adapter === 'skills-api') {
+      // The adapter resolves names from its own inventory at apply time.
+      entries.push({
+        ...base,
+        providerId: provider.id,
+        paths: skillPaths(data, ctx, harnesses),
+        action: 'remove',
+        adapter: 'skills-api',
+      });
+      continue;
+    }
+
     const vars = {
       skill: item.skill,
       serverName: serverName(item),
@@ -203,6 +217,32 @@ export async function applyRemovePlan(data: Data, ctx: Ctx, plan: RemovePlan): P
         results.push({ entry, status: 'removed' });
       } catch (error) {
         results.push({ entry, status: 'error', message: error instanceof HookConfigError ? t.hookTargetUnreadable : String(error) });
+      }
+      continue;
+    }
+
+    if (entry.adapter === 'skills-api') {
+      try {
+        const item = data.items.get(entry.itemId);
+        const installed = await ctx.skills.list();
+        const names = installed
+          .filter((skill) => skill.source === item?.source && (!item?.skill || skill.name === item.skill))
+          .map((skill) => skill.name);
+        if (names.length === 0) {
+          results.push({ entry, status: 'not-covered', message: t.removeNoSkills(item?.source ?? entry.itemId) });
+          continue;
+        }
+        // No agent filter: "remove" means everywhere, and the API still keeps a shared copy while
+        // another installed agent uses it.
+        const outcome = await ctx.skills.remove({ names });
+        if (outcome.failed.length > 0) {
+          results.push({ entry, status: 'error', message: outcome.failed[0]?.message ?? t.commandMissing });
+          continue;
+        }
+        removedItems.add(entry.itemId);
+        results.push({ entry, status: 'removed' });
+      } catch (error) {
+        results.push({ entry, status: 'error', message: t.hookError(error) });
       }
       continue;
     }

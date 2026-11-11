@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { t } from './i18n.js';
+import { createSkillsAdapter, type SkillsAdapter } from './providers/skills-api.js';
 
 export interface RunResult {
   code: number;
@@ -21,6 +22,8 @@ export interface Ctx {
   runner: Runner;
   now: () => Date;
   log: (line: string) => void;
+  /** Provided so tests can answer without the network; defaults to the real `skills` package. */
+  skills: SkillsAdapter;
 }
 
 /** Real process runner. On Windows `npx` needs a shell to resolve `npx.cmd`. */
@@ -72,6 +75,7 @@ export function createContext(overrides: Partial<Ctx> = {}): Ctx {
     runner: overrides.runner ?? new ProcessRunner(),
     now: overrides.now ?? (() => new Date()),
     log: overrides.log ?? (() => {}),
+    skills: overrides.skills ?? createSkillsAdapter(),
   };
 }
 

@@ -36,6 +36,8 @@ export interface ProviderDef {
   install?: string[];
   remove?: string[];
   update?: string[];
+  /** Built-in in-process implementation, used instead of argv templates (currently `skills-api`). */
+  adapter?: 'skills-api';
   /** How to ask the owner whether the install is really there (skill lockfile, harness config). */
   verify?: { strategy: 'skill-lock'; file: string } | { strategy: 'json-key' };
   /** Providers that write config themselves (hooks) instead of shelling out. */

@@ -154,6 +154,33 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       continue;
     }
 
+    if (entry.adapter === 'skills-api') {
+      const item = data.items.get(entry.itemId);
+      const harness = data.harnesses.find((candidate) => candidate.id === entry.harness);
+      if (!item?.source || !harness) {
+        items.push({ entry, status: 'error', message: t.skillsApiNoSource });
+        continue;
+      }
+      try {
+        const outcome = await ctx.skills.install({
+          source: item.source,
+          skills: item.skill ? [item.skill] : undefined,
+          agents: [harness.agentId ?? harness.id],
+        });
+        if (outcome.failed.length > 0) {
+          items.push({ entry, status: 'error', message: outcome.failed[0]?.message ?? t.commandMissing });
+          continue;
+        }
+        if (outcome.installed.length > 0) {
+          record({ ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId }, kind: entry.kind, command: entry.record });
+        }
+        items.push({ entry, status: outcome.installed.length > 0 ? 'ok' : 'already' });
+      } catch (error) {
+        items.push({ entry, status: 'error', message: t.hookError(error) });
+      }
+      continue;
+    }
+
     if (entry.hook) {
       const target = entry.hook.target;
       const previous = findEntry(state, entry.itemId, entry.harness)?.hookCommand;

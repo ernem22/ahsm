@@ -98,6 +98,7 @@ export const t = {
   hookItemIncomplete: (id: string) => `hook ${id} is missing event, matcher or command`,
   hookTargetUnreadable: 'target file is not readable JSONC — nothing was written',
   commandMissing: 'command could not be built',
+  skillsApiNoSource: 'this skill item has no source for the skills API',
   definitionMissing: 'definition not found',
   recordedInstalled: 'recorded as installed',
   recordNotInTarget: 'recorded but not found in the target — installing again',

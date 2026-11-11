@@ -30,6 +30,8 @@ Değer kurulum yapmakta değil, üç türü tek pakette birleştirmekte ve tek d
 - Onaysız yazma ve onaysız ön koşul kurulumu yok. agentenv'in kendi yazdığı hook dosyası ile bozuk
   `state.json`, yazılmadan önce yedeklenir; skills/MCP dosyalarını sağlayıcı yazar.
 - Skills ve MCP dosyalarını agentenv yazmaz (sağlayıcı yazar); hook birleştirmesi bizim.
+- Doğrulama hızlı kaynaktan okunur: skills için lockfile (~1 ms), MCP için harness config'i. `listSkills()`
+  plan için kullanılmaz — 103 skill'de ~7 s sürüyor; API kurulum/kaldırma yolunda kullanılır.
 - Kapsam bugün sağlayıcı komutunda sabit (`-g` = kullanıcı seviyesi); proje kapsamı açılınca
   `{scope}` değişkeni olarak plana girer, ayrı kod yolu açılmaz.
 - Sıralı uygulama hatada durmaz: başarısız öğe `hata` olarak raporlanır, kalanlar devam eder.
@@ -49,13 +51,18 @@ harnesses/*.yaml    harness tanımları
 providers/*.yaml    sağlayıcı tanımları (kind, supports, argv şablonları)
 requires/*.yaml     ön koşullar (check + platform kurulum komutu)
 src/core/           detect, plan, apply, remove, state, status, verify
-src/apply/          hook-merger (tek yerli yazıcı)
+src/apply/          hook-merger + config-writer (tek yerli yazıcı)
+src/providers/      skills-api adaptörü (in-process, `skills` paketi)
 src/context.ts      Ctx, Runner (gerçek + kayıt eden), argv genişletme
 src/cli.ts          komutlar + TUI girişi
 ~/.agentenv/        state.json, backups/<zaman>/
 ```
 
 ## Şemalar
+
+Bir sağlayıcı argv yerine gömülü bir adaptör bildirebilir: `adapter: skills-api` (öncelik 5). Bu,
+skills paketinin programatik API'sini kullanır (`installSkills` / `removeSkills`); `skills-cli`
+(öncelik 10) aynı işi komutla yapan yedek yoldur.
 
 ```yaml
 # providers/skills-cli.yaml
@@ -201,6 +208,8 @@ harness tanımında kalır.
   okuyucu eklenir.
 - Hook birleştirme yalnız JSONC hedefler için yazıldı; başka bir biçim gerekirse `hook-merger`'a yeni bir
   biçim eklenir, çekirdek değişmez.
+- `skills` paketi Node ≥22.20 istiyor; `engines` ve `requires/node` bu yüzden 22.20. CLI sağlayıcısı
+  yedek olarak duruyor ama bugün hiçbir harness'ta seçilmiyor (API dördünü de kapsıyor).
 - MCP sırları (`${VAR}` → `add-mcp --env KEY=${VAR}`) henüz uygulanmadı; öğe tanımında env alanı yok.
 - `status` üç durum bilir (`güncel` / `eksik` / `bilinmiyor`); kayıtlı ama komutu değişmiş hook `eksik`
   sayılır — ayrı bir "farklı" durumu yok.

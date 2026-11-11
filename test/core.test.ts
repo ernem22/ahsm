@@ -742,3 +742,60 @@ test('remove: etkilenen skill dizinleri harness tanımından gelir', async () =>
   );
   assert.ok(paths.every((entry) => !entry.startsWith('~')), 'yol açılmamış');
 });
+
+test('adapter: plan/apply/remove skills API üzerinden yürür', async () => {
+  const home = tempHome();
+  const data = fixture();
+  const installed: Array<{ name: string; source?: string; agents: string[] }> = [];
+  const removedCalls: Array<{ names: string[]; agents?: string[] }> = [];
+  const skills = {
+    async install({ source, agents }: { source: string; agents: string[] }) {
+      installed.push({ name: 'alpha', source, agents });
+      return { installed: ['alpha'], failed: [] };
+    },
+    async remove({ names, agents }: { names: string[]; agents?: string[] }) {
+      removedCalls.push({ names, agents });
+      return { removed: names, notFound: [], failed: [] };
+    },
+    async list() {
+      return installed;
+    },
+  };
+  data.providers.unshift({
+    id: 'skills-api',
+    kind: 'skill',
+    supports: [HARNESS],
+    requires: ['node'],
+    priority: 1,
+    adapter: 'skills-api',
+    install: [],
+    verify: { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' },
+  });
+  data.items.get('sk')!.skill = 'alpha';
+  const { ctx: base } = setup(home);
+  const ctx = createContext({ root: process.cwd(), home, runner: base.runner, platform: 'linux', skills });
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  assert.equal(plan.entries[0]?.adapter, 'skills-api');
+  assert.match(plan.entries[0]?.via ?? '', /owner\/repo/);
+
+  assert.equal((await applyPlan(data, ctx, plan)).items[0]?.status, 'ok');
+  assert.equal(installed.length, 1);
+
+  // the provider's lockfile is the plan-time evidence, exactly as the real package keeps it
+  fs.mkdirSync(path.join(home, '.agents'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.agents', '.skill-lock.json'),
+    JSON.stringify({ skills: { alpha: { source: 'owner/repo' } } }),
+    'utf8',
+  );
+
+  const replan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  assert.equal(replan.entries[0]?.action, 'already');
+
+  const removal = buildRemovePlan(data, ctx);
+  assert.equal(removal.entries[0]?.adapter, 'skills-api');
+  assert.equal((await applyRemovePlan(data, ctx, removal)).results[0]?.status, 'removed');
+  assert.deepEqual(removedCalls[0]?.names, ['alpha']);
+  assert.equal(removedCalls[0]?.agents, undefined, 'kaldırma agent filtresi kullanmamalı');
+});
