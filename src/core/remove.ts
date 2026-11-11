@@ -6,6 +6,7 @@ import { writeConfigFile } from '../apply/config-writer.js';
 import { HookConfigError, removeHook, readText } from '../apply/hook-merger.js';
 import { failureLine } from './apply.js';
 import { entryDefs } from './entry.js';
+import { readSkillInventory, type SkillInventoryRow } from './list.js';
 import { pickProvider, serverName } from './providers.js';
 import { backupFile, readState, statePath, writeState, type State, type StateEntry } from './state.js';
 import { t } from '../i18n.js';
@@ -26,6 +27,11 @@ export interface RemoveEntry {
   adapter?: 'skills-api';
   command?: string[];
   reason?: string;
+  /**
+   * True when the user named the skill instead of it coming out of the record: agentenv did not have
+   * to install it, so the name itself is what the provider is asked to remove.
+   */
+  named?: boolean;
 }
 
 export interface RemovePlan {
@@ -37,8 +43,19 @@ export interface RemovePlan {
 
 export interface RemoveResult {
   entry: RemoveEntry;
-  status: 'removed' | 'not-covered' | 'error';
+  /** `absent`: the provider inventory does not hold it, so there was nothing to remove. */
+  status: 'removed' | 'not-covered' | 'error' | 'absent';
   message?: string;
+}
+
+/** What to remove: everything recorded, a set of item ids, and/or skill names the user typed. */
+export interface RemoveSelection {
+  /** Item ids to narrow the removal to; absent means every recorded item. */
+  itemIds?: string[];
+  /** Skill names to remove by name — a record is not needed, the inventory says where they landed. */
+  skillNames?: string[];
+  /** The inventory the names were looked up in; supplied by `planRemoval`, never read here. */
+  inventory?: SkillInventoryRow[];
 }
 
 export interface RemoveOutcome {
@@ -76,11 +93,18 @@ function lockSources(file: string): Record<string, { source?: string }> | undefi
 /**
  * Plans a removal for every recorded item (or the given subset). Removal is deliberately all-harness:
  * the skill directories are shared, so a per-harness removal would claim something untrue.
+ *
+ * A skill the user names is planned the same way whether or not agentenv installed it: when a record
+ * covers the name the recorded rules apply, otherwise the name alone is what the provider removes.
  */
-export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): RemovePlan {
+export function buildRemovePlan(data: Data, ctx: Ctx, selection: RemoveSelection = {}): RemovePlan {
   const stored = readState(ctx);
   const warnings = stored.warning ? [stored.warning] : [];
-  const records = stored.state.entries.filter((entry) => !itemIds || itemIds.includes(entry.itemId));
+  const names = selection.skillNames ?? [];
+  const narrowed = Boolean(selection.itemIds) || names.length > 0;
+  const records = narrowed
+    ? stored.state.entries.filter((entry) => selectedRecord(data, entry, selection))
+    : stored.state.entries;
   const byItem = new Map<string, StateEntry[]>();
   for (const record of records) {
     const group = byItem.get(record.itemId) ?? [];
@@ -88,6 +112,8 @@ export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): Remov
     byItem.set(record.itemId, group);
   }
 
+  /** Names the selected records already account for, so no name is planned twice. */
+  const covered = new Set<string>();
   const entries: RemoveEntry[] = [];
   for (const [itemId, group] of byItem) {
     const item = data.items.get(itemId);
@@ -96,6 +122,8 @@ export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): Remov
       warnings.push(t.unknownItem(itemId));
       continue;
     }
+    // The item the record names installs the skill the user named: one entry, the recorded rules.
+    if (item.kind === 'skill' && item.skill && names.includes(item.skill)) covered.add(item.skill);
 
     const base = { itemId, kind: item.kind, harnesses };
 
@@ -176,7 +204,90 @@ export function buildRemovePlan(data: Data, ctx: Ctx, itemIds?: string[]): Remov
     entries.push({ ...base, providerId: provider.id, paths, action: 'remove', command });
   }
 
+  entries.push(...namedEntries(data, ctx, names.filter((name) => !covered.has(name)), selection.inventory));
+
   return { entries, records, warnings };
+}
+
+/** A record belongs to a removal when its item was picked, or when the user named the skill it installs. */
+function selectedRecord(data: Data, record: StateEntry, selection: RemoveSelection): boolean {
+  if (selection.itemIds?.includes(record.itemId)) return true;
+  const item = data.items.get(record.itemId);
+  return item?.kind === 'skill' && item.skill !== undefined && (selection.skillNames ?? []).includes(item.skill);
+}
+
+/**
+ * The skills the user named that no record covers. The inventory only says where each one landed (and
+ * which harnesses carry it); the provider's own remove decides whether it was there. A name the
+ * inventory does not list is still planned, with a note, rather than silently dropped.
+ */
+function namedEntries(
+  data: Data,
+  ctx: Ctx,
+  names: string[],
+  inventory: SkillInventoryRow[] | undefined,
+): RemoveEntry[] {
+  if (names.length === 0) return [];
+  const provider = pickProvider(data, 'skill', { capability: 'remove' });
+
+  return [...new Set(names)].map((name) => {
+    const row = inventory?.find((candidate) => candidate.name === name);
+    // A skill nobody reports has no harnesses to name, but its directories are still shown.
+    const harnesses = row?.harnesses ?? [];
+    const base = { itemId: name, kind: 'skill' as const, harnesses, named: true };
+    if (!provider) {
+      return { ...base, paths: [], action: 'not-covered' as const, reason: t.removeNotCovered('skill') };
+    }
+    const paths = skillPaths(data, ctx, harnesses);
+    const note = row ? {} : { reason: t.removeNotInInventory(name) };
+
+    if (provider.adapter === 'skills-api') {
+      // The adapter resolves the name from its own inventory at apply time.
+      return {
+        ...base,
+        providerId: provider.id,
+        paths,
+        action: 'remove' as const,
+        adapter: 'skills-api' as const,
+        ...note,
+      };
+    }
+    if (!provider.remove) {
+      return {
+        ...base,
+        providerId: provider.id,
+        paths,
+        action: 'not-covered' as const,
+        reason: t.removeNotCovered('skill'),
+      };
+    }
+    const command = expandArgs(provider.remove, { skill: name, source: row?.source, root: ctx.root });
+    return { ...base, providerId: provider.id, paths, action: 'remove' as const, command, ...note };
+  });
+}
+
+/**
+ * Read-only: plans the removal the user asked for — everything recorded, a package's items, and/or the
+ * skills they named. Removal and `list` share the inventory read, which is why this is async: the plan
+ * can then show the harnesses and directories of a skill agentenv never installed, before approval.
+ * Reading the inventory is the only thing that can fail here, and it does not block the removal.
+ */
+export async function planRemoval(data: Data, ctx: Ctx, selection: RemoveSelection = {}): Promise<RemovePlan> {
+  const first = buildRemovePlan(data, ctx, selection);
+  // Every name the user gave is already covered by the record: the inventory would add nothing, and
+  // reading it is the expensive part (~7 s per hundred skills), so it is not read.
+  if (!first.entries.some((entry) => entry.named)) return first;
+
+  const warnings: string[] = [];
+  let inventory: SkillInventoryRow[] = [];
+  try {
+    inventory = (await readSkillInventory(data, ctx)).rows;
+  } catch (error) {
+    warnings.push(t.removeInventoryUnreadable(error instanceof Error ? error.message : String(error)));
+  }
+
+  const plan = buildRemovePlan(data, ctx, { ...selection, inventory });
+  return { ...plan, warnings: [...plan.warnings, ...warnings] };
 }
 
 /** Applies a removal plan: commands first, then the hook entries we wrote, then the records. */
@@ -223,13 +334,23 @@ export async function applyRemovePlan(data: Data, ctx: Ctx, plan: RemovePlan): P
 
     if (entry.adapter === 'skills-api') {
       try {
-        const item = data.items.get(entry.itemId);
+        // A named entry has no item behind it: the name the user gave is what the provider removes.
+        const item = entry.named ? undefined : data.items.get(entry.itemId);
         const installed = await ctx.skills.list();
         const names = installed
-          .filter((skill) => skill.source === item?.source && (!item?.skill || skill.name === item.skill))
+          .filter((skill) =>
+            item
+              ? skill.source === item.source && (!item.skill || skill.name === item.skill)
+              : skill.name === entry.itemId,
+          )
           .map((skill) => skill.name);
         if (names.length === 0) {
-          results.push({ entry, status: 'not-covered', message: t.removeNoSkills(item?.source ?? entry.itemId) });
+          // Nothing to remove is reported, not treated as a failure of the run: the rest goes on.
+          results.push(
+            entry.named
+              ? { entry, status: 'absent', message: t.removeSkillMissing(entry.itemId) }
+              : { entry, status: 'not-covered', message: t.removeNoSkills(item?.source ?? entry.itemId) },
+          );
           continue;
         }
         // No agent filter: "remove" means everywhere, and the API still keeps a shared copy while
@@ -282,6 +403,10 @@ export async function applyRemovePlan(data: Data, ctx: Ctx, plan: RemovePlan): P
     version: 1,
     entries: stored.state.entries.filter((record) => !removedItems.has(record.itemId)),
   };
+  // Nothing recorded was removed (a named skill agentenv did not install, say): rewriting the file
+  // would only churn it. A damaged record was still backed up above, so this cannot erase history.
+  if (next.entries.length === stored.state.entries.length) return { results, warnings };
+
   writeState(ctx, next);
 
   return { results, warnings };

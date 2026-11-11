@@ -6,7 +6,7 @@ import { loadData } from './data.js';
 import { applyPlan, exitCodeFor, type ApplyOutcome } from './core/apply.js';
 import { buildPlan, type Plan, type PlanAction } from './core/plan.js';
 import { resolveSelection } from './core/selection.js';
-import { applyRemovePlan, buildRemovePlan } from './core/remove.js';
+import { applyRemovePlan, planRemoval } from './core/remove.js';
 import { readStatus } from './core/status.js';
 import { readSkillInventory } from './core/list.js';
 import { readStaleSkills } from './core/stale.js';
@@ -131,7 +131,14 @@ async function main(): Promise<void> {
     const packageId = valueOf(argv, '--package');
     const pkg = packageId ? data.packages.get(packageId) : undefined;
     if (packageId && !pkg) throw new Error(t.packageNotFound(packageId));
-    const plan = buildRemovePlan(data, ctx, pkg?.items);
+    const skillFlag = valueOf(argv, '--skill');
+    const skillNames = skillFlag
+      ? skillFlag
+          .split(',')
+          .map((name) => name.trim())
+          .filter(Boolean)
+      : [];
+    const plan = await planRemoval(data, ctx, { itemIds: pkg?.items, skillNames });
     if (!argv.includes('--yes')) {
       console.log(`
 ${t.removeTitle}`);

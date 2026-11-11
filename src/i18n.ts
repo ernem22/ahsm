@@ -128,6 +128,11 @@ export const t = {
   removePaths: (paths: string[]) => `paths: ${paths.join(', ')}`,
   removeNotCovered: (kind: string) => `no provider can remove a ${kind} yet`,
   removeNoSkills: (source: string) => `the skills lockfile lists no skill from ${source}`,
+  /** A named skill the inventory does not list: the provider's own remove is what has the last word. */
+  removeNotInInventory: (name: string) => `the provider inventory does not list ${name} — the provider's own remove has the final word`,
+  removeSkillMissing: (name: string) => `${name} is not in the provider inventory — nothing to remove`,
+  removeInventoryUnreadable: (reason: string) =>
+    `the provider inventory could not be read (${reason}); the skills you named are still planned`,
   removeNoRecord: 'no recorded command for this hook, nothing to delete safely',
   removeHookMissing: (item: string, file: string) => `${item}: the recorded hook was not in ${file}`,
   removePlanLabels: {
@@ -136,7 +141,7 @@ export const t = {
     manual: 'needs a name — remove by hand',
     error: 'error',
   } as Record<RemoveAction, string>,
-  removeLabels: { removed: 'removed', 'not-covered': 'not covered', error: 'error' },
+  removeLabels: { removed: 'removed', 'not-covered': 'not covered', error: 'error', absent: 'not installed' },
   removeHint: 'to run it: agentenv remove --yes',
   stateUnreadable: (where: string) =>
     `state.json at ${where} could not be read; it was left untouched and treated as empty. 'apply' will try to back it up before recording.`,
@@ -168,7 +173,7 @@ export const t = {
     'agentenv list                         list every skill the provider inventory reports (read-only)',
     'agentenv stale                        mark each installed skill up-to-date / stale / unknown (read-only)',
     'agentenv update [--yes]               install every stale skill again (same install path and record)',
-    'agentenv remove [--package id]        remove every recorded item (all harnesses)',
+    'agentenv remove [--package id] [--skill name,name] remove every recorded item and/or the named skills (all harnesses)',
     '',
     'flags: --package <id> (default: the package marked default) · --harness <id,id>',
     '       --update <ids|all|none> marks outdated prerequisite updates (default: none — they stay blocked)',

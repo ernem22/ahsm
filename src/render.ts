@@ -133,7 +133,7 @@ export function removeOutcomeLines(outcome: RemoveOutcome): Line[] {
     const suffix = result.message ? ` (${result.message})` : '';
     lines.push({
       text: `${t.removeLabels[result.status]}  ${result.entry.itemId}${suffix}`,
-      tone: result.status === 'error' ? 'error' : 'normal',
+      tone: result.status === 'error' ? 'error' : result.status === 'absent' ? 'dim' : 'normal',
     });
   }
   return lines;
