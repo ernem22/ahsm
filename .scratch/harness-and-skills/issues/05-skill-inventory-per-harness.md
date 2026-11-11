@@ -6,7 +6,7 @@ harnesses that have them. This is the first surface that is not limited to what 
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Listing shows installed skills per harness from the provider inventory
 - [x] Skills installed outside agentenv appear in the listing

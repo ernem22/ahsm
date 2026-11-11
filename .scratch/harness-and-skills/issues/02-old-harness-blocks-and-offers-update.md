@@ -7,7 +7,7 @@ default command, the requirement is re-checked, and the items proceed in the sam
 
 **Blocked by:** 01 (needs the version/usable notion settled first)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Plan shows the harness requirement with version, minimum and update command
 - [x] Items depending on it are blocked with a reason, and other harnesses still proceed

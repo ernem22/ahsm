@@ -7,7 +7,7 @@ question must never change anything.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `status` lists every harness with present/absent, version and usable/too-old
 - [x] An absent harness is shown as absent, not as an error

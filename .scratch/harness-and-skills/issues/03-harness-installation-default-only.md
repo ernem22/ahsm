@@ -7,7 +7,7 @@ package is unaffected.
 
 **Blocked by:** 02 (same requirement path)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A definition without an install command for this platform reports "no install command", in plan
       and in apply

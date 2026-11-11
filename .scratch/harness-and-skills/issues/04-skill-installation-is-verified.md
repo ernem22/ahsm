@@ -7,7 +7,7 @@ and reported.
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A fresh install reports installed, and a second run reports already installed without writing
 - [x] A skill deleted by hand reappears on the next run
