@@ -21,9 +21,11 @@ export function planLines(plan: Plan): Line[] {
   const lines: Line[] = [];
 
   for (const entry of plan.entries) {
+    // A blocked entry keeps its action but is reported as blocked: apply still has the final word.
+    const blocked = entry.blockedBy !== undefined;
     lines.push({
-      text: `${ACTION_MARK[entry.action]} ${entry.itemId} → ${entry.harness} [${entry.kind}/${entry.providerId ?? '-'}]`,
-      tone: entry.action === 'error' ? 'error' : 'normal',
+      text: `${blocked ? '!' : ACTION_MARK[entry.action]} ${entry.itemId} → ${entry.harness} [${entry.kind}/${entry.providerId ?? '-'}]`,
+      tone: blocked ? 'warning' : entry.action === 'error' ? 'error' : 'normal',
     });
     if (entry.command) lines.push({ text: `    ${t.runPrefix}: ${entry.command.join(' ')}`, tone: 'dim' });
     else if (entry.via) lines.push({ text: `    ${t.runPrefix}: ${entry.via}`, tone: 'dim' });
@@ -32,22 +34,32 @@ export function planLines(plan: Plan): Line[] {
       lines.push({ text: `    ${t.writePrefix}: ${where}`, tone: 'dim' });
       lines.push({ text: `    ${t.hookEntry}: ${JSON.stringify(entry.hook.entry)}`, tone: 'dim' });
     }
+    if (entry.blockedBy) {
+      lines.push({ text: `    ${t.blocked}: ${t.requirementUnmet(entry.blockedBy)}`, tone: 'warning' });
+    }
     if (entry.reason) lines.push({ text: `    ${t.notePrefix}: ${entry.reason}`, tone: 'dim' });
   }
 
   for (const requirement of plan.requirements) {
-    const install =
+    const name = requirement.label ?? requirement.id;
+    const version = requirement.version ? ` ${requirement.version}` : '';
+    const minimum = requirement.minimum ? ` · ${t.minimum(requirement.minimum)}` : '';
+    const offered =
       !requirement.present && requirement.installCommand ? ` → ${requirement.installCommand.join(' ')}` : '';
+    // "too old" is the same word status uses: an unmet minimum is a requirement, not a detection failure.
+    const state = requirement.present ? t.ready : requirement.version ? t.harnessLabels['too-old'] : t.missing;
     lines.push({
-      text: `${requirement.present ? t.ready : t.missing}  ${t.requirement} ${requirement.id}${install}`,
+      text: `${state}  ${t.requirement} ${name}${version}${minimum}${offered}`,
       tone: requirement.present ? 'normal' : 'warning',
     });
   }
 
   for (const warning of plan.warnings) lines.push({ text: warning, tone: 'warning' });
 
-  const runs = plan.entries.filter((entry) => entry.action === 'run').length;
-  lines.push({ text: t.actions(runs, plan.entries.length - runs), tone: 'dim' });
+  const blocked = plan.entries.filter((entry) => entry.blockedBy !== undefined).length;
+  // Blocked entries are offered only if their requirement's update gets marked, so they are not "actions" yet.
+  const runs = plan.entries.filter((entry) => entry.action === 'run' && entry.blockedBy === undefined).length;
+  lines.push({ text: t.actions(runs, plan.entries.length - runs - blocked, blocked), tone: 'dim' });
   return lines;
 }
 

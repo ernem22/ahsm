@@ -46,6 +46,17 @@ function selectionFromArgs(data: Data, ctx: Ctx, argv: string[]) {
   });
 }
 
+/** `--update` absent means the whole plan was approved; `none` marks no update; a list names them. */
+function markedUpdates(argv: string[]): string[] | undefined {
+  const flag = valueOf(argv, '--update');
+  if (!flag || flag === 'all') return undefined;
+  if (flag === 'none') return [];
+  return flag
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   if (argv.includes('--help') || argv.includes('-h') || argv[0] === 'help') {
@@ -68,7 +79,7 @@ async function main(): Promise<void> {
       console.log(t.applyHint);
       return;
     }
-    const outcome = await applyPlan(data, ctx, plan);
+    const outcome = await applyPlan(data, ctx, plan, { updates: markedUpdates(argv) });
     printOutcome(outcome);
     process.exitCode = exitCodeFor(outcome);
     return;

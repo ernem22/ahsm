@@ -9,7 +9,7 @@ default command, the requirement is re-checked, and the items proceed in the sam
 
 **Status:** ready-for-agent
 
-- [ ] Plan shows the harness requirement with version, minimum and update command
-- [ ] Items depending on it are blocked with a reason, and other harnesses still proceed
-- [ ] Marking the update runs it once, re-checks the version, then continues with the items
-- [ ] Without marking, nothing is updated and the run reports what stayed blocked
+- [x] Plan shows the harness requirement with version, minimum and update command
+- [x] Items depending on it are blocked with a reason, and other harnesses still proceed
+- [x] Marking the update runs it once, re-checks the version, then continues with the items
+- [x] Without marking, nothing is updated and the run reports what stayed blocked

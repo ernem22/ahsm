@@ -83,6 +83,36 @@ function settingsOf(home) {
   return fs.readFileSync(path.join(home, '.fake', 'settings.json'), 'utf8');
 }
 
+/**
+ * A root whose fake harness declares minimum 99 and reports whatever version the paired update script
+ * wrote: the same CLI is too old at plan time and usable after its marked update, without new code.
+ */
+function versionedRoot() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-root-'));
+  fs.cpSync(offlineRoot, root, { recursive: true });
+  const version = JSON.stringify(path.join(root, 'bin', 'fake-version.mjs'));
+  const update = JSON.stringify(path.join(root, 'bin', 'fake-update.mjs'));
+  fs.writeFileSync(
+    path.join(root, 'requires', 'fake.yaml'),
+    `id: fake
+check:
+  command: [node, ${version}]
+  min: "99"
+install:
+  win32: [node, ${update}]
+  darwin: [node, ${update}]
+  linux: [node, ${update}]
+`,
+    'utf8',
+  );
+  return root;
+}
+
+function updatesRan(home) {
+  const log = path.join(home, '.fake-updates.log');
+  return fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).length : 0;
+}
+
 console.log('offline (ağ yok, sahte harness)');
 
 const home = sandbox();
@@ -161,6 +191,48 @@ check('status bulunmayan harness için absent der, hata vermez', () => {
   const { out, code } = run(empty, ['status'], offlineRoot);
   assert(code === 0, `çıkış kodu ${code}: ${out}`);
   assert(/^absent {2}fake$/m.test(out), `absent satırı yok: ${out}`);
+});
+
+check('plan eski harness\'ı sürüm, asgari ve güncelleme komutuyla gösterir, öğeleri bloklar', () => {
+  const old = sandbox();
+  const root = versionedRoot();
+  const before = treeHash(old);
+  const { out, code } = run(old, ['plan'], root);
+  assert(code === 0, `çıkış kodu ${code}: ${out}`);
+  assert(
+    /^too old {2}requirement Fake Harness 1\.0\.0 · min 99 → node .*fake-update\.mjs$/m.test(out),
+    `gereksinim satırı yok: ${out}`,
+  );
+  const blocked = (out.match(/blocked: requirement not met: fake/g) ?? []).length;
+  assert(blocked === 3, `bloklu öğe sayısı ${blocked}: ${out}`);
+  assert(treeHash(old) === before, 'plan sandboxı değiştirdi');
+  assert(updatesRan(old) === 0, 'güncelleme plan sırasında çalıştı');
+});
+
+check('markalanmayan güncelleme çalışmaz: öğeler bloklu kalır, hiçbiri kurulmaz', () => {
+  const blocked = sandbox();
+  const root = versionedRoot();
+  const before = treeHash(blocked);
+  const { out, code } = run(blocked, ['apply', '--yes', '--update', 'none'], root);
+  assert(code === 1, `çıkış kodu 1 değil: ${code}: ${out}`);
+  assert(/the fake update was not marked, so it was not run/.test(out), `sebep yok: ${out}`);
+  const reasons = (out.match(/requirement not met: fake/g) ?? []).length;
+  assert(reasons === 3, `bloklu öğe sayısı ${reasons}: ${out}`);
+  assert(updatesRan(blocked) === 0, 'markalanmayan güncelleme çalıştı');
+  assert(!fs.existsSync(path.join(blocked, '.fake', 'skills', 'alpha.md')), 'bloklu skill kuruldu');
+  assert(treeHash(blocked) === before, 'hiçbir şey kurulmamalı');
+});
+
+check('markalanan güncelleme bir kez çalışır, sürüm yeniden okunur, öğeler aynı çalıştırmada kurulur', () => {
+  const fixed = sandbox();
+  const root = versionedRoot();
+  const { out, code } = run(fixed, ['apply', '--yes', '--update', 'fake'], root);
+  assert(code === 0, `çıkış kodu ${code}: ${out}`);
+  assert((out.match(/^installed {2}/gm) ?? []).length === 3, `üç kurulum yok: ${out}`);
+  assert(updatesRan(fixed) === 1, `güncelleme ${updatesRan(fixed)} kez çalıştı`);
+  assert(fs.readFileSync(path.join(fixed, '.fake-version'), 'utf8').trim() === '99.0.0', 'güncelleme sürümü yazmadı');
+  const status = run(fixed, ['status'], root).out;
+  assert((status.match(/^up-to-date/gm) ?? []).length === 3, `status üçünü güncel göstermedi: ${status}`);
 });
 
 check('ikinci apply hiçbir şeyi değiştirmez', () => {

@@ -30,6 +30,8 @@ export function App({ data, ctx }: Props): React.ReactElement {
   const [itemIndex, setItemIndex] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [plan, setPlan] = useState<Plan | undefined>();
+  // Marked prerequisite updates: the plan shows the offers, and 'y' runs only what is marked.
+  const [markUpdates, setMarkUpdates] = useState(true);
   const [outcome, setOutcome] = useState<ApplyOutcome | undefined>();
   const [error, setError] = useState<string | undefined>();
 
@@ -61,7 +63,7 @@ export function App({ data, ctx }: Props): React.ReactElement {
   useEffect(() => {
     if (step !== 'applying' || !plan) return;
     let cancelled = false;
-    applyPlan(data, ctx, plan)
+    applyPlan(data, ctx, plan, { updates: markUpdates ? undefined : [] })
       .then((result) => {
         if (!cancelled) {
           setOutcome(result);
@@ -132,6 +134,7 @@ export function App({ data, ctx }: Props): React.ReactElement {
       return;
     }
     if (step === 'plan') {
+      if (input === ' ') setMarkUpdates((marked) => !marked);
       if (input === 'y') setStep('applying');
       if (input === 'n' || key.escape || key.leftArrow) setStep('items');
       return;
@@ -211,6 +214,7 @@ export function App({ data, ctx }: Props): React.ReactElement {
               {line.text}
             </Text>
           ))}
+          <Text dimColor>{markUpdates ? t.updatesMarked : t.updatesSkipped}</Text>
           <Text dimColor>{t.keysPlan.join(' · ')}</Text>
         </Box>
       )}

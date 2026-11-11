@@ -5,7 +5,7 @@ import { mergeHook, readText } from '../apply/hook-merger.js';
 import { writeConfigFile } from '../apply/config-writer.js';
 import type { Data } from '../types.js';
 import type { Plan, PlanEntry } from './plan.js';
-import { entryDefs } from './entry.js';
+import { requiredIds } from './entry.js';
 import { meetsRequirement } from './requirements.js';
 import { backupFile, findEntry, readState, recordEntry, statePath } from './state.js';
 import { t } from '../i18n.js';
@@ -28,6 +28,15 @@ export interface ApplyOutcome {
   requirements: RequirementResult[];
   items: ApplyResult[];
   warnings: string[];
+}
+
+export interface ApplyOptions {
+  /**
+   * The requirement ids the user marked in the plan. Omitted means the whole plan was approved (today's
+   * `apply --yes`), so every offered update runs. An id left out is not installed: the requirement stays
+   * unmet and the items that need it are reported blocked — the rest of the run is untouched.
+   */
+  updates?: string[];
 }
 
 /** Process exit code for an outcome: 1 if anything failed, 0 otherwise (warnings alone do not fail). */
@@ -59,7 +68,7 @@ export function failureLine(stderr: string, fallback: string): string {
   return (interesting ?? lines[0] ?? fallback).slice(0, 160);
 }
 
-export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<ApplyOutcome> {
+export async function applyPlan(data: Data, ctx: Ctx, plan: Plan, options: ApplyOptions = {}): Promise<ApplyOutcome> {
   const requirements: RequirementResult[] = [];
   const unmet = new Set<string>();
 
@@ -70,6 +79,11 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
     }
     if (!requirement.installCommand) {
       requirements.push({ id: requirement.id, ok: false, message: t.notDefined });
+      unmet.add(requirement.id);
+      continue;
+    }
+    if (options.updates && !options.updates.includes(requirement.id)) {
+      requirements.push({ id: requirement.id, ok: false, message: t.updateNotMarked(requirement.id) });
       unmet.add(requirement.id);
       continue;
     }
@@ -133,8 +147,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
   };
 
   for (const entry of plan.entries) {
-    const defs = entryDefs(data, entry);
-    const blocked = [...(defs.provider?.requires ?? []), ...(defs.harness?.requires ?? [])].find((id) => unmet.has(id));
+    const blocked = requiredIds(data, entry).find((id) => unmet.has(id));
 
     if (entry.action === 'run' && blocked) {
       items.push({ entry, status: 'error', message: t.requirementUnmet(blocked) });

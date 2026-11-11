@@ -3,8 +3,9 @@ import { mergeHook, readText, type HookEntry } from '../apply/hook-merger.js';
 import { hookTarget, type HookTarget } from '../apply/hook-target.js';
 import { t } from '../i18n.js';
 import type { Data, ItemDef, Kind, ProviderDef, RequirementDef, Selection } from '../types.js';
+import { requiredIds } from './entry.js';
 import { pickProvider } from './providers.js';
-import { meetsRequirement } from './requirements.js';
+import { checkRequirement } from './requirements.js';
 import { verifyInstalled } from './verify.js';
 import { findEntry, readState, sameCommand } from './state.js';
 
@@ -27,10 +28,18 @@ export interface PlanEntry {
   hook?: { target: HookTarget; entry: HookEntry };
   note?: string;
   reason?: string;
+  /** The requirement this entry cannot run without; set only when that requirement is unmet. */
+  blockedBy?: string;
 }
 
 export interface PlanRequirement {
   id: string;
+  /** Human name when the requirement belongs to a harness (the harness label, which is data). */
+  label?: string;
+  /** What the check command printed, when a version could be read out of it. */
+  version?: string;
+  /** The minimum the definition declares (`check.min`). */
+  minimum?: string;
   present: boolean;
   installCommand?: string[];
 }
@@ -174,12 +183,27 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
       warnings.push(t.unknownRequirement(id));
       continue;
     }
-    const result = await ctx.runner.run(def.check.command);
+    const check = checkRequirement(def, await ctx.runner.run(def.check.command));
+    // A requirement a selected harness links through `requires` carries that harness's minimum.
+    const owner = data.harnesses.find(
+      (harness) => selection.harnessIds.includes(harness.id) && (harness.requires ?? []).includes(id),
+    );
     requirements.push({
       id,
-      present: meetsRequirement(def, result),
+      label: owner?.label,
+      version: check.version,
+      minimum: def.check.min,
+      present: check.meets,
       installCommand: def.install[ctx.platform],
     });
+  }
+
+  // The same unmet requirements apply would refuse to run: show the blockage here instead of at the end.
+  const unmet = new Set(requirements.filter((requirement) => !requirement.present).map((requirement) => requirement.id));
+  for (const entry of entries) {
+    if (entry.action !== 'run') continue;
+    const blockedBy = requiredIds(data, entry).find((id) => unmet.has(id));
+    if (blockedBy) entry.blockedBy = blockedBy;
   }
 
   return { selection, entries, requirements, warnings };

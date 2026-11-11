@@ -17,3 +17,12 @@ export function entryDefs(data: Data, entry: EntryRef): EntryDefs {
     item: data.items.get(entry.itemId),
   };
 }
+
+/**
+ * What an entry cannot be installed without: the provider's requirements and the harness's own. The one
+ * list plan, apply and status read, so "blocked" cannot mean two different things.
+ */
+export function requiredIds(data: Data, entry: EntryRef): string[] {
+  const { harness, provider } = entryDefs(data, entry);
+  return [...(provider?.requires ?? []), ...(harness?.requires ?? [])];
+}

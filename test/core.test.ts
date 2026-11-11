@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { createContext, RecordingRunner } from '../src/context.js';
+import { createContext, RecordingRunner, type RunResult, type Runner } from '../src/context.js';
 import { applyPlan, exitCodeFor, type ApplyOutcome } from '../src/core/apply.js';
 import { detectHarnesses } from '../src/core/detect.js';
 import { buildPlan } from '../src/core/plan.js';
@@ -12,6 +12,7 @@ import { readStatus } from '../src/core/status.js';
 import { findEntry, readState, statePath, type State } from '../src/core/state.js';
 import { verifyInstalled } from '../src/core/verify.js';
 import { mergeHook, readText } from '../src/apply/hook-merger.js';
+import { planLines } from '../src/render.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
 
@@ -873,4 +874,141 @@ test('adapter: plan/apply/remove skills API üzerinden yürür', async () => {
   assert.equal((await applyRemovePlan(data, ctx, removal)).results[0]?.status, 'removed');
   assert.deepEqual(removedCalls[0]?.names, ['alpha']);
   assert.equal(removedCalls[0]?.agents, undefined, 'kaldırma agent filtresi kullanmamalı');
+});
+
+/** Answers by command and keeps a queue per command, so a re-check can answer differently from the first read. */
+function scripted(answers: Record<string, RunResult[]>) {
+  const calls: string[][] = [];
+  const runner: Runner = {
+    async run(argv: string[]) {
+      calls.push(argv);
+      return answers[argv.join(' ')]?.shift() ?? { code: 0, stdout: '', stderr: '' };
+    },
+  };
+  return { runner, calls };
+}
+
+/** Two harnesses: one below its declared minimum, one comfortably above it. */
+function twoHarnesses(): Data {
+  const data = withHarnessRequirement();
+  data.harnesses[0]!.label = 'Claude Code';
+  data.harnesses.push({
+    ...data.harnesses[0]!,
+    id: 'other',
+    label: 'Other Harness',
+    detect: ['~/.other'],
+    requires: ['other-cli'],
+  });
+  data.requires.push({
+    id: 'other-cli',
+    check: { command: ['other', '--version'], min: '1.0' },
+    install: { win32: ['install-other'], darwin: ['install-other'], linux: ['install-other'] },
+  });
+  data.providers = data.providers.map((provider) => ({ ...provider, supports: [...provider.supports, 'other'] }));
+  return data;
+}
+
+const HARNESS_UPDATE = ['npm', 'install', '-g', '@fake/harness'];
+
+test('plan: asgari sürümün altındaki harness sürüm, asgari ve güncelleme komutuyla görünür', async () => {
+  const home = tempHome();
+  const data = twoHarnesses();
+  const { runner } = scripted({
+    'node --version': [{ code: 0, stdout: 'v22.1.0', stderr: '' }],
+    'claude --version': [{ code: 0, stdout: '1.4.0', stderr: '' }],
+    'other --version': [{ code: 0, stdout: '1.5.0', stderr: '' }],
+  });
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
+
+  const tooOld = plan.requirements.find((requirement) => requirement.id === HARNESS);
+  assert.equal(tooOld?.present, false);
+  assert.equal(tooOld?.version, '1.4.0');
+  assert.equal(tooOld?.minimum, '2.0');
+  assert.deepEqual(tooOld?.installCommand, HARNESS_UPDATE);
+
+  const text = planLines(plan)
+    .map((line) => line.text)
+    .join('\n');
+  assert.match(text, /too old {2}requirement Claude Code 1\.4\.0 · min 2\.0 → npm install -g @fake\/harness/);
+  assert.equal(fs.existsSync(path.join(home, '.agentenv')), false, 'plan yazmamalı');
+});
+
+test('plan: eski harness\'a bağlı öğeler sebebiyle bloklanır, diğer harness devam eder', async () => {
+  const home = tempHome();
+  const data = twoHarnesses();
+  const { runner } = scripted({
+    'node --version': [{ code: 0, stdout: 'v22.1.0', stderr: '' }],
+    'claude --version': [{ code: 0, stdout: '1.4.0', stderr: '' }],
+    'other --version': [{ code: 0, stdout: '1.5.0', stderr: '' }],
+  });
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
+
+  assert.deepEqual(
+    plan.entries.filter((entry) => entry.blockedBy).map((entry) => [entry.harness, entry.blockedBy]),
+    [[HARNESS, HARNESS]],
+  );
+  assert.equal(plan.entries.find((entry) => entry.harness === 'other')?.blockedBy, undefined);
+  const text = planLines(plan)
+    .map((line) => line.text)
+    .join('\n');
+  assert.match(text, /blocked: requirement not met: claude-code/);
+});
+
+test('apply: markalanan güncelleme bir kez çalışır, sürüm yeniden okunur, öğeler aynı çalıştırmada devam eder', async () => {
+  const home = tempHome();
+  const data = twoHarnesses();
+  const { runner, calls } = scripted({
+    'node --version': [{ code: 0, stdout: 'v22.1.0', stderr: '' }],
+    'claude --version': [
+      { code: 0, stdout: '1.4.0', stderr: '' },
+      { code: 0, stdout: '2.5.0', stderr: '' },
+    ],
+    'other --version': [{ code: 0, stdout: '1.5.0', stderr: '' }],
+    [HARNESS_UPDATE.join(' ')]: [{ code: 0, stdout: '', stderr: '' }],
+  });
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
+
+  const outcome = await applyPlan(data, ctx, plan, { updates: [HARNESS] });
+
+  assert.equal(calls.filter((call) => call.join(' ') === HARNESS_UPDATE.join(' ')).length, 1, 'güncelleme bir kez çalışmadı');
+  assert.equal(calls.filter((call) => call.join(' ') === 'claude --version').length, 2, 'sürüm yeniden okunmadı');
+  assert.equal(outcome.requirements.find((requirement) => requirement.id === HARNESS)?.ok, true);
+  assert.deepEqual(
+    outcome.items.map((item) => item.status),
+    ['ok', 'ok'],
+  );
+  assert.equal(readState(ctx).state.entries.length, 2);
+  assert.equal(exitCodeFor(outcome), 0);
+});
+
+test('apply: markalanmayan güncelleme çalışmaz, bağımlı öğe bloklanır ve sebebi raporlanır', async () => {
+  const home = tempHome();
+  const data = twoHarnesses();
+  const { runner, calls } = scripted({
+    'node --version': [{ code: 0, stdout: 'v22.1.0', stderr: '' }],
+    'claude --version': [{ code: 0, stdout: '1.4.0', stderr: '' }],
+    'other --version': [{ code: 0, stdout: '1.5.0', stderr: '' }],
+    [HARNESS_UPDATE.join(' ')]: [{ code: 0, stdout: '', stderr: '' }],
+  });
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
+
+  const outcome = await applyPlan(data, ctx, plan, { updates: [] });
+
+  assert.equal(calls.some((call) => call.join(' ') === HARNESS_UPDATE.join(' ')), false, 'markalanmayan güncelleme çalıştı');
+  const requirement = outcome.requirements.find((candidate) => candidate.id === HARNESS);
+  assert.equal(requirement?.ok, false);
+  assert.equal(requirement?.message, t.updateNotMarked(HARNESS));
+  const blocked = outcome.items.find((item) => item.entry.harness === HARNESS);
+  assert.equal(blocked?.status, 'error');
+  assert.equal(blocked?.message, t.requirementUnmet(HARNESS));
+  assert.equal(outcome.items.find((item) => item.entry.harness === 'other')?.status, 'ok', 'diğer harness devam etmedi');
+  assert.equal(findEntry(readState(ctx).state, 'sk', HARNESS), undefined, 'bloklu öğe kaydedildi');
+  assert.ok(findEntry(readState(ctx).state, 'sk', 'other'), 'diğer harness kaydedilmedi');
+  assert.equal(exitCodeFor(outcome), 1);
 });

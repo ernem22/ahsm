@@ -149,12 +149,19 @@ items: [emil-skills, context7, bash-log]
 2. **select** — paket seçilince öğeleri işaretli gelir; harness bazında ya da "hepsine". Çıktı:
    `(kind, öğe, harness)` üçlüleri.
 3. **plan** — her üçlü için sağlayıcı çözümlenir (`supports` içinde mi), komut (hook için yazılacak girdi) üretilir; kayıt varsa
-   sağlayıcının `verify` tarifiyle gerçek kontrol edilir; eksik ön koşullar listelenir. Hiçbir şey yazılmaz.
-4. **bootstrap** — onaylanan ön koşullar platform komutuyla kurulur, sonra yeniden check.
+   sağlayıcının `verify` tarifiyle gerçek kontrol edilir; eksik ön koşullar listelenir. Her ön koşul satırı
+   okunan sürümü, tanımın asgarisini (`check.min`) ve eksikse güncelleme komutunu taşır; bir harness'ın
+   asgari sürümü karşılanmıyorsa satır `çok eski` der (status ile aynı sözcük). O ön koşula bağlı öğeler
+   `bloklu` olarak ve sebebiyle gösterilir; başka bir harness'ın öğeleri etkilenmez. Hiçbir şey yazılmaz.
+4. **bootstrap** — yalnız **işaretlenen** ön koşullar platform komutuyla bir kez kurulur, sonra sürüm
+   yeniden check edilir. `apply --yes` işaretsiz çağrıldığında planın tamamı onaylanmış sayılır (bugünkü
+   davranış); `--update <id,id>` yalnız adı geçenleri, `--update none` hiçbirini işaretler. İşaretlenmeyen
+   ön koşul kurulmaz, bağımlı öğeler sebebiyle birlikte `hata` olarak raporlanır.
 5. **apply** — sıralı uygulama; her hook yazımından önce hedef dosya, bozuk `state.json` kaydından önce
    o dosya yedeklenir. Sonuç satırı: `kuruldu` / `zaten kurulu` / `kapsanmıyor` / `hata`. CLI
    (`apply --yes`) çıkış kodu: bir öğe `hata` verdiyse ya da bir ön koşul karşılanmadıysa 1, yalnız
-   uyarı varsa 0; etkileşimli TUI çıkış kodu ayarlamaz.
+   uyarı varsa 0; etkileşimli TUI çıkış kodu ayarlamaz. "Bloklu" ayrı bir kapı değildir: apply, kendi
+   ön koşul sonucuna bakıp öğeyi çalıştırmaz — plan yalnız aynı sonucu önceden gösterir.
 6. **record** — `state.json`: öğe, harness, sağlayıcı, çalıştırılan komut, tarih. Her başarılı öğeden
    sonra atomik yazılır (tmp + rename); kayıt devre dışıysa (`state.json` okunamıyorsa, bozuk dosya
    yedeklenemiyorsa ya da kayıt yazılamıyorsa) yazılmaz. İstisna: hedefte zaten bulunan bir hook (elle
@@ -181,9 +188,11 @@ harness tanımında kalır.
 ## Test
 
 - `npm test` — birim/entegrasyon: `node:test`, geçici HOME + kayıt eden runner, ağ yok.
-- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 14 senaryo: kurulum, idempotens,
+- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 17 senaryo: kurulum, idempotens,
   doğrulama, kendini onarma, bozuk JSONC, bozuk state, eksik ön koşul, plan/status'un yazmaması,
-  status'un harness bölümü (hazır / çok eski + güncelleme komutu / yok).
+  status'un harness bölümü (hazır / çok eski + güncelleme komutu / yok), eski harness'ın planda
+  sürüm/asgari/güncelleme komutuyla görünüp öğelerini bloklaması, markalanmayan güncellemenin
+  çalışmaması ve markalananın bir kez çalışıp aynı çalıştırmada öğeleri kurması.
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 
