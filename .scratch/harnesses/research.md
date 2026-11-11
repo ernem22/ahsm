@@ -1,6 +1,6 @@
 # Harness config claims — primary-source verification (2026-11-11)
 
-> Note: this repo has no research-notes convention yet (`docs/` holds only `adr/` and `agents/`); `docs/research/` was created for this file. Repo branch: `feat/harnesses-and-remove`. `skills` v1.8.1, `add-mcp` 2.6.1, claude 2.1.322, codex-cli 0.166.0, pi 1.4.0, opencode 1.19.0.
+> Note: research notes live beside the ticket in `.scratch/<feature>/` (this repo's tracker convention); this one belongs to the harnesses feature. Repo branch: `feat/harnesses-and-remove`. `skills` v1.8.1, `add-mcp` 2.6.1, claude 2.1.322, codex-cli 0.166.0, pi 1.4.0, opencode 1.19.0.
 
 | Claim | Verdict | Evidence (one line) |
 |---|---|---|
