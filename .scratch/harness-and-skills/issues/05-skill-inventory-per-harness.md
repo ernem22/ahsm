@@ -8,7 +8,7 @@ harnesses that have them. This is the first surface that is not limited to what 
 
 **Status:** ready-for-agent
 
-- [ ] Listing shows installed skills per harness from the provider inventory
-- [ ] Skills installed outside agentenv appear in the listing
-- [ ] The listing marks scope and which harnesses carry each skill
-- [ ] Listing writes nothing and does not depend on the record being intact
+- [x] Listing shows installed skills per harness from the provider inventory
+- [x] Skills installed outside agentenv appear in the listing
+- [x] The listing marks scope and which harnesses carry each skill
+- [x] Listing writes nothing and does not depend on the record being intact
