@@ -1,0 +1,12 @@
+#!/bin/sh
+# Fast pre-commit subset of `npm run check`: no build, no e2e.
+# Checked in on purpose — `.git/hooks` is not tracked. Enable it once per clone with:
+#   git config core.hooksPath .githooks
+# The file is plain ASCII with LF line endings (pinned by .gitattributes), so it needs no
+# executable bit and no CRLF translation to run under the sh git ships on any platform.
+set -e
+
+npm run check:eol
+npm run typecheck
+npm run typecheck:test
+npm test

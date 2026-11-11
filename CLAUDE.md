@@ -15,3 +15,7 @@ The five canonical triage roles, label strings unchanged. See `docs/agents/triag
 ### Domain docs
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root, read lazily. See `docs/agents/domain.md`.
+
+### Git
+
+Conventional commits, LF line endings, and the checked-in pre-commit hook (`.githooks/pre-commit`). See `docs/agents/git.md`.

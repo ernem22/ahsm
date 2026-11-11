@@ -1,2 +1,4 @@
 # Repo tek biçim kullansın: index ve çalışma ağacı LF.
 * text=auto eol=lf
+# Hooks run under sh: pin LF instead of trusting text=auto detection.
+.githooks/* text eol=lf
