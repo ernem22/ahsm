@@ -91,6 +91,22 @@ function setup(home: string, results: ConstructorParameters<typeof RecordingRunn
   return { ctx, runner };
 }
 
+/** The harness definition declares its own minimum version, and that minimum is data (`check.min`). */
+function withHarnessRequirement(): Data {
+  const data = fixture();
+  data.harnesses[0]!.requires = [HARNESS];
+  data.requires.push({
+    id: HARNESS,
+    check: { command: ['claude', '--version'], min: '2.0' },
+    install: {
+      win32: ['npm', 'install', '-g', '@fake/harness'],
+      darwin: ['npm', 'install', '-g', '@fake/harness'],
+      linux: ['npm', 'install', '-g', '@fake/harness'],
+    },
+  });
+  return data;
+}
+
 function tempHome(): string {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-test-'));
   fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
@@ -172,7 +188,7 @@ test('apply: üç türü yazar, yedek alır, kaydı tutar; ikinci çalıştırma
   assert.equal(readState(ctx).state.entries.length, 3);
   assert.ok(fs.existsSync(statePath(ctx)));
   assert.deepEqual(
-    readStatus(data, ctx).rows.map((row) => row.value),
+    (await readStatus(data, ctx)).rows.map((row) => row.value),
     ['missing', 'missing', 'up-to-date'],
   );
 
@@ -345,7 +361,7 @@ test('bozuk state.json: plan dosya yazmaz, apply ezmeden önce yedekler', async 
   const selection = { harnessIds: [HARNESS], itemIds: ['hk'] };
 
   const plan = await buildPlan(data, ctx, selection);
-  readStatus(data, ctx);
+  await readStatus(data, ctx);
   assert.equal(plan.warnings.length, 1);
   assert.match(plan.warnings[0] ?? '', /state\.json/);
   assert.equal(fs.existsSync(path.join(home, '.agentenv', 'backups')), false, 'plan/status yazmamalı');
@@ -547,7 +563,7 @@ test('status: doğrulanabilen sağlayıcı için gerçeği söyler', async () =>
 
   await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk', 'mc'] }));
 
-  const before = readStatus(data, ctx).rows.map((row) => row.value);
+  const before = (await readStatus(data, ctx)).rows.map((row) => row.value);
   assert.equal(before[0], 'missing', 'lock yok → eksik');
 
   fs.mkdirSync(path.join(home, '.agents'), { recursive: true });
@@ -558,8 +574,67 @@ test('status: doğrulanabilen sağlayıcı için gerçeği söyler', async () =>
   );
   fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { mc: {} } }), 'utf8');
 
-  const after = readStatus(data, ctx).rows.map((row) => row.value);
+  const after = (await readStatus(data, ctx)).rows.map((row) => row.value);
   assert.deepEqual(after, ['up-to-date', 'up-to-date']);
+});
+
+test('status: harness bölümü sürümü ve asgari sürümü gösterir', async () => {
+  const home = tempHome();
+  const runner = new RecordingRunner([{ code: 0, stdout: '2.5.0 (Claude Code)', stderr: '' }]);
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+
+  const report = await readStatus(withHarnessRequirement(), ctx);
+  const harness = report.harnesses[0];
+
+  assert.equal(harness?.present, true, 'kurulu harness yok sayıldı');
+  assert.equal(harness?.version, '2.5.0', 'sürüm CLI çıktısından okunmadı');
+  assert.equal(harness?.minimum, '2.0');
+  assert.equal(harness?.usable, true);
+  assert.equal(harness?.updateCommand, undefined, 'güncel harness için güncelleme önerilmemeli');
+  assert.deepEqual(runner.calls, [['claude', '--version']]);
+});
+
+test('status: asgari sürümün altındaki harness güncelleme komutunu önerir', async () => {
+  const home = tempHome();
+  const runner = new RecordingRunner([{ code: 0, stdout: '1.4.0', stderr: '' }]);
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+
+  const harness = (await readStatus(withHarnessRequirement(), ctx)).harnesses[0];
+
+  assert.equal(harness?.present, true);
+  assert.equal(harness?.version, '1.4.0');
+  assert.equal(harness?.usable, false, 'asgari sürümün altı kullanılabilir sayıldı');
+  assert.deepEqual(harness?.updateCommand, ['npm', 'install', '-g', '@fake/harness']);
+});
+
+test('status: bulunmayan harness yok olarak görünür, sürüm komutu çalıştırılmaz', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-empty-'));
+  const runner = new RecordingRunner([{ code: 0, stdout: '2.5.0', stderr: '' }]);
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+
+  const harness = (await readStatus(withHarnessRequirement(), ctx)).harnesses[0];
+
+  assert.equal(harness?.present, false);
+  assert.equal(harness?.version, undefined);
+  assert.deepEqual(runner.calls, [], 'bulunmayan harness için sürüm komutu çalıştırıldı');
+});
+
+test('status: hiçbir şey yazmaz — geçici ev ve kayıt değişmeden kalır', async () => {
+  const home = tempHome();
+  const settings = path.join(home, '.claude', 'settings.json');
+  fs.writeFileSync(settings, '{\n  // not\n  "model": "opus"\n}\n', 'utf8');
+  const runner = new RecordingRunner([
+    { code: 0, stdout: '1.4.0', stderr: '' },
+    { code: 0, stdout: '1.4.0', stderr: '' },
+  ]);
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+  const before = fs.readdirSync(home, { recursive: true }).sort();
+
+  await readStatus(withHarnessRequirement(), ctx);
+
+  assert.deepEqual(fs.readdirSync(home, { recursive: true }).sort(), before);
+  assert.equal(fs.readFileSync(settings, 'utf8'), '{\n  // not\n  "model": "opus"\n}\n');
+  assert.equal(fs.existsSync(path.join(home, '.agentenv')), false, 'status kayıt dizini oluşturdu');
 });
 
 test('hook elle yazılmışsa apply komutunu kaydeder; sonraki değişiklik eskisini yerinde değiştirir', async () => {
@@ -580,7 +655,7 @@ test('hook elle yazılmışsa apply komutunu kaydeder; sonraki değişiklik eski
   assert.equal(readState(ctx).state.entries[0]?.hookCommand, 'echo hi');
 
   data.items.set('hk', { ...data.items.get('hk')!, hookCommand: 'echo new' });
-  assert.equal(readStatus(data, ctx).rows[0]?.value, 'missing');
+  assert.equal((await readStatus(data, ctx)).rows[0]?.value, 'missing');
   await applyPlan(data, ctx, await buildPlan(data, ctx, selection));
   const written = JSON.parse(fs.readFileSync(settings, 'utf8')) as {
     hooks: { PreToolUse: { hooks: { command: string }[] }[] };

@@ -1,0 +1,10 @@
+id: fake
+# The offline fixture has no real harness CLI, so `node` stands in for it: the version node prints is
+# the version the fake harness reports, and the minimum below is the one the definition declares.
+check:
+  command: [node, --version]
+  min: "20"
+install:
+  win32: [npm, install, -g, "@fake/harness"]
+  darwin: [npm, install, -g, "@fake/harness"]
+  linux: [npm, install, -g, "@fake/harness"]

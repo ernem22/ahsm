@@ -1,5 +1,6 @@
 import { t } from './i18n.js';
 import type { ApplyOutcome } from './core/apply.js';
+import type { HarnessStatus, HarnessStatusRow, StatusReport } from './core/status.js';
 import type { RemoveOutcome, RemovePlan } from './core/remove.js';
 import type { Plan, PlanAction } from './core/plan.js';
 
@@ -103,6 +104,49 @@ export function removeOutcomeLines(outcome: RemoveOutcome): Line[] {
     lines.push({
       text: `${t.removeLabels[result.status]}  ${result.entry.itemId}${suffix}`,
       tone: result.status === 'error' ? 'error' : 'normal',
+    });
+  }
+  return lines;
+}
+
+function harnessStatus(row: HarnessStatusRow): HarnessStatus {
+  if (!row.present) return 'absent';
+  return row.usable ? 'ready' : 'too-old';
+}
+
+/**
+ * The one status formatter: the CLI prints these lines, the TUI colours them by tone. Harness presence,
+ * the version its own CLI reports, the declared minimum, and the update we would run when it is too old.
+ */
+export function statusLines(report: StatusReport): Line[] {
+  const lines: Line[] = report.warnings.map((warning) => ({ text: `! ${warning}`, tone: 'warning' as Tone }));
+
+  lines.push({ text: t.harnesses, tone: 'dim' });
+  for (const row of report.harnesses) {
+    const status = harnessStatus(row);
+    if (status === 'absent') {
+      lines.push({ text: `${t.harnessLabels.absent}  ${row.id}`, tone: 'dim' });
+      continue;
+    }
+    const version = row.version ?? t.versionUnknown;
+    const minimum = row.minimum ? ` · ${t.minimum(row.minimum)}` : '';
+    lines.push({
+      text: `${t.harnessLabels[status]}  ${row.id}  ${version}${minimum}`,
+      tone: status === 'too-old' ? 'warning' : 'normal',
+    });
+    if (row.updateCommand) lines.push({ text: `    ${t.harnessUpdate(row.updateCommand)}`, tone: 'dim' });
+  }
+
+  lines.push({ text: t.itemsTitle, tone: 'dim' });
+  if (report.rows.length === 0) {
+    lines.push({ text: t.statusEmpty, tone: 'dim' });
+    return lines;
+  }
+  for (const row of report.rows) {
+    const detail = row.detail ? ` — ${row.detail}` : '';
+    lines.push({
+      text: `${t.statusLabels[row.value]}  ${row.itemId} → ${row.harness} [${row.kind}]${detail}`,
+      tone: 'normal',
     });
   }
   return lines;

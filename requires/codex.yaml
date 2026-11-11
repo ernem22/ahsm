@@ -1,6 +1,7 @@
 id: codex
 check:
   command: [codex, --version]
+  min: "0.166"
 install:
   win32: [npm, install, -g, "@openai/codex"]
   darwin: [npm, install, -g, "@openai/codex"]

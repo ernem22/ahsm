@@ -126,6 +126,43 @@ check('status üçünü de güncel gösterir', () => {
   assert(upToDate === 3, `güncel satır sayısı ${upToDate}: ${out}`);
 });
 
+check('status harness bölümünde sürümü ve asgari sürümü gösterir', () => {
+  const { out, code } = run(home, ['status'], offlineRoot);
+  assert(code === 0, `çıkış kodu ${code}: ${out}`);
+  assert(/^harnesses$/m.test(out), `harness başlığı yok: ${out}`);
+  assert(/^ready {2}fake {2}\d+\.\d+\.\d+ · min 20$/m.test(out), `hazır harness satırı yok: ${out}`);
+});
+
+check('status asgari sürümün altındaki harness için güncelleme komutunu gösterir', () => {
+  // Same fixture, one number raised: the declared minimum is now above the version the CLI prints.
+  const strictRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-root-'));
+  fs.cpSync(offlineRoot, strictRoot, { recursive: true });
+  fs.writeFileSync(
+    path.join(strictRoot, 'requires', 'fake.yaml'),
+    `id: fake
+check:
+  command: [node, --version]
+  min: "99"
+install:
+  win32: [npm, install, -g, "@fake/harness"]
+  darwin: [npm, install, -g, "@fake/harness"]
+  linux: [npm, install, -g, "@fake/harness"]
+`,
+    'utf8',
+  );
+  const { out, code } = run(home, ['status'], strictRoot);
+  assert(code === 0, `çıkış kodu ${code}: ${out}`);
+  assert(/^too old {2}fake {2}\d+\.\d+\.\d+ · min 99$/m.test(out), `eski harness satırı yok: ${out}`);
+  assert(/update: npm install -g @fake\/harness/.test(out), `güncelleme komutu yok: ${out}`);
+});
+
+check('status bulunmayan harness için absent der, hata vermez', () => {
+  const empty = sandbox(false);
+  const { out, code } = run(empty, ['status'], offlineRoot);
+  assert(code === 0, `çıkış kodu ${code}: ${out}`);
+  assert(/^absent {2}fake$/m.test(out), `absent satırı yok: ${out}`);
+});
+
 check('ikinci apply hiçbir şeyi değiştirmez', () => {
   const before = treeHash(home);
   const { out, code } = run(home, PASS, offlineRoot);

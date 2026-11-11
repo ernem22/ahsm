@@ -2,7 +2,7 @@ import { HookConfigError } from './apply/hook-merger.js';
 import type { ApplyStatus } from './core/apply.js';
 import type { RemoveAction } from './core/remove.js';
 import type { PlanAction } from './core/plan.js';
-import type { StatusValue } from './core/status.js';
+import type { HarnessStatus, StatusValue } from './core/status.js';
 
 /**
  * All user-facing strings live here, in English. Swapping in another locale means adding a second
@@ -41,6 +41,15 @@ export const t = {
   actions: (runs: number, total: number) => `${runs} action(s), ${total} skipped`,
   applyHint: 'to run it: agentenv apply --yes',
   statusEmpty: 'record is empty — nothing installed yet',
+  itemsTitle: 'items',
+  harnessLabels: {
+    ready: 'ready',
+    'too-old': 'too old',
+    absent: 'absent',
+  } as Record<HarnessStatus, string>,
+  minimum: (min: string) => `min ${min}`,
+  versionUnknown: 'version unknown',
+  harnessUpdate: (command: string[]) => `update: ${command.join(' ')}`,
   hookError: (error: unknown) => (error instanceof HookConfigError ? t.hookTargetUnreadable : String(error)),
   statusLabels: {
     'up-to-date': 'up-to-date',

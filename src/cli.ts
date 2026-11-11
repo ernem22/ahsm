@@ -9,7 +9,7 @@ import { resolveSelection } from './core/selection.js';
 import { applyRemovePlan, buildRemovePlan } from './core/remove.js';
 import { readStatus } from './core/status.js';
 import { t } from './i18n.js';
-import { outcomeLines, planLines, removeOutcomeLines, removePlanLines } from './render.js';
+import { outcomeLines, planLines, removeOutcomeLines, removePlanLines, statusLines } from './render.js';
 import type { Data } from './types.js';
 
 /** `AGENTENV_ROOT` points the CLI at another data root (fixtures, e2e sandboxes). */
@@ -28,17 +28,9 @@ function printOutcome(outcome: ApplyOutcome): void {
   for (const line of outcomeLines(outcome)) console.log(line.text);
 }
 
-function printStatus(data: Data, ctx: Ctx): void {
-  const report = readStatus(data, ctx);
-  for (const warning of report.warnings) console.log(`! ${warning}`);
-  if (report.rows.length === 0) {
-    console.log(t.statusEmpty);
-    return;
-  }
-  for (const row of report.rows) {
-    const detail = row.detail ? ` — ${row.detail}` : '';
-    console.log(`${t.statusLabels[row.value]}  ${row.itemId} → ${row.harness} [${row.kind}]${detail}`);
-  }
+async function printStatus(data: Data, ctx: Ctx): Promise<void> {
+  const report = await readStatus(data, ctx);
+  for (const line of statusLines(report)) console.log(line.text);
 }
 
 function valueOf(argv: string[], flag: string): string | undefined {
@@ -101,7 +93,7 @@ ${t.removeTitle}`);
   }
 
   if (command === 'status') {
-    printStatus(data, ctx);
+    await printStatus(data, ctx);
     return;
   }
 

@@ -3,6 +3,8 @@ label: Fake Harness
 detect:
   - ~/.fake
 agentId: fake
+# The harness's own CLI, and the minimum version it must have to be usable.
+requires: [fake]
 config:
   path: ~/.fake/settings.json
   format: jsonc

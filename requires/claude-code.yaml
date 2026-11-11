@@ -1,6 +1,7 @@
 id: claude-code
 check:
   command: [claude, --version]
+  min: "2.1"
 install:
   win32: [npm, install, -g, "@anthropic-ai/claude-code"]
   darwin: [npm, install, -g, "@anthropic-ai/claude-code"]

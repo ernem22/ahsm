@@ -161,9 +161,16 @@ items: [emil-skills, context7, bash-log]
    ya da eski bir çalıştırmadan) için komut çalışmaz; yalnız `hookCommand` kaydedilir (`command` boş), böylece komut
    sonradan değişince eski girdi bulunup yerinde değiştirilir. Bu kayıt var olduğuna kanıt sayılmaz:
    `status`/`plan` hedef dosyayı yine kendileri okur.
-7. **status** — kayıt + doğrulanabilen gerçek: `verify` tarifi olan sağlayıcılarda `güncel`/`eksik`,
-   olmayanlarda `bilinmiyor`. Güncelleme komutları sağlayıcı tanımlarında duruyor (`update:`), henüz
-   plana girmiyor.
+7. **status** — iki bölüm, ikisi de yan etkisiz: **harness'lar** ve **öğeler**.
+   - *harness'lar*: her harness tanımı için var/yok (mevcut `detect` yoklaması), kendi CLI'sının bildirdiği
+     sürüm, tanımın `requires` ile bağladığı ön koşulun `check.min` asgarisini karşılayıp karşılamadığı
+     (`hazır` / `çok eski` / `yok`) ve karşılamıyorsa çalıştıracağımız güncelleme komutu
+     (ön koşulun bu platformdaki `install` argv'si). Asgari sürüm veridir; kodda sayı yok.
+   - *öğeler*: kayıt + doğrulanabilen gerçek: `verify` tarifi olan sağlayıcılarda `güncel`/`eksik`,
+     olmayanlarda `bilinmiyor`. Güncelleme komutları sağlayıcı tanımlarında duruyor (`update:`), henüz
+     plana girmiyor.
+
+   İki bölüm de tek biçimlendiriciden (`src/render.ts`) geçer; CLI satırı yazar, TUI tonu renge çevirir.
 
 ## Skill hedefleri ortak
 
@@ -174,8 +181,9 @@ harness tanımında kalır.
 ## Test
 
 - `npm test` — birim/entegrasyon: `node:test`, geçici HOME + kayıt eden runner, ağ yok.
-- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 11 senaryo: kurulum, idempotens,
-  doğrulama, kendini onarma, bozuk JSONC, bozuk state, eksik ön koşul, plan/status'un yazmaması.
+- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 14 senaryo: kurulum, idempotens,
+  doğrulama, kendini onarma, bozuk JSONC, bozuk state, eksik ön koşul, plan/status'un yazmaması,
+  status'un harness bölümü (hazır / çok eski + güncelleme komutu / yok).
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 
@@ -212,6 +220,9 @@ plugin/keşif işi geldiğinde geçerli olacak.
 ## Bilinçli sınırlar
 
 - `npx` yoksa hiçbir sağlayıcı çalışmaz; plan bunu ön koşul olarak söyler (Node kurulumu önerilir).
+- Harness sürümü harness'ın **kendi CLI'sına** sorulur (`claude --version`); agentenv yazmaz, ama CLI
+  kendi önbelleğini oluşturabilir (ör. `opencode` ilk çalıştırmada `~/.cache/opencode`, `~/.local/state`).
+  `status`'un "yazmaz" garantisi agentenv'in kendi dosyaları içindir.
 - Proje kapsamı bugün kapalı: iki sağlayıcı da `-g` alır, yani yalnız kullanıcı seviyesine yazar.
 - `status`/`plan` bir kurulumu yalnız sağlayıcının kendi envanteri doğruluyorsa "kurulu" sayar; `verify`
   tarifi olmayan sağlayıcıda `bilinmiyor` der ve plan öğeyi yeniden kurar.
@@ -240,6 +251,8 @@ plugin/keşif işi geldiğinde geçerli olacak.
   (kaldırma ikisini birden etkiler). Biz yalnız global kapsam kullandığımız için bugün devrede değil.
 - MCP sırları (`${VAR}` → `add-mcp --env KEY=${VAR}`) henüz uygulanmadı; öğe tanımında env alanı yok.
 - `status` üç durum bilir (`güncel` / `eksik` / `bilinmiyor`); kayıtlı ama komutu değişmiş hook `eksik`
-  sayılır — ayrı bir "farklı" durumu yok.
+  sayılır — ayrı bir "farklı" durumu yok. Harness bölümü ayrı bir ölçek kullanır (`hazır` / `çok eski` /
+  `yok`): "eski" bir algılama hatası değildir, karşılanmamış bir ön koşuldur. Sürüm okunamazsa satır
+  `sürüm bilinmiyor` der ve asgari varsa `çok eski` sayılır.
 - Dosya erişimi `Ctx` üzerinden enjekte edilmiyor: `plan` hedef dosyayı okuyor, testler geçici HOME ile
   bunu gerçek dosya sistemi üzerinden doğruluyor.

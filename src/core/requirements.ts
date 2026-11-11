@@ -16,10 +16,21 @@ function satisfies(found: string, min: string): boolean {
   return true;
 }
 
-/** One predicate for both plan and apply, so a re-check can never be laxer than the first check. */
+export interface RequirementCheck {
+  /** The version the command printed, when one could be read out of it. */
+  version?: string;
+  /** True when the command succeeded and the printed version meets `check.min` (if declared). */
+  meets: boolean;
+}
+
+/** One predicate for plan, status and apply, so a re-check can never be laxer than the first check. */
+export function checkRequirement(def: RequirementDef, result: RunResult | undefined): RequirementCheck {
+  if (!result || result.code !== 0) return { meets: false };
+  const printed = version(`${result.stdout}${result.stderr}`);
+  if (!def.check.min) return { version: printed, meets: true };
+  return { version: printed, meets: printed !== undefined && satisfies(printed, def.check.min) };
+}
+
 export function meetsRequirement(def: RequirementDef, result: RunResult | undefined): boolean {
-  if (!result || result.code !== 0) return false;
-  if (!def.check.min) return true;
-  const found = version(`${result.stdout}${result.stderr}`);
-  return found !== undefined && satisfies(found, def.check.min);
+  return checkRequirement(def, result).meets;
 }

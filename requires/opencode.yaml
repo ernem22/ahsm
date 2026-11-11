@@ -1,6 +1,7 @@
 id: opencode
 check:
   command: [opencode, --version]
+  min: "1.19"
 install:
   win32: [npm, install, -g, opencode-ai]
   darwin: [npm, install, -g, opencode-ai]
