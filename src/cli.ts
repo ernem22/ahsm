@@ -66,7 +66,7 @@ async function runUpdate(data: Data, ctx: Ctx, argv: string[]): Promise<number> 
   const update = await buildUpdatePlan(data, ctx);
   if (!argv.includes('--yes')) {
     for (const line of updateLines(update)) console.log(line.text);
-    console.log(t.updateHint);
+    if (update.plan.entries.length > 0) console.log(t.updateHint);
     return 0;
   }
   // One approval, one installation per stale skill and harness, recorded the way apply always does.

@@ -8,7 +8,7 @@ import { readStaleSkills, type StaleRow } from './stale.js';
 
 /** A stale skill the update cannot act on, with the reason in the glossary's words. */
 export interface UpdateSkip {
-  row: StaleRow;
+  name: string;
   reason: string;
 }
 
@@ -65,6 +65,7 @@ export async function buildUpdatePlan(data: Data, ctx: Ctx): Promise<UpdatePlan>
   const stale = report.rows.filter((row) => row.value === 'stale');
   if (stale.length === 0) return { stale, plan: emptyPlan(), skips: [], warnings };
 
+  // Read-only, like the rest: buildPlan warns about a damaged record, so this read does not repeat it.
   const stored = readState(ctx);
   const skips: UpdateSkip[] = [];
   const pairs = new Map<string, { row: StaleRow; harness: string }>();
@@ -74,12 +75,12 @@ export async function buildUpdatePlan(data: Data, ctx: Ctx): Promise<UpdatePlan>
   for (const row of stale) {
     const item = skillItem(data, row);
     if (!item) {
-      skips.push({ row, reason: t.updateNoItem(row.name) });
+      skips.push({ name: row.name, reason: t.updateNoItem(row.name) });
       continue;
     }
     const harnesses = recordedHarnesses(stored.state.entries, item.id);
     if (harnesses.length === 0) {
-      skips.push({ row, reason: t.updateNoRecord(row.name) });
+      skips.push({ name: row.name, reason: t.updateNoRecord(row.name) });
       continue;
     }
     itemIds.add(item.id);
@@ -112,7 +113,7 @@ export async function buildUpdatePlan(data: Data, ctx: Ctx): Promise<UpdatePlan>
 
   // A recorded harness with no definition here cannot be planned: report it instead of dropping it.
   for (const [key, pair] of pairs) {
-    if (!planned.has(key)) skips.push({ row: pair.row, reason: t.updateNoTarget(pair.row.name, pair.harness) });
+    if (!planned.has(key)) skips.push({ name: pair.row.name, reason: t.updateNoTarget(pair.row.name, pair.harness) });
   }
 
   return { stale, plan, skips, warnings };
