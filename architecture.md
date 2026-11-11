@@ -201,7 +201,9 @@ Bu üç kural karara bağlandı ama kodda yok; uygulanana kadar plan/apply bugü
 - **Yetenek yoklaması.** Bir harness CLI'ının alt komutu varsayılmaz; sürümde var mı diye yoklanır
   (`--help`/`--version`), sonuç önbelleğe alınır ve yoksa plan `kapsanmıyor (bu sürümde)` der. Sebep
   somut: OpenCode 1.19.0 `plugin <module>` dışında bir şey bilmiyor, güncel doküman ise
-  `plugin add/list/remove` belgeliyor.
+  `plugin add/list/remove` belgeliyor. Aynı sebep config yolları için de geçerli: `pi mcp list --json`
+  `source` alanında yolu veriyor, `codex doctor` config yolunu yazıyor, `claude mcp list` ve
+  `opencode mcp list` vermiyor — bu yüzden `harnesses/*.yaml` yolları hâlâ veri olarak tutuyor.
 - **skills.sh REST API'si kullanılmıyor.** Kurulum/kaldırma `skills` paketinin fonksiyonlarıyla
   yapılıyor; `/api/v1/*` uçlarının istediği Vercel OIDC token'ı bizim yolumuzda devrede değil.
 
@@ -227,6 +229,13 @@ Bu üç kural karara bağlandı ama kodda yok; uygulanana kadar plan/apply bugü
   biçim eklenir, çekirdek değişmez.
 - `skills` paketi Node ≥22.20 istiyor; `engines` ve `requires/node` bu yüzden 22.20. CLI sağlayıcısı
   yedek olarak duruyor ama bugün hiçbir harness'ta seçilmiyor (API dördünü de kapsıyor).
+- Claude Code'da MCP'nin tek kaynağı `~/.claude.json` değil: `claude mcp list` ayrıca `plugin:…` girdileri
+  gösteriyor. Bizim doğrulamamız **kullanıcı kapsamındaki** kayıtları okur; plugin'in getirdiği sunucular
+  agentenv'in kaydı değildir.
+- `agentId` alanı hem `skills` hem `add-mcp` için geçerli olmalı. Bugün örtüşüyor (`pi`, `codex`, …);
+  ayrışırsa harness tanımına sağlayıcı başına kimlik gerekir.
+- `add-mcp`, proje kapsamında `.mcp.json` dosyasını Claude Code ve GitHub Copilot CLI ile paylaşıyor
+  (kaldırma ikisini birden etkiler). Biz yalnız global kapsam kullandığımız için bugün devrede değil.
 - MCP sırları (`${VAR}` → `add-mcp --env KEY=${VAR}`) henüz uygulanmadı; öğe tanımında env alanı yok.
 - `status` üç durum bilir (`güncel` / `eksik` / `bilinmiyor`); kayıtlı ama komutu değişmiş hook `eksik`
   sayılır — ayrı bir "farklı" durumu yok.
