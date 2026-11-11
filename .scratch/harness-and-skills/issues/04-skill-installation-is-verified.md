@@ -9,7 +9,7 @@ and reported.
 
 **Status:** ready-for-agent
 
-- [ ] A fresh install reports installed, and a second run reports already installed without writing
-- [ ] A skill deleted by hand reappears on the next run
-- [ ] A failure on one harness is reported per item while other harnesses finish
-- [ ] The record reflects only what actually landed
+- [x] A fresh install reports installed, and a second run reports already installed without writing
+- [x] A skill deleted by hand reappears on the next run
+- [x] A failure on one harness is reported per item while other harnesses finish
+- [x] The record reflects only what actually landed
