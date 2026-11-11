@@ -188,6 +188,23 @@ harness tanımında kalır.
 | pi | `~/.pi`, `path:pi` | ortak + `~/.pi/agent/skills` | `~/.pi/agent/mcp.json` → `mcpServers` | yok — extension |
 | opencode | `~/.config/opencode`, `path:opencode` | ortak + `~/.config/opencode/skills` | `opencode.jsonc` → `mcp` | yok — plugin |
 
+## Keşif, plugin ve yetenek yoklaması (karar — henüz uygulanmadı)
+
+Bu üç kural karara bağlandı ama kodda yok; uygulanana kadar plan/apply bugünkü gibi çalışır.
+
+- **Keşif yalnız taslak üretir.** Resmî MCP registry (`registry.modelcontextprotocol.io`) ve SkillFed
+  (`skillfed.io/api/...`) arama için okunur; bulunan sunucu/skill kataloğa *taslak* olarak girer,
+  kurulum yine `apply` üzerinden yapılır. Katalogda olmak güvenlik denetimi değildir.
+- **Plugin ayrı bir öğe türüdür.** Kurulum birimi harness'ın plugin CLI'ıdır; önizleme paketin içindeki
+  skill/MCP/hook envanterini gösterir (`claude plugin details`, `codex plugin list --json`). Plugin,
+  bizim `package`'ımız değildir.
+- **Yetenek yoklaması.** Bir harness CLI'ının alt komutu varsayılmaz; sürümde var mı diye yoklanır
+  (`--help`/`--version`), sonuç önbelleğe alınır ve yoksa plan `kapsanmıyor (bu sürümde)` der. Sebep
+  somut: OpenCode 1.19.0 `plugin <module>` dışında bir şey bilmiyor, güncel doküman ise
+  `plugin add/list/remove` belgeliyor.
+- **skills.sh REST API'si kullanılmıyor.** Kurulum/kaldırma `skills` paketinin fonksiyonlarıyla
+  yapılıyor; `/api/v1/*` uçlarının istediği Vercel OIDC token'ı bizim yolumuzda devrede değil.
+
 ## Bilinçli sınırlar
 
 - `npx` yoksa hiçbir sağlayıcı çalışmaz; plan bunu ön koşul olarak söyler (Node kurulumu önerilir).

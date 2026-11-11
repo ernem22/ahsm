@@ -14,8 +14,25 @@ One thing that can be installed into a harness: a skill, an MCP server, or a hoo
 _Avoid_: entry, asset, extension, plugin
 
 **Package**:
-A named set of items that are chosen together. Never an npm package; those are always "npm package".
-_Avoid_: bundle, profile, set, collection
+A named set of items that the user chooses together. Never an npm package ("npm package") and never a
+plugin.
+_Avoid_: bundle, profile, set, collection, plugin
+
+**Plugin**:
+A distributable unit published by someone else that a harness installs as a whole, and which may carry
+skills, MCP servers and hooks inside it. Its inventory is part of what the user approves, never a
+detail.
+_Avoid_: package, bundle, extension (that is pi's own word for its code-level mechanism)
+
+**Discovery source**:
+A catalog we search to draft an item — the official MCP registry, SkillFed, a harness marketplace. It
+supplies metadata only; installing still goes through a provider.
+_Avoid_: registry (say which registry), catalog (that is ours under `catalog/`)
+
+**Capability probe**:
+Asking a harness's own CLI what it supports in the version actually installed, instead of assuming a
+subcommand exists. The result feeds the plan; unsupported work is reported, not attempted.
+_Avoid_: feature check, version check
 
 **Provider**:
 The external tool that performs an installation for one item type — the `skills` CLI for skills,
