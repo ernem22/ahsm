@@ -188,9 +188,13 @@ harness tanımında kalır.
 | pi | `~/.pi`, `path:pi` | ortak + `~/.pi/agent/skills` | `~/.pi/agent/mcp.json` → `mcpServers` | yok — extension |
 | opencode | `~/.config/opencode`, `path:opencode` | ortak + `~/.config/opencode/skills` | `opencode.jsonc` → `mcp` | yok — plugin |
 
-## Keşif, plugin ve yetenek yoklaması (karar — henüz uygulanmadı)
+## Keşif, plugin ve sürüm desteği (karar — henüz uygulanmadı)
 
-Bu üç kural karara bağlandı ama kodda yok; uygulanana kadar plan/apply bugünkü gibi çalışır.
+Plugin ve keşif park edildi; sıra önce harness + skill temeline verildi. "Yetenek yoklaması" fikri
+**bırakıldı**: birden fazla CLI kuşağını desteklemek fazladan yük. Bunun yerine **stabil sürüm** hedefi
+geçerli — harness tanımı asgari sürümü mevcut `requirement` kontrolüyle bildirir; sürüm eskiyse plan
+güncellemeyi önerir, kullanıcı işaretlerse güncellenir, akış devam eder. Aşağıdaki üç kural yalnız
+plugin/keşif işi geldiğinde geçerli olacak.
 
 - **Keşif yalnız taslak üretir.** Resmî MCP registry (`registry.modelcontextprotocol.io`) ve SkillFed
   (`skillfed.io/api/...`) arama için okunur; bulunan sunucu/skill kataloğa *taslak* olarak girer,
@@ -198,12 +202,10 @@ Bu üç kural karara bağlandı ama kodda yok; uygulanana kadar plan/apply bugü
 - **Plugin ayrı bir öğe türüdür.** Kurulum birimi harness'ın plugin CLI'ıdır; önizleme paketin içindeki
   skill/MCP/hook envanterini gösterir (`claude plugin details`, `codex plugin list --json`). Plugin,
   bizim `package`'ımız değildir.
-- **Yetenek yoklaması.** Bir harness CLI'ının alt komutu varsayılmaz; sürümde var mı diye yoklanır
-  (`--help`/`--version`), sonuç önbelleğe alınır ve yoksa plan `kapsanmıyor (bu sürümde)` der. Sebep
-  somut: OpenCode 1.19.0 `plugin <module>` dışında bir şey bilmiyor, güncel doküman ise
-  `plugin add/list/remove` belgeliyor. Aynı sebep config yolları için de geçerli: `pi mcp list --json`
-  `source` alanında yolu veriyor, `codex doctor` config yolunu yazıyor, `claude mcp list` ve
-  `opencode mcp list` vermiyor — bu yüzden `harnesses/*.yaml` yolları hâlâ veri olarak tutuyor.
+- **Sürüm, yetenek değil.** Bir harness'ın alt komut desteği sürümden sürüme değişiyor; biz tek tek
+  yoklama yapmıyoruz. Harness tanımı asgari sürümü `requires` ile bildirir (`opencode --version ≥ x`),
+  altındaysa plan "güncelle" der ve o öğeler bloklanır. Config yolları yine `harnesses/*.yaml`'da veri
+  olarak duruyor: `pi mcp list --json` ve `codex doctor` yolu verebiliyor, `claude`/`opencode` vermiyor.
 - **skills.sh REST API'si kullanılmıyor.** Kurulum/kaldırma `skills` paketinin fonksiyonlarıyla
   yapılıyor; `/api/v1/*` uçlarının istediği Vercel OIDC token'ı bizim yolumuzda devrede değil.
 

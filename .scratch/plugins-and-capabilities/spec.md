@@ -1,6 +1,13 @@
 # Plugin items and harness capabilities
 
-Status: ready-for-agent
+Status: needs-triage
+
+> **Parked (2026-11-11).** Not scheduled: harness-and-skills foundation comes first, sequentially.
+> The capability-probe approach described below was **dropped** — supporting several CLI generations is
+> extra load we do not want. Stable-version support only: a harness declares a minimum version through
+> the existing requirement check, and an outdated harness is *suggested* for update (and updated only if
+> the user marks it) before the flow continues. What survives from this spec is the plugin item kind;
+> the probe/cache machinery does not.
 
 ## Problem Statement
 

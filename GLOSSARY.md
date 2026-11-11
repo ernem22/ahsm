@@ -29,11 +29,6 @@ A catalog we search to draft an item — the official MCP registry, SkillFed, a 
 supplies metadata only; installing still goes through a provider.
 _Avoid_: registry (say which registry), catalog (that is ours under `catalog/`)
 
-**Capability probe**:
-Asking a harness's own CLI what it supports in the version actually installed, instead of assuming a
-subcommand exists. The result feeds the plan; unsupported work is reported, not attempted.
-_Avoid_: feature check, version check
-
 **Provider**:
 The external tool that performs an installation for one item type — the `skills` CLI for skills,
 `add-mcp` for MCP servers. agentenv does not install skills or MCP servers itself.
