@@ -1,7 +1,7 @@
 import { t } from './i18n.js';
 import type { ApplyOutcome } from './core/apply.js';
 import type { HarnessStatus, HarnessStatusRow, StatusReport } from './core/status.js';
-import type { RemoveOutcome, RemovePlan } from './core/remove.js';
+import type { RemoveOutcome, RemovePlan, RemoveResult } from './core/remove.js';
 import type { SkillInventoryReport } from './core/list.js';
 import type { StaleReport } from './core/stale.js';
 import type { UpdatePlan } from './core/update.js';
@@ -46,7 +46,7 @@ export function planLines(plan: Plan): Line[] {
       tone: blocked ? 'warning' : entry.action === 'error' ? 'error' : 'normal',
     });
     if (entry.command) lines.push({ text: `    ${t.runPrefix}: ${entry.command.join(' ')}`, tone: 'dim' });
-    else if (entry.via) lines.push({ text: `    ${t.runPrefix}: ${entry.via}`, tone: 'dim' });
+    else if (entry.via) lines.push({ text: `    ${t.runPrefix}: ${t.adapterVia(entry.via)}`, tone: 'dim' });
     if (entry.hook) {
       const where = `${entry.hook.target.file} → ${entry.hook.target.path.join('.')}`;
       lines.push({ text: `    ${t.writePrefix}: ${where}`, tone: 'dim' });
@@ -63,9 +63,8 @@ export function planLines(plan: Plan): Line[] {
     const version = requirement.version ? ` ${requirement.version}` : '';
     const minimum = requirement.minimum ? ` · ${t.minimum(requirement.minimum)}` : '';
     const offered = requirementOffer(requirement);
-    // "too old" is the same word status uses: an unmet minimum is a requirement, not a detection failure.
-    const current = requirementState(requirement);
-    const state = current === 'ready' ? t.ready : current === 'outdated' ? t.harnessLabels['too-old'] : t.missing;
+    // The same three words and the same labels status uses for a harness: one vocabulary, not two.
+    const state = t.harnessLabels[requirementState(requirement)];
     lines.push({
       text: `${state}  ${t.requirement} ${name}${version}${minimum}${offered}`,
       tone: requirement.present ? 'normal' : 'warning',
@@ -127,13 +126,22 @@ export function removePlanLines(plan: RemovePlan): Line[] {
   return lines;
 }
 
+/** What each outcome status is worth on screen: `manual` asks for work too, so it is not dim. */
+const REMOVE_TONE: Record<RemoveResult['status'], Tone> = {
+  removed: 'normal',
+  absent: 'dim',
+  manual: 'warning',
+  'not-covered': 'warning',
+  error: 'error',
+};
+
 export function removeOutcomeLines(outcome: RemoveOutcome): Line[] {
   const lines: Line[] = outcome.warnings.map((warning) => ({ text: `! ${warning}`, tone: 'warning' as Tone }));
   for (const result of outcome.results) {
     const suffix = result.message ? ` (${result.message})` : '';
     lines.push({
       text: `${t.removeLabels[result.status]}  ${result.entry.itemId}${suffix}`,
-      tone: result.status === 'error' ? 'error' : result.status === 'absent' ? 'dim' : 'normal',
+      tone: REMOVE_TONE[result.status],
     });
   }
   return lines;

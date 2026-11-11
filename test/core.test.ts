@@ -9,7 +9,7 @@ import { detectHarnesses } from '../src/core/detect.js';
 import { buildPlan } from '../src/core/plan.js';
 import { applyRemovePlan, buildRemovePlan } from '../src/core/remove.js';
 import { readStatus } from '../src/core/status.js';
-import { findEntry, readState, statePath, type State } from '../src/core/state.js';
+import { findEntry, readState, recordEntry, statePath, type State } from '../src/core/state.js';
 import { verifyInstalled } from '../src/core/verify.js';
 import { mergeHook, readText } from '../src/apply/hook-merger.js';
 import { outcomeLines, planLines } from '../src/render.js';
@@ -917,7 +917,13 @@ test('adapter: plan/apply/remove skills API üzerinden yürür', async () => {
 
   const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
   assert.equal(plan.entries[0]?.adapter, 'skills-api');
-  assert.match(plan.entries[0]?.via ?? '', /owner\/repo/);
+  // Core carries the values, i18n owns the sentence, the renderer prints it.
+  const via = { source: 'owner/repo', skill: 'alpha', agent: HARNESS };
+  assert.deepEqual(plan.entries[0]?.via, via);
+  assert.ok(
+    planLines(plan).some((line) => line.text === `    ${t.runPrefix}: ${t.adapterVia(via)}`),
+    'plan satırı adaptörün ne yapacağını yazmıyor',
+  );
 
   assert.equal((await applyPlan(data, ctx, plan)).items[0]?.status, 'ok');
   assert.equal(installed.length, 1);
@@ -989,6 +995,28 @@ test('adapter: "already installed" yalnız envanter doğruladığında söylenir
   const already = await applyPlan(data, ctx, await buildPlan(data, ctx, selection));
   assert.equal(already.items[0]?.status, 'already');
   assert.equal(readState(ctx).state.entries.length, 0, 'zaten kurulu öğe bizim kurulumumuz gibi kaydedildi');
+});
+
+test('plan: agentenv dışında kurulmuş skill "recorded as installed" demez', async () => {
+  const home = tempHome();
+  const data = adapterData();
+  const ctx = adapterContext(home, {});
+  // Kurulu ama bizim kaydımız yok: envanter var, kayıt yok.
+  writeSkillLock(home, 'alpha', 'owner/repo');
+
+  const outside = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  assert.equal(outside.entries[0]?.action, 'run');
+  assert.equal(outside.entries[0]?.reason, undefined, 'kayıtsız kuruluma "recorded as installed" dendi');
+
+  // Aynı envanter, bu kez kendi kaydımızla: not ancak şimdi doğru (ADR-0002).
+  recordEntry(ctx, readState(ctx).state, {
+    ref: { itemId: 'sk', harness: HARNESS, providerId: 'skills-api' },
+    kind: 'skill',
+    command: ['skills-api', 'owner/repo', 'alpha'],
+  });
+  const ours = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  assert.equal(ours.entries[0]?.action, 'already');
+  assert.equal(ours.entries[0]?.reason, t.recordedInstalled);
 });
 
 test('adapter: elle silinen skill yeniden kurulur', async () => {
@@ -1276,7 +1304,7 @@ test('plan: bu platformda kurulum komutu olmayan tanım "no install command" der
     .join('\n');
   assert.match(
     text,
-    new RegExp(`^missing {2}requirement ${HARNESS} · min 2\\.0 — ${t.noInstallCommand}$`, 'm'),
+    new RegExp(`^${t.harnessLabels.absent} {2}requirement ${HARNESS} · min 2\\.0 — ${t.noInstallCommand}$`, 'm'),
     `plan satırı yok:\n${text}`,
   );
 });

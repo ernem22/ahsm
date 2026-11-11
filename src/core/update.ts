@@ -6,9 +6,8 @@ import { buildPlan, narrowToSkill, type Plan, type PlanEntry } from './plan.js';
 import { readState, type StateEntry } from './state.js';
 import { readStaleSkills, type StaleRow } from './stale.js';
 
-/** A stale skill the update cannot act on, with the reason in the glossary's words. */
+/** A stale skill the update cannot act on, with the reason in the glossary's words (the reason names it). */
 export interface UpdateSkip {
-  name: string;
   reason: string;
 }
 
@@ -85,12 +84,12 @@ export async function buildUpdatePlan(data: Data, ctx: Ctx): Promise<UpdatePlan>
   for (const row of stale) {
     const item = skillItem(data, row);
     if (!item) {
-      skips.push({ name: row.name, reason: t.updateNoItem(row.name) });
+      skips.push({ reason: t.updateNoItem(row.name) });
       continue;
     }
     const harnesses = recordedHarnesses(stored.state.entries, item.id);
     if (harnesses.length === 0) {
-      skips.push({ name: row.name, reason: t.updateNoRecord(row.name) });
+      skips.push({ reason: t.updateNoRecord(row.name) });
       continue;
     }
     itemIds.add(item.id);
@@ -134,7 +133,7 @@ export async function buildUpdatePlan(data: Data, ctx: Ctx): Promise<UpdatePlan>
   // A recorded harness with no definition here cannot be planned: report it instead of dropping it.
   for (const slot of slots) {
     if (!planned.has(pairKey(slot.itemId, slot.harness))) {
-      skips.push({ name: slot.row.name, reason: t.updateNoTarget(slot.row.name, slot.harness) });
+      skips.push({ reason: t.updateNoTarget(slot.row.name, slot.harness) });
     }
   }
 

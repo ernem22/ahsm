@@ -145,6 +145,16 @@ function adapterContext(
   return { ctx, removedCalls };
 }
 
+/** The provider's own lockfile: what a source-level removal asks for the names of its skills. */
+function writeLock(home: string, sources: Record<string, string>): void {
+  const file = path.join(home, '.agents', '.skill-lock.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const skills = Object.fromEntries(
+    Object.entries(sources).map(([name, source]) => [name, { source, sourceType: 'github' }]),
+  );
+  fs.writeFileSync(file, JSON.stringify({ version: 3, skills }, null, 2), 'utf8');
+}
+
 async function plan(data: Data, ctx: Ctx, selection: RemoveSelection = {}) {
   return planRemoval(data, ctx, selection);
 }
@@ -386,4 +396,73 @@ test('remove: kaldırmadan sonra kayıt ve status diskle anlaşır', async () =>
   assert.equal(outcome.results[0]?.status, 'removed');
   assert.deepEqual(readState(ctx).state.entries, [], 'kayıt hayalet girdi tutuyor');
   assert.deepEqual((await readStatus(data, ctx)).rows, [], 'status hayalet girdi gösteriyor');
+});
+
+test('remove: kaynak seviyesindeki öğe adlarını sağlayıcının kendi lockfile ından alır', async () => {
+  const home = tempHome();
+  const data = argvData();
+  const { ctx, runner } = argvContext(home);
+  record(ctx, [{ itemId: 'skill-group', harness: FAKE }]);
+  writeLock(home, { alpha: 'fixture/group', beta: 'fixture/group', other: 'fixture/other' });
+
+  const removal = await plan(data, ctx);
+
+  const [entry] = removal.entries;
+  assert.equal(entry?.action, 'remove');
+  // Yalnız aynı kaynağın skill adları; başka kaynağın adı karışmaz.
+  assert.deepEqual(entry?.command, ['npx', 'skills', 'remove', '-g', 'alpha', 'beta']);
+
+  const outcome = await applyRemovePlan(data, ctx, removal);
+  assert.equal(outcome.results[0]?.status, 'removed');
+  assert.deepEqual(runner.calls, [['npx', 'skills', 'remove', '-g', 'alpha', 'beta']]);
+});
+
+test('remove: adı bulunamayan kaynak seviyesindeki öğe "manual" olarak raporlanır', async () => {
+  const home = tempHome();
+  const data = argvData();
+  const { ctx, runner } = argvContext(home);
+  record(ctx, [{ itemId: 'skill-group', harness: FAKE }]);
+  // Lockfile kaynağından hiç skill yazmıyor: kaldırılacak ad yok, kullanıcı elle kaldırmalı.
+  writeLock(home, {});
+
+  const removal = await plan(data, ctx);
+  const [entry] = removal.entries;
+  assert.equal(entry?.action, 'manual');
+  assert.equal(entry?.reason, t.removeNoSkills('fixture/group'));
+  assert.ok(
+    removePlanLines(removal).some((line) => line.text.includes(t.removePlanLabels.manual)),
+    removePlanLines(removal)
+      .map((line) => line.text)
+      .join(' | '),
+  );
+
+  const outcome = await applyRemovePlan(data, ctx, removal);
+
+  // GLOSSARY: "not covered" = hiçbir sağlayıcı bu türü desteklemiyor. Burada sağlayıcı var, ad yok.
+  assert.equal(outcome.results[0]?.status, 'manual');
+  assert.equal(outcome.results[0]?.message, t.removeNoSkills('fixture/group'));
+  assert.deepEqual(runner.calls, [], 'adı olmayan kaldırma yine komut çalıştırdı');
+  assert.ok(
+    removeOutcomeLines(outcome).some(
+      (line) => line.text === `${t.removeLabels.manual}  skill-group (${t.removeNoSkills('fixture/group')})`,
+    ),
+    removeOutcomeLines(outcome)
+      .map((line) => line.text)
+      .join(' | '),
+  );
+  // Hiçbir şey kaldırılmadı: kayıt yerinde durur.
+  assert.deepEqual(readState(ctx).state.entries.map((stored) => stored.itemId), ['skill-group']);
+});
+
+test('remove: envanterde skill i olmayan kayıtlı öğe "not installed" der, "not covered" değil', async () => {
+  const home = tempHome();
+  const data = adapterData();
+  const { ctx, removedCalls } = adapterContext(home, { installed: [] });
+  record(ctx, [{ itemId: 'skill-a', harness: FAKE }]);
+
+  const outcome = await applyRemovePlan(data, ctx, await plan(data, ctx));
+
+  assert.equal(outcome.results[0]?.status, 'absent');
+  assert.equal(outcome.results[0]?.message, t.removeNoSkills('fixture/skills'));
+  assert.deepEqual(removedCalls, [], 'envanterde olmayan skill için sağlayıcı çağrıldı');
 });

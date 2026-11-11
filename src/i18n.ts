@@ -1,7 +1,7 @@
 import { HookConfigError } from './apply/hook-merger.js';
 import type { ApplyStatus } from './core/apply.js';
-import type { RemoveAction } from './core/remove.js';
-import type { PlanAction } from './core/plan.js';
+import type { RemoveAction, RemoveResult } from './core/remove.js';
+import type { AdapterVia } from './core/plan.js';
 import type { HarnessStatus, StatusValue } from './core/status.js';
 import type { InventoryScope } from './core/list.js';
 import type { StaleValue } from './core/stale.js';
@@ -38,13 +38,15 @@ export const t = {
   writePrefix: 'write',
   runPrefix: 'run',
   notePrefix: 'note',
+  /** What an adapter will do, in words: an adapter entry has no argv to show. */
+  adapterVia: (via: AdapterVia) =>
+    `skills-api → ${via.source}${via.skill ? ` (${via.skill})` : ''} → ${via.agent}`,
   requirement: 'requirement',
-  ready: 'ready',
   missing: 'missing',
   blocked: 'blocked',
   actions: (runs: number, skipped: number, blocked: number) =>
     `${runs} action(s), ${skipped} skipped, ${blocked} blocked`,
-  applyHint: 'to run it: agentenv apply --yes (add --update <ids|all> to mark outdated prerequisites; default: none)',
+  applyHint: 'to run it: agentenv apply --yes (add --update <ids|all> to mark too-old prerequisites; default: none)',
   statusEmpty: 'record is empty — nothing installed yet',
   itemsTitle: 'items',
   skillsTitle: 'skills (provider inventory)',
@@ -53,7 +55,6 @@ export const t = {
   listEmpty: 'the provider inventory reports no installed skill',
   listNoHarness: 'no harness reports it',
   listCount: (count: number) => `${count} skill(s) — inventory read only, nothing written`,
-  listHint: 'agentenv list reads the skills provider inventory; it never writes and does not depend on the record',
   staleTitle: 'skills (provider update check)',
   staleLabels: {
     'up-to-date': 'up-to-date',
@@ -62,8 +63,6 @@ export const t = {
   } as Record<StaleValue, string>,
   staleEmpty: 'the provider lockfile records no installation to compare',
   staleCount: (count: number) => `${count} skill(s) — verification only, nothing was installed`,
-  staleHint:
-    'agentenv stale asks the provider whether each installed skill is still what its source offers; it runs no installation and writes nothing',
   staleNotCovered: 'not covered — no provider offers an update check',
   staleNoLock: 'the provider records no skill lockfile — nothing to compare',
   staleLockUnreadable: (where: string) => `the skill lockfile at ${where} could not be read — nothing was compared`,
@@ -104,12 +103,6 @@ export const t = {
     unsupported: 'not covered',
     error: 'error',
   } as Record<ApplyStatus, string>,
-  planActions: {
-    run: 'todo',
-    already: 'already installed',
-    unsupported: 'not covered',
-    error: 'error',
-  } as Record<PlanAction, string>,
   hookAlready: 'hook already installed',
   hookEntry: 'adds hook',
   noPackages: 'no package defined in packages/*.yaml',
@@ -141,7 +134,14 @@ export const t = {
     manual: 'needs a name — remove by hand',
     error: 'error',
   } as Record<RemoveAction, string>,
-  removeLabels: { removed: 'removed', 'not-covered': 'not covered', error: 'error', absent: 'not installed' },
+  removeLabels: {
+    removed: 'removed',
+    'not-covered': 'not covered',
+    // Says what the user has to do instead of claiming no provider covers the type (GLOSSARY).
+    manual: 'needs a name — remove by hand',
+    error: 'error',
+    absent: 'not installed',
+  } as Record<RemoveResult['status'], string>,
   removeHint: 'to run it: agentenv remove --yes',
   stateUnreadable: (where: string) =>
     `state.json at ${where} could not be read; it was left untouched and treated as empty. 'apply' will try to back it up before recording.`,
@@ -168,7 +168,7 @@ export const t = {
   help: [
     'agentenv                              TUI (pick harnesses and a package, review, install)',
     'agentenv plan [--package id]          print the plan only',
-    'agentenv apply --yes [--package id]   apply the plan (--update <ids|all> marks outdated prerequisites; default: none)',
+    'agentenv apply --yes [--package id]   apply the plan (--update <ids|all> marks too-old prerequisites; default: none)',
     'agentenv status                       show what is installed',
     'agentenv list                         list every skill the provider inventory reports (read-only)',
     'agentenv stale                        mark each installed skill up-to-date / stale / unknown (read-only)',
@@ -176,6 +176,6 @@ export const t = {
     'agentenv remove [--package id]        remove recorded items (add --skill <name,name> for named skills)',
     '',
     'flags: --package <id> (default: the package marked default) · --harness <id,id>',
-    '       --update <ids|all|none> marks outdated prerequisite updates (default: none — they stay blocked)',
+    '       --update <ids|all|none> marks too-old prerequisite updates (default: none — they stay blocked)',
   ],
 };

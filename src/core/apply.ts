@@ -34,8 +34,8 @@ export interface ApplyOutcome {
 export interface ApplyOptions {
   /**
    * The requirement ids whose offered update the user marked. Omitted means nothing was marked: an
-   * outdated requirement stays unmet and its items are reported blocked. A missing requirement (no
-   * usable version was read) is bootstrapped either way, so the node bootstrap path keeps working.
+   * too-old requirement stays unmet and its items are reported blocked. An absent one (the check read
+   * no usable version) is bootstrapped either way, so the node bootstrap path keeps working.
    */
   updates?: string[];
 }
@@ -46,7 +46,7 @@ export function exitCodeFor(outcome: ApplyOutcome): number {
   return failed ? 1 : 0;
 }
 
-function errorText(error: unknown): string {
+export function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -63,7 +63,7 @@ function skillLanded(data: Data, entry: PlanEntry, ctx: Ctx): boolean | undefine
 }
 
 /** A runner that throws must not cost the whole report: treat it like an exit-1 result. */
-async function runSafe(ctx: Ctx, argv: string[]): Promise<RunResult> {
+export async function runSafe(ctx: Ctx, argv: string[]): Promise<RunResult> {
   try {
     return await ctx.runner.run(argv);
   } catch (error) {
@@ -95,8 +95,8 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan, options: Apply
       unmet.add(requirement.id);
       continue;
     }
-    // Only an outdated requirement waits for a mark; missing ones are bootstrapped without one.
-    if (requirementState(requirement) === 'outdated' && !options.updates?.includes(requirement.id)) {
+    // Only a too-old requirement waits for a mark; absent ones are bootstrapped without one.
+    if (requirementState(requirement) === 'too-old' && !options.updates?.includes(requirement.id)) {
       requirements.push({ id: requirement.id, ok: false, message: t.updateNotMarked(requirement.id) });
       unmet.add(requirement.id);
       continue;

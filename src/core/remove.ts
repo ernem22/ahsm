@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { expandArgs, expandPath, type Ctx } from '../context.js';
 import { hookTarget } from '../apply/hook-target.js';
@@ -9,8 +8,9 @@ import { entryDefs } from './entry.js';
 import { readSkillInventory, type SkillInventoryRow } from './list.js';
 import { pickProvider, serverName } from './providers.js';
 import { backupFile, readState, statePath, writeState, type State, type StateEntry } from './state.js';
+import { readSkillLock } from './verify.js';
 import { t } from '../i18n.js';
-import type { Data, Kind, ProviderDef } from '../types.js';
+import type { Data, ItemDef, Kind, ProviderDef } from '../types.js';
 
 export type RemoveAction = 'remove' | 'not-covered' | 'manual' | 'error';
 
@@ -43,8 +43,12 @@ export interface RemovePlan {
 
 export interface RemoveResult {
   entry: RemoveEntry;
-  /** `absent`: the provider inventory does not hold it, so there was nothing to remove. */
-  status: 'removed' | 'not-covered' | 'error' | 'absent';
+  /**
+   * `absent`: the provider inventory does not hold it, so there was nothing to remove.
+   * `manual`: the plan could not name what to remove by hand — never folded into `not-covered`, which
+   * means no provider supports the item type at all (GLOSSARY).
+   */
+  status: 'removed' | 'not-covered' | 'manual' | 'error' | 'absent';
   message?: string;
 }
 
@@ -63,13 +67,17 @@ export interface RemoveOutcome {
   warnings: string[];
 }
 
+/** The shared skills store: the one `skill-lock` recipe a provider declares, wherever it sits in the list. */
+function skillLock(data: Data): Extract<ProviderDef['verify'], { strategy: 'skill-lock' }> | undefined {
+  const verify = data.providers.map((provider) => provider.verify).find((recipe) => recipe?.strategy === 'skill-lock');
+  return verify?.strategy === 'skill-lock' ? verify : undefined;
+}
+
 /** The shared store the lockfile owns, plus each recorded harness's own skills directory. */
 function skillPaths(data: Data, ctx: Ctx, harnesses: string[]): string[] {
-  const shared = data.providers
-    .map((provider) => provider.verify)
-    .find((verify) => verify?.strategy === 'skill-lock');
+  const shared = skillLock(data);
   const paths = new Set<string>();
-  if (shared && shared.strategy === 'skill-lock') {
+  if (shared) {
     paths.add(path.dirname(expandPath(shared.file, ctx.home)));
     paths.add(path.join(path.dirname(expandPath(shared.file, ctx.home)), 'skills'));
   }
@@ -80,14 +88,13 @@ function skillPaths(data: Data, ctx: Ctx, harnesses: string[]): string[] {
   return [...paths];
 }
 
-function lockSources(file: string): Record<string, { source?: string }> | undefined {
-  if (!fs.existsSync(file)) return undefined;
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as { skills?: Record<string, { source?: string }> };
-    return parsed.skills;
-  } catch {
-    return undefined;
-  }
+/** The skills the provider's own lockfile records for this source: what a source-level removal names. */
+function lockedNames(data: Data, ctx: Ctx, item: ItemDef): string[] {
+  const verify = skillLock(data);
+  const lock = verify ? readSkillLock(expandPath(verify.file, ctx.home)) : undefined;
+  return Object.entries(lock ?? {})
+    .filter(([, entry]) => entry?.source === item.source)
+    .map(([name]) => name);
 }
 
 /**
@@ -177,15 +184,8 @@ export function buildRemovePlan(data: Data, ctx: Ctx, selection: RemoveSelection
     const command = expandArgs(provider.remove!, vars);
 
     if (item.kind === 'skill' && !item.skill) {
-      // A source-level item names no single skill: ask the lockfile which skills it installed.
-      const lockFile = data.providers.find((candidate) => candidate.kind === 'skill')?.verify;
-      const skills =
-        lockFile && lockFile.strategy === 'skill-lock'
-          ? lockSources(expandPath(lockFile.file, ctx.home))
-          : undefined;
-      const names = Object.entries(skills ?? {})
-        .filter(([, value]) => value.source === item.source)
-        .map(([name]) => name);
+      // A source-level item names no single skill: ask the provider's lockfile which skills it installed.
+      const names = lockedNames(data, ctx, item);
       if (names.length === 0) {
         entries.push({ ...base, providerId: provider.id, paths: [], action: 'manual', reason: t.removeNoSkills(item.source ?? item.id) });
         continue;
@@ -297,8 +297,13 @@ export async function applyRemovePlan(data: Data, ctx: Ctx, plan: RemovePlan): P
   const removedItems = new Set<string>();
 
   for (const entry of plan.entries) {
-    if (entry.action === 'not-covered' || entry.action === 'manual') {
+    if (entry.action === 'not-covered') {
       results.push({ entry, status: 'not-covered', message: entry.reason });
+      continue;
+    }
+    // The plan says "needs a name — remove by hand": that is not "no provider covers this type".
+    if (entry.action === 'manual') {
+      results.push({ entry, status: 'manual', message: entry.reason });
       continue;
     }
     if (entry.action === 'error') {
@@ -349,7 +354,8 @@ export async function applyRemovePlan(data: Data, ctx: Ctx, plan: RemovePlan): P
           results.push(
             entry.named
               ? { entry, status: 'absent', message: t.removeSkillMissing(entry.itemId) }
-              : { entry, status: 'not-covered', message: t.removeNoSkills(item?.source ?? entry.itemId) },
+              // The provider covers it and found nothing: "not installed", never "not covered".
+              : { entry, status: 'absent', message: t.removeNoSkills(item?.source ?? entry.itemId) },
           );
           continue;
         }

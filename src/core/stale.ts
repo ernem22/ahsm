@@ -1,7 +1,8 @@
 import fs from 'node:fs';
-import { expandArgs, expandPath, type Ctx, type RunResult } from '../context.js';
+import { expandArgs, expandPath, type Ctx } from '../context.js';
 import { t } from '../i18n.js';
 import type { Data, ProviderDef } from '../types.js';
+import { runSafe } from './apply.js';
 import { pickProvider } from './providers.js';
 import { readSkillLock, type SkillLockEntry } from './verify.js';
 
@@ -28,14 +29,10 @@ export interface StaleReport {
 interface CheckRun {
   /** The provider printed its closing summary: silence then means "nothing newer upstream". */
   completed: boolean;
-  outdated: Set<string>;
+  newer: Set<string>;
   deleted: Set<string>;
   failedSources: Set<string>;
   unchecked: Set<string>;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** The provider colours its output on a TTY; the parser must not see escape sequences. */
@@ -53,7 +50,7 @@ function plain(text: string): string {
 function parseCheckOutput(stdout: string): CheckRun {
   const run: CheckRun = {
     completed: false,
-    outdated: new Set(),
+    newer: new Set(),
     deleted: new Set(),
     failedSources: new Set(),
     unchecked: new Set(),
@@ -86,7 +83,7 @@ function parseCheckOutput(stdout: string): CheckRun {
     section = undefined;
     const update = /^↑ (.+) has an update$/.exec(line);
     if (update?.[1]) {
-      run.outdated.add(update[1].trim());
+      run.newer.add(update[1].trim());
       continue;
     }
     const failed = /^✗ Failed to check skills from (.+?)(?::\s.*)?$/.exec(line);
@@ -103,15 +100,6 @@ function parseCheckOutput(stdout: string): CheckRun {
     }
   }
   return run;
-}
-
-/** A runner that throws must not cost the whole report: treat it like an exit-1 result. */
-async function runSafe(ctx: Ctx, argv: string[]): Promise<RunResult> {
-  try {
-    return await ctx.runner.run(argv);
-  } catch (error) {
-    return { code: 1, stdout: '', stderr: errorText(error) };
-  }
 }
 
 interface LockedSkill {
@@ -167,7 +155,7 @@ export async function readStaleSkills(data: Data, ctx: Ctx): Promise<StaleReport
       return { ...base, value: 'unknown', detail: t.staleUnreachable(source) };
     }
     // A named update or a deleted-upstream warning is evidence even if the run then fell over.
-    if (check.outdated.has(name)) return { ...base, value: 'stale', detail: t.staleNewer };
+    if (check.newer.has(name)) return { ...base, value: 'stale', detail: t.staleNewer };
     if (check.deleted.has(name)) return { ...base, value: 'stale', detail: t.staleGone };
     if (check.unchecked.has(name)) return { ...base, value: 'unknown', detail: t.staleNotComparable };
     if (!check.completed) return { ...base, value: 'unknown', detail: t.staleNotRun };

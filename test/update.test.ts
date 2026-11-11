@@ -6,7 +6,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { createContext, type Ctx, type RunResult, type Runner } from '../src/context.js';
 import { applyPlan, exitCodeFor } from '../src/core/apply.js';
-import { readState, recordEntry, type State } from '../src/core/state.js';
+import { buildPlan } from '../src/core/plan.js';
+import { readState, recordEntry, statePath, type State } from '../src/core/state.js';
 import { readStatus } from '../src/core/status.js';
 import { buildUpdatePlan, type UpdatePlan } from '../src/core/update.js';
 import { updateLines, updateOutcomeLines } from '../src/render.js';
@@ -484,4 +485,94 @@ test('update: kaynak seviyesindeki öğe skills API adaptöründe de yalnız bay
 
   assert.equal(outcome.items[0]?.status, 'ok');
   assert.deepEqual(installs, [{ source: 'fixture/all', skills: ['alpha'], agents: [CLAUDE] }], 'adaptör tüm kaynağı kurmamalı');
+});
+
+/**
+ * B1: the recorded fingerprint of a narrowed update must be recognised by the next plan. `update` records
+ * the argv it really ran — the item's install narrowed to one stale skill — so a plan comparing only
+ * against the item's whole scope used to see no record at all and reinstall the entire source.
+ */
+test('update→plan: daraltılmış kayıt öğenin kapsamı sayılır, sonraki plan "already" der ve kayıt sabit kalır', async () => {
+  const home = tempHome();
+  const runner = new UpdateRunner(home, ['alpha']);
+  const { ctx, advance } = context(home, runner);
+  const data = withSourceLevel();
+  recordInstall(ctx, 'skill-all', CLAUDE, 'alpha');
+  writeLock(home, { alpha: lockEntry('fixture/all'), beta: lockEntry('fixture/all') });
+
+  advance();
+  const update = await buildUpdatePlan(data, ctx);
+  const installed = await applyPlan(data, ctx, update.plan);
+  assert.deepEqual(installed.items.map((item) => item.status), ['ok']);
+
+  // Kayıt gerçekten çalıştırılan daraltılmış argv'yi tutar: tüm kaynağı yazsaydı çalışmayan bir işi anlatırdı.
+  const narrowed = readState(ctx).state.entries[0]?.command;
+  assert.deepEqual(narrowed, ['npx', 'skills', 'add', 'fixture/all', '-g', '-a', CLAUDE, '--skill', 'alpha']);
+
+  const replan = await buildPlan(data, ctx, { harnessIds: [CLAUDE], itemIds: ['skill-all'] });
+  assert.equal(replan.entries[0]?.action, 'already', 'güncellenmiş öğe yeniden kurulum olarak planlandı');
+  assert.equal(replan.entries[0]?.reason, t.recordedInstalled);
+
+  // Ve kayıt bir sonraki apply ile ne yeniden yazılır ne de çoğalır.
+  const before = fs.readFileSync(statePath(ctx), 'utf8');
+  const again = await applyPlan(data, ctx, replan);
+  assert.deepEqual(again.items.map((item) => item.status), ['already']);
+  assert.equal(fs.readFileSync(statePath(ctx), 'utf8'), before, 'ikinci apply kaydı yeniden yazdı');
+  assert.equal(runner.installs.length, 1, 'plan "already" derken tüm kaynak yeniden kuruldu');
+});
+
+test('update→plan: boşluk içeren kaynak da daraltılmış kayıttan tanınır', async () => {
+  const home = tempHome();
+  const runner = new UpdateRunner(home, ['alpha']);
+  const { ctx } = context(home, runner);
+  const data = withSourceLevel('skill-all', 'fixture/all dir');
+  recordInstall(ctx, 'skill-all', CLAUDE, 'alpha');
+  writeLock(home, { alpha: lockEntry('fixture/all dir') });
+
+  await applyPlan(data, ctx, (await buildUpdatePlan(data, ctx)).plan);
+
+  const replan = await buildPlan(data, ctx, { harnessIds: [CLAUDE], itemIds: ['skill-all'] });
+  assert.equal(replan.entries[0]?.action, 'already');
+});
+
+test('update→plan: skills API kaydı da daraltılmış hâliyle öğeye sayılır', async () => {
+  const home = tempHome();
+  const runner = new UpdateRunner(home, ['alpha']);
+  const data = withSourceLevel();
+  data.providers.unshift({
+    id: 'skills-api',
+    kind: 'skill',
+    supports: [CLAUDE, CODEX],
+    requires: ['node'],
+    priority: 1,
+    adapter: 'skills-api',
+    verify: { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' },
+  });
+  const { ctx } = context(home, runner, {
+    async install({ source }) {
+      writeLock(home, { alpha: lockEntry(source) });
+      return { installed: ['alpha'], failed: [] };
+    },
+  });
+  recordInstall(ctx, 'skill-all', CLAUDE, 'alpha');
+  writeLock(home, { alpha: lockEntry('fixture/all'), beta: lockEntry('fixture/all') });
+
+  await applyPlan(data, ctx, (await buildUpdatePlan(data, ctx)).plan);
+  assert.deepEqual(readState(ctx).state.entries[0]?.command, ['skills-api', 'fixture/all', 'alpha']);
+
+  const replan = await buildPlan(data, ctx, { harnessIds: [CLAUDE], itemIds: ['skill-all'] });
+  assert.equal(replan.entries[0]?.action, 'already', 'adaptör kaydı öğenin kapsamı sayılmadı');
+});
+
+test('plan: başka bir kaynağın kaydı öğeyi "already" yapmaz', async () => {
+  const home = tempHome();
+  const runner = new UpdateRunner(home, []);
+  const { ctx } = context(home, runner);
+  const data = withSourceLevel();
+  // Kayıt `fixture/skills` için, öğe ise `fixture/all`: aynı provider, aynı skill adı, başka kaynak.
+  recordInstall(ctx, 'skill-all', CLAUDE, 'alpha');
+  writeLock(home, { alpha: lockEntry('fixture/all') });
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [CLAUDE], itemIds: ['skill-all'] });
+  assert.equal(plan.entries[0]?.action, 'run', 'başka kaynağın argvsi eşleşti');
 });

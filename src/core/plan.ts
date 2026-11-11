@@ -8,8 +8,16 @@ import { pickProvider } from './providers.js';
 import { checkRequirement } from './requirements.js';
 import { verifyInstalled } from './verify.js';
 import { findEntry, readState, sameCommand } from './state.js';
+import type { HarnessStatus } from './status.js';
 
 export type PlanAction = 'run' | 'already' | 'unsupported' | 'error';
+
+/** The three values an adapter entry's description needs: source, the skill of it, and the agent. */
+export interface AdapterVia {
+  source: string;
+  skill?: string;
+  agent: string;
+}
 
 export interface PlanEntry {
   itemId: string;
@@ -26,8 +34,11 @@ export interface PlanEntry {
   skills?: string[];
   /** Set when a built-in adapter performs the work instead of a shell command. */
   adapter?: 'skills-api';
-  /** Human description of what an adapter will do (no argv to show). */
-  via?: string;
+  /**
+   * What an adapter will do, as data: an adapter entry has no argv to show, and the renderer is what
+   * turns these values into copy (the words live in i18n).
+   */
+  via?: AdapterVia;
   /** What to store in the record for an adapter entry (a fingerprint, not an argv). */
   record?: string[];
   /** Present when this entry writes a hook into a config file. */
@@ -50,15 +61,18 @@ export interface PlanRequirement {
   installCommand?: string[];
 }
 
-export type RequirementState = 'ready' | 'missing' | 'outdated';
+export type RequirementState = HarnessStatus;
 
 /**
- * The two unmet states apply must tell apart: `missing` (no usable version was read, so bootstrap it)
- * and `outdated` (a version was read and it is below `check.min`, so only a marked update touches it).
+ * The two unmet states apply must tell apart: `absent` (the check read no usable version, so bootstrap
+ * it) and `too-old` (a version was read and it is below `check.min`, so only a marked update touches it).
+ *
+ * These are the same three words `status` uses for a harness — one vocabulary, one set of labels in
+ * i18n (`harnessLabels`). There is no second name for either state.
  */
 export function requirementState(requirement: PlanRequirement): RequirementState {
   if (requirement.present) return 'ready';
-  return requirement.version !== undefined ? 'outdated' : 'missing';
+  return requirement.version !== undefined ? 'too-old' : 'absent';
 }
 
 export interface Plan {
@@ -77,22 +91,139 @@ function adapterRecord(item: ItemDef, skill: string | undefined): string[] {
   return ['skills-api', item.source ?? item.id, skill ?? '*'];
 }
 
-/** What the adapter will do, in words: an adapter entry has no argv to show. */
-function adapterVia(item: ItemDef, skill: string | undefined, harness: HarnessDef): string {
-  return `skills-api → ${item.source}${skill ? ` (${skill})` : ''} → ${harness.agentId ?? harness.id}`;
+/** What an adapter will do: the values, never the sentence (that is the renderer's job). */
+function adapterVia(item: ItemDef, skill: string | undefined, harness: HarnessDef): AdapterVia {
+  return {
+    source: item.source ?? item.id,
+    ...(skill ? { skill } : {}),
+    agent: harness.agentId ?? harness.id,
+  };
 }
 
-/** The argv the provider runs for this item; `{skill}` is the item's own skill unless one is named. */
-function installArgv(provider: ProviderDef, item: ItemDef, harness: HarnessDef, ctx: Ctx, skill = item.skill): string[] {
-  return expandArgs(provider.install ?? [], {
+/** The values a provider's install template is expanded with; `{skill}` is the item's own by default. */
+function installVars(item: ItemDef, harness: HarnessDef, ctx: Ctx): Record<string, string | undefined> {
+  return {
     source: item.source,
-    skill,
+    skill: item.skill,
     package: item.package ?? item.url,
     agentId: harness.agentId ?? harness.id,
     harness: harness.id,
     item: item.id,
     root: ctx.root,
-  });
+  };
+}
+
+/** The argv the provider runs for this item; `{skill}` is the item's own skill unless one is named. */
+function installArgv(provider: ProviderDef, item: ItemDef, harness: HarnessDef, ctx: Ctx, skill = item.skill): string[] {
+  return expandArgs(provider.install ?? [], { ...installVars(item, harness, ctx), skill });
+}
+
+const SKILL_SLOT = '{skill}';
+
+/**
+ * One template word against one recorded token, carrying the skill value the record implies. `{skill}`
+ * may sit anywhere inside a word (`--skill {skill}`, `{source}/{skill}`), so the token is split around it.
+ */
+function matchToken(
+  word: string,
+  token: string,
+  skill: string | undefined,
+  vars: Record<string, string | undefined>,
+): { ok: boolean; skill?: string } {
+  // Every other placeholder is known here: only `{skill}` is what the matcher has to recover.
+  const pattern = word.replace(/\{(\w+)\}/g, (all, name: string) => (name === 'skill' ? all : (vars[name] ?? all)));
+  const at = pattern.indexOf(SKILL_SLOT);
+  if (at < 0) return { ok: pattern === token, skill };
+  const prefix = pattern.slice(0, at);
+  const suffix = pattern.slice(at + SKILL_SLOT.length);
+  // A skill is never an empty string: expansion drops the whole element instead.
+  if (token.length < prefix.length + suffix.length + 1) return { ok: false };
+  if (!token.startsWith(prefix) || !token.endsWith(suffix)) return { ok: false };
+  const value = token.slice(prefix.length, token.length - suffix.length);
+  if (skill !== undefined && skill !== value) return { ok: false };
+  return { ok: true, skill: value };
+}
+
+/**
+ * Walks the template once: an element either vanishes (no skill value, like `expandArgs` does) or yields
+ * its words with `{skill}` filled in. Backtracking, because only one skill value fits every occurrence.
+ */
+function matchElements(
+  elements: string[],
+  vars: Record<string, string | undefined>,
+  candidate: string[],
+  at: number,
+  index: number,
+  skill: string | undefined,
+): boolean {
+  if (at === elements.length) return index === candidate.length;
+  const element = elements[at] ?? '';
+  const names = [...element.matchAll(/\{(\w+)\}/g)].map((match) => match[1] as string);
+  const hasSkill = names.includes('skill');
+  // A placeholder this argv cannot fill drops the whole element, so it never shows up in a record.
+  const producible = names.every((name) => name === 'skill' || Boolean(vars[name]));
+  if (!hasSkill) {
+    const expanded = expandArgs([element], vars);
+    if (index + expanded.length > candidate.length) return false;
+    if (!expanded.every((token, offset) => candidate[index + offset] === token)) return false;
+    return matchElements(elements, vars, candidate, at + 1, index + expanded.length, skill);
+  }
+  // Without a skill value the element disappears: that is the item's own, unnarrowed scope.
+  if (producible && matchElements(elements, vars, candidate, at + 1, index, skill)) return true;
+  if (!producible) return false;
+  let cursor = index;
+  let captured = skill;
+  for (const word of element.split(' ').filter(Boolean)) {
+    const token = candidate[cursor];
+    if (token === undefined) return false;
+    const step = matchToken(word, token, captured, vars);
+    if (!step.ok) return false;
+    captured = step.skill;
+    cursor += 1;
+  }
+  return matchElements(elements, vars, candidate, at + 1, cursor, captured);
+}
+
+/**
+ * True when `candidate` is an argv this install template can produce — for some `{skill}` value, or for
+ * none at all. `update` records the argv it really ran (the item narrowed to one stale skill), while plan
+ * compares against the item's whole scope, so the two differ only where `{skill}` lands.
+ */
+function matchesInstallArgv(
+  template: string[],
+  vars: Record<string, string | undefined>,
+  candidate: string[],
+): boolean {
+  return matchElements(template, vars, candidate, 0, 0, vars.skill);
+}
+
+/**
+ * Does a recorded fingerprint describe this item's installation? A record says which item a row belongs
+ * to; whether it is really there is `verifyInstalled`'s answer, never the record's (ADR-0002). Widening
+ * the comparison keeps the record honest about what ran: `update` writes the narrowed argv it executed,
+ * and an item-scope argv it never ran would be a claim about work that did not happen.
+ */
+function argvCovers(
+  recorded: string[] | undefined,
+  command: string[],
+  provider: ProviderDef,
+  item: ItemDef,
+  harness: HarnessDef,
+  ctx: Ctx,
+): boolean {
+  if (!recorded) return false;
+  if (sameCommand(recorded, command)) return true;
+  // Only a source-level item is ever narrowed: an item naming one skill has no narrower scope.
+  if (item.skill !== undefined) return false;
+  return matchesInstallArgv(provider.install ?? [], installVars(item, harness, ctx), recorded);
+}
+
+/** The adapter fingerprint, which may name the one skill `update` reinstalled instead of the whole source. */
+function adapterCovers(recorded: string[] | undefined, expected: string[], item: ItemDef): boolean {
+  if (!recorded) return false;
+  if (sameCommand(recorded, expected)) return true;
+  if (item.skill !== undefined) return false;
+  return recorded.length === expected.length && recorded[0] === expected[0] && recorded[1] === expected[1];
 }
 
 /**
@@ -187,7 +318,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
       if (provider.adapter === 'skills-api') {
         const record = adapterRecord(item, item.skill);
         const recordedEntry = findEntry(state, itemId, harnessId);
-        const matchesRecord = Boolean(recordedEntry && sameCommand(recordedEntry.command, record));
+        const matchesRecord = adapterCovers(recordedEntry?.command, record, item);
         // The lockfile answers in milliseconds; listSkills() scans every skill dir (~7s for 103).
         const present = verifyInstalled(harness, item, provider, ctx) === 'present';
         entries.push({
@@ -196,14 +327,16 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
           adapter: 'skills-api',
           via: adapterVia(item, item.skill, harness),
           record,
-          reason: present ? t.recordedInstalled : undefined,
+          // A record is not evidence: only say "recorded" when our record is the one that matches too.
+          // A skill installed outside agentenv is present and needs no install — but it is not ours.
+          reason: matchesRecord && present ? t.recordedInstalled : undefined,
         });
         continue;
       }
 
       const command = installArgv(provider, item, harness, ctx);
       const recorded = findEntry(state, itemId, harnessId);
-      const matchesRecord = Boolean(recorded && sameCommand(recorded.command, command));
+      const matchesRecord = argvCovers(recorded?.command, command, provider, item, harness, ctx);
 
       // A record is not evidence: if the owner says it is gone, install it again.
       let already = false;
