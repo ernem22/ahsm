@@ -4,6 +4,7 @@ import type { HarnessStatus, HarnessStatusRow, StatusReport } from './core/statu
 import type { RemoveOutcome, RemovePlan } from './core/remove.js';
 import type { SkillInventoryReport } from './core/list.js';
 import type { StaleReport } from './core/stale.js';
+import type { UpdatePlan } from './core/update.js';
 import { requirementState, type Plan, type PlanAction, type PlanRequirement } from './core/plan.js';
 
 export type Tone = 'normal' | 'dim' | 'error' | 'warning';
@@ -181,6 +182,31 @@ export function staleLines(report: StaleReport): Line[] {
   }
   lines.push({ text: t.staleCount(report.rows.length), tone: 'dim' });
   return lines;
+}
+
+/**
+ * The one update formatter: the stale rows the provider marked, then the plan apply would run — the same
+ * installer, the same words. What the update could not act on is said before the plan, never dropped.
+ */
+export function updateLines(update: UpdatePlan): Line[] {
+  const lines: Line[] = [
+    ...update.warnings.map((warning) => ({ text: `! ${warning}`, tone: 'warning' as Tone })),
+    ...update.skips.map((skip) => ({ text: `! ${skip.reason}`, tone: 'warning' as Tone })),
+  ];
+  if (update.plan.entries.length === 0) {
+    lines.push({ text: t.updateNone, tone: 'dim' });
+    return lines;
+  }
+  lines.push({ text: t.updateTitle, tone: 'dim' });
+  lines.push(...planLines(update.plan));
+  lines.push({ text: t.updateCount(update.stale.length, update.plan.entries.length), tone: 'dim' });
+  return lines;
+}
+
+/** The results of an approved update, per skill and per harness: the skips still show, then the installs. */
+export function updateOutcomeLines(update: UpdatePlan, outcome: ApplyOutcome): Line[] {
+  const skipped: Line[] = update.skips.map((skip) => ({ text: `! ${skip.reason}`, tone: 'warning' as Tone }));
+  return [...skipped, ...outcomeLines(outcome)];
 }
 
 /**

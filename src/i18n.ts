@@ -74,6 +74,16 @@ export const t = {
   staleNotRun: 'the provider update check did not finish — verification unknown',
   staleNewer: 'the source has a newer copy — an installation would replace it',
   staleGone: 'the source no longer offers it — an installation would not restore it',
+  updateTitle: 'UPDATE',
+  updateHint: 'to run it: agentenv update --yes',
+  updateNone: 'no stale skill — nothing to update',
+  /** The note an update entry carries: why an install is planned for something already installed. */
+  updateStaleCopy: (name: string) => `${name} is stale — the same installation replaces it`,
+  updateNoItem: (name: string) => `${name} matches no item in the catalogue — nothing to update`,
+  updateNoRecord: (name: string) => `${name} is not recorded for any harness — nothing to update`,
+  updateNoTarget: (name: string, harness: string) =>
+    `${name} → ${harness}: that harness is not defined here — nothing to update`,
+  updateCount: (stale: number, planned: number) => `${stale} stale skill(s) — ${planned} installation(s) planned`,
   harnessLabels: {
     ready: 'ready',
     'too-old': 'too old',
@@ -157,6 +167,7 @@ export const t = {
     'agentenv status                       show what is installed',
     'agentenv list                         list every skill the provider inventory reports (read-only)',
     'agentenv stale                        mark each installed skill up-to-date / stale / unknown (read-only)',
+    'agentenv update [--yes]               install every stale skill again (same install path and record)',
     'agentenv remove [--package id]        remove every recorded item (all harnesses)',
     '',
     'flags: --package <id> (default: the package marked default) · --harness <id,id>',

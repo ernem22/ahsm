@@ -10,8 +10,19 @@ import { applyRemovePlan, buildRemovePlan } from './core/remove.js';
 import { readStatus } from './core/status.js';
 import { readSkillInventory } from './core/list.js';
 import { readStaleSkills } from './core/stale.js';
+import { buildUpdatePlan } from './core/update.js';
 import { t } from './i18n.js';
-import { listLines, outcomeLines, planLines, removeOutcomeLines, removePlanLines, staleLines, statusLines } from './render.js';
+import {
+  listLines,
+  outcomeLines,
+  planLines,
+  removeOutcomeLines,
+  removePlanLines,
+  staleLines,
+  statusLines,
+  updateLines,
+  updateOutcomeLines,
+} from './render.js';
 import type { Data } from './types.js';
 
 /** `AGENTENV_ROOT` points the CLI at another data root (fixtures, e2e sandboxes). */
@@ -45,6 +56,23 @@ async function printInventory(data: Data, ctx: Ctx): Promise<void> {
 async function printStale(data: Data, ctx: Ctx): Promise<void> {
   const report = await readStaleSkills(data, ctx);
   for (const line of staleLines(report)) console.log(line.text);
+}
+
+/**
+ * `agentenv update`: install the skills the provider marked stale again, through the install path.
+ * Without `--yes` it only shows what that run would do — the check and the plan both write nothing.
+ */
+async function runUpdate(data: Data, ctx: Ctx, argv: string[]): Promise<number> {
+  const update = await buildUpdatePlan(data, ctx);
+  if (!argv.includes('--yes')) {
+    for (const line of updateLines(update)) console.log(line.text);
+    console.log(t.updateHint);
+    return 0;
+  }
+  // One approval, one installation per stale skill and harness, recorded the way apply always does.
+  const outcome = await applyPlan(data, ctx, update.plan);
+  for (const line of updateOutcomeLines(update, outcome)) console.log(line.text);
+  return exitCodeFor(outcome);
 }
 
 function valueOf(argv: string[], flag: string): string | undefined {
@@ -129,6 +157,11 @@ ${t.removeTitle}`);
 
   if (command === 'stale') {
     await printStale(data, ctx);
+    return;
+  }
+
+  if (command === 'update') {
+    process.exitCode = await runUpdate(data, ctx, argv);
     return;
   }
 

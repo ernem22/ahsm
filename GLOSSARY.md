@@ -67,5 +67,6 @@ _Avoid_: unsupported, skipped
 An installed item whose source now offers a different copy — a newer one, or none at all. Decided by the
 provider's own comparison (recorded hash against what the source holds now), never by a timestamp. Its
 opposite is **up-to-date**, and where the provider cannot compare the answer is **unknown**, which is not
-up-to-date.
-_Avoid_: outdated, old, dirty, drifted
+up-to-date. Updating one means installing it again through the same provider path and record — it is an
+installation, never a mechanism of its own.
+_Avoid_: outdated, old, dirty, drifted, upgrade, refresh

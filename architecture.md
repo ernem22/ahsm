@@ -208,6 +208,16 @@ items: [emil-skills, context7, bash-log]
    o skill için güncelleme/silinme bildirdiğinde, `güncel` yalnız kontrol o kaynağın skill'leri için
    tamamlandığında, gerisi `bilinmiyor` (kaynağa ulaşılamadı, komut bitmedi, kayıtta hash/kaynak yok).
    Sağlayıcı `check:` sunmuyorsa satırlar değil "not covered" yazılır.
+10. **update** — açık komut (`agentenv update`, `src/core/update.ts`): `stale`in **bayat** dediği skill'ler aynı
+    kurulum yolundan yeniden kurulur. Karşılaştırma yine sağlayıcının kendi kontrolüdür; iş yine `buildPlan`
+    + `applyPlan`: bayat satırlar katalog öğesine ve kayıttaki harness'lara eşlenir, yalnız o (öğe, harness)
+    çiftleri için plan kurulur ve `zaten kurulu` diyen girdiler `run`'a çevrilir — ayrı bir güncelleme
+    mekanizması, ikinci bir yükleyici yok; sağlayıcının `install` argv'si/adaptörü ve `state.json` kaydı aynı.
+    Onay bir tanedir: `--yes` yoksa yalnız plan basılır (kontrol ve plan hiçbir şey yazmaz), varsa her çift bir
+    kez kurulur ve kaydı tazelenir; bir skill'in hatası diğerlerini durdurmaz, çıkış kodu 1 olur. **İşaretsiz**
+    hiçbir skill'e dokunulmaz: `güncel` ve `bilinmiyor` satırları plana hiç girmez. Katalogda öğesi olmayan,
+    kaydında harness bulunmayan ya da o harness burada tanımlı olmayan bayat skill sessizce atlanmaz — satır
+    sebebiyle birlikte (`not covered` anlamında) yazılır.
 
 ## Skill hedefleri ortak
 
@@ -236,6 +246,13 @@ harness tanımında kalır.
   `bilinmiyor` olması, kontrol hiç bitmezse `bilinmiyor`, hash kayıtlı değilse karşılaştırma yapılmaması
   ve bozuk `state.json`ın sonucu değiştirmemesi. Ağsız bir `check` "kaynağa ulaşılamıyor" demektir; bu,
   `bilinmiyor`un gerçek senaryosudur.
+- `node scripts/e2e-update.mjs` — `update` için ayrı, ağsız dört senaryo (`npm run e2e`'ye bağlı): bayat
+  skill yokken hiçbir şey yapmaması ve ağacın değişmemesi, planın bayat skill'i kurulum satırı olarak
+  göstermesi ve hiçbir şey yazmaması, `--yes` ile skill'in gerçekten bir kez kurulması (elle silinen dosya
+  geri gelir) ve işaretsiz MCP öğesine dokunulmaması, ardından `status`un `güncel` demesi.
+- `scripts/check-syntax.mjs` (`npm run check:scripts`) — `scripts/*.mjs` ve `test/fixtures/offline/bin/*.mjs`
+  dosyalarını `node --check` ile ayrıştırır: bu programları e2e `spawn` ile çalıştırdığı için typecheck
+  onları hiç görmez.
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 
@@ -283,6 +300,14 @@ plugin/keşif işi geldiğinde geçerli olacak.
   listenin kendisi de zaten yalnız agentenv'in kurduklarıyla sınırlı değildir.
 - `status`/`plan` bir kurulumu yalnız sağlayıcının kendi envanteri doğruluyorsa "kurulu" sayar; `verify`
   tarifi olmayan sağlayıcıda `bilinmiyor` der ve plan öğeyi yeniden kurar.
+- `update` sağlayıcının "farklı" dediğine uyar, "daha yeni" dediğine değil: `skills check` yön bildirmez,
+  yalnız kayıtlı hash ile kaynağın bugünkü hâlinin farklı olduğunu söyler. Kaynak geri alınmışsa (ya da
+  kurulu kopya elle değiştirilmişse) "güncelleme" eski içeriği kurar; bunu engellemek ikinci bir
+  karşılaştırma yazmak olurdu, o yüzden `update` yönü bilmez.
+- `update` katalog ve kayıt üzerinden çalışır: bayat skill'in katalogda bir öğesi yoksa, kayıt onu bir
+  harness'a yazmamışsa ya da o harness burada tanımlı değilse kurulum yapılmaz ve satır sebebiyle raporlanır.
+  Kaynak artık skill'i sunmuyorsa `stale` bunu `bayat` (silinmiş) bildirir ve `update` yine dener: kurulum
+  başarısızsa o skill `hata` olur, kalanlar kurulmaya devam eder.
 - `skill-lock` doğrulaması harness'e göre ayırmaz: lockfile'da hangi harness için kurulduğu yazmaz
   (`~/.agents/.skill-lock.json`, öğe başına yalnız kaynak ve skill adı). `codex` için kurulmuş bir skill
   `claude-code` için de `zaten kurulu` görünebilir; `~/.claude/skills/` ayrıca bakılmaz. Öğede `skill`

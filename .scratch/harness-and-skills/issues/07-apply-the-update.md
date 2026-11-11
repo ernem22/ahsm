@@ -7,9 +7,20 @@ mark.
 
 **Blocked by:** 06
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Marked stale skills are updated through the install path, once each
-- [ ] Results are reported per skill and per harness, with failures not stopping the rest
-- [ ] The record is refreshed so a following status run agrees with reality
-- [ ] Skills that were not marked are left untouched
+- [x] Marked stale skills are updated through the install path, once each
+- [x] Results are reported per skill and per harness, with failures not stopping the rest
+- [x] The record is refreshed so a following status run agrees with reality
+- [x] Skills that were not marked are left untouched
+
+## Comments
+
+- The surface is `agentenv update [--yes]` (`src/core/update.ts`): `buildUpdatePlan` reads the stale report
+  (06), maps each stale row to its catalogue item and the harnesses the record says it was installed for,
+  and builds the ordinary plan for exactly those `(item, harness)` pairs. Entries the plan calls `already`
+  are turned into `run` — a stale skill is installed again — and `applyPlan` does the work: same provider
+  argv/adapter, same verification, same `state.json` record. No second update mechanism, and the plan path
+  writes nothing (unit test snapshots the sandbox tree).
+- A stale skill with no catalogue item, no record, or a harness this data root does not define is reported
+  with its reason instead of being dropped; the provider offering no `check` reports "not covered".

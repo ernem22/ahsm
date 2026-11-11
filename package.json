@@ -19,7 +19,7 @@
     "check": "npm run check:eol && npm run check:scripts && npm run typecheck && npm run typecheck:test && npm test && npm run e2e",
     "check:eol": "node scripts/check-eol.mjs",
     "check:scripts": "node scripts/check-syntax.mjs",
-    "e2e": "npm run build && node scripts/e2e.mjs && node scripts/e2e-list.mjs && node scripts/e2e-stale.mjs",
+    "e2e": "npm run build && node scripts/e2e.mjs && node scripts/e2e-list.mjs && node scripts/e2e-stale.mjs && node scripts/e2e-update.mjs",
     "e2e:network": "npm run build && node scripts/e2e.mjs --network"
   },
   "dependencies": {
