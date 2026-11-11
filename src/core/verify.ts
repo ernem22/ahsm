@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { parse as parseJsonc } from 'jsonc-parser';
+import { parse as parseToml } from 'smol-toml';
 import { expandPath, type Ctx } from '../context.js';
 import type { Data, HarnessDef, ItemDef, ProviderDef } from '../types.js';
 
@@ -23,10 +24,22 @@ function lockHasSkill(file: string, item: ItemDef): Verified {
   return candidates.some((entry) => entry?.source === item.source) ? 'present' : 'missing';
 }
 
+function readConfig(file: string, format: 'jsonc' | 'toml'): unknown {
+  if (!fs.existsSync(file)) return undefined;
+  const text = fs.readFileSync(file, 'utf8');
+  try {
+    return format === 'toml' ? parseToml(text) : parseJsonc(text, [], { allowTrailingComma: true, disallowComments: false });
+  } catch {
+    return undefined;
+  }
+}
+
 function configHasKey(harness: HarnessDef, item: ItemDef, ctx: Ctx): Verified {
   const target = harness.mcp;
   if (!target) return 'unknown';
-  const config = readJson(expandPath(target.path, ctx.home)) as Record<string, unknown> | undefined;
+  const config = readConfig(expandPath(target.path, ctx.home), target.format ?? 'jsonc') as
+    | Record<string, unknown>
+    | undefined;
   const map = config?.[target.key];
   if (!map || typeof map !== 'object') return 'missing';
   return (item.serverName ?? item.id) in (map as Record<string, unknown>) ? 'present' : 'missing';

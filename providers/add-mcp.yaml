@@ -1,7 +1,8 @@
 id: add-mcp
 kind: mcp
-supports: [claude-code]
+supports: [claude-code, codex, opencode, pi]
 requires: [node]
 priority: 10
 verify: { strategy: json-key }
 install: [npx, add-mcp, "{package}", -g, -a, "{agentId}", -y]
+remove: [npx, add-mcp, remove, "{serverName}", -g, -y]

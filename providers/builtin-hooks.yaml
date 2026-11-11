@@ -1,6 +1,6 @@
 id: builtin-hooks
 kind: hook
-supports: [claude-code]
+supports: [claude-code, codex]
 priority: 10
 writes:
   path: "{harness.config}"

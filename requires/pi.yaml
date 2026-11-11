@@ -1,0 +1,7 @@
+id: pi
+check:
+  command: [pi, --version]
+install:
+  win32: [npm, install, -g, "@earendil-works/pi-coding-agent"]
+  darwin: [npm, install, -g, "@earendil-works/pi-coding-agent"]
+  linux: [npm, install, -g, "@earendil-works/pi-coding-agent"]

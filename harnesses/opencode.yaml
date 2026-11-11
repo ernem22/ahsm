@@ -1,0 +1,13 @@
+id: opencode
+label: opencode
+detect:
+  - ~/.config/opencode
+  - path:opencode
+agentId: opencode
+requires: [opencode]
+config:
+  path: ~/.config/opencode/opencode.jsonc
+  format: jsonc
+mcp:
+  path: ~/.config/opencode/opencode.jsonc
+  key: mcp

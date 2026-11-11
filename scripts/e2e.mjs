@@ -187,6 +187,15 @@ check('eksik ön koşul: öğeler kurulmaz, sebep söylenir', () => {
   assert(!fs.existsSync(path.join(empty, '.fake', 'skills')), 'ön koşul yokken skill kuruldu');
 });
 
+check('remove hepsinden kaldırır ve kaydı boşaltır', () => {
+  const { out, code } = run(home, ['remove', '--yes'], offlineRoot);
+  assert(code === 0, `çıkış kodu ${code}: ${out}`);
+  assert(!fs.existsSync(path.join(home, '.fake', 'skills', 'alpha.md')), 'skill dosyası kaldı');
+  assert(!fs.existsSync(path.join(home, '.fake', 'mcp.json')) || !JSON.parse(fs.readFileSync(path.join(home, '.fake', 'mcp.json'), 'utf8')).mcpServers?.['mcp-a'], 'mcp girdisi kaldı');
+  assert(!/PreToolUse/.test(settingsOf(home)), 'hook ayarı kaldı');
+  assert(/record is empty/.test(run(home, ['status'], offlineRoot).out), 'kayıt boşalmadı');
+});
+
 if (network) {
   console.log('network (gerçek npx skills / add-mcp, geçici HOME)');
   const real = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-net-'));

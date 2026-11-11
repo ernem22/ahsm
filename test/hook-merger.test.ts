@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { HookConfigError, mergeHook, sectionPath } from '../src/apply/hook-merger.js';
+import { HookConfigError, mergeHook, removeHook, sectionPath } from '../src/apply/hook-merger.js';
 
 const spec = { event: 'PreToolUse', matcher: 'Bash', command: 'echo hi' };
 const path = ['hooks', 'PreToolUse'];
@@ -47,4 +47,20 @@ test('farklı matcher ayrı giriş olur', () => {
 
 test('bozuk JSONC yazmaya kalkışmaz', () => {
   assert.throws(() => mergeHook('{ nope', path, spec), HookConfigError);
+});
+
+test('removeHook: kayıtlı komutu taşıyan girdiyi siler, diğerlerine dokunmaz', () => {
+  const base = mergeHook('{}', path, spec).text;
+  const two = mergeHook(base, path, { ...spec, matcher: 'Edit' }).text;
+
+  const removed = removeHook(two, path, spec);
+  assert.equal(removed.changed, true);
+  const parsed = JSON.parse(removed.text) as { hooks: { PreToolUse: Array<{ matcher: string }> } };
+  assert.deepEqual(
+    parsed.hooks.PreToolUse.map((entry) => entry.matcher),
+    ['Edit'],
+  );
+
+  assert.equal(removeHook(removed.text, path, { ...spec, command: 'baska-komut' }).changed, false);
+  assert.equal(removeHook(removed.text, path, { ...spec, matcher: 'Edit' }).changed, true, 'Edit hâlâ silinebilir olmalı');
 });

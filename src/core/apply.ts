@@ -49,7 +49,7 @@ async function runSafe(ctx: Ctx, argv: string[]): Promise<RunResult> {
 }
 
 /** Picks the line a human needs from a failed command: an error line beats a trailing banner. */
-function failureLine(stderr: string, fallback: string): string {
+export function failureLine(stderr: string, fallback: string): string {
   const lines = stderr
     .split(/\r?\n/)
     .map((line) => line.trim())

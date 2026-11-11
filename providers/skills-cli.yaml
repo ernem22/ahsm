@@ -1,9 +1,9 @@
 id: skills-cli
 kind: skill
-supports: [claude-code]
+supports: [claude-code, codex, opencode, pi]
 requires: [node]
 priority: 10
 verify: { strategy: skill-lock, file: "~/.agents/.skill-lock.json" }
 install: [npx, skills, add, "{source}", -g, -a, "{agentId}", -y, "--skill {skill}"]
-remove: [npx, skills, remove, -g, -a, "{agentId}", "{skill}"]
+remove: [npx, skills, remove, -g, -y, "{skill}"]
 update: [npx, skills, update, "{skill}"]

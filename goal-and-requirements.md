@@ -56,8 +56,9 @@ sunucusu veya hook için dosyalar elle düzenleniyor. İki sonuç doğuyor:
   listelenir ve onay sonrası kurulur; kurulum tarifi platform başına veridir.
 - **Doğru formata yazma.** Her harness kendi formatını alır; MCP anahtarı düz metin yazılmaz, `${VAR}`
   referansı ve gerekli değişken adları plan çıktısında görünür.
-- **Kaldırma.** Kurulan öğeler geri alınabilir: skills için `npx skills remove`, MCP/hook için agentenv'in
-  kaydına dayanan geri alma. *(varsayım — ilk sürüm kapsamı sorusu atlandı)*
+- **Kaldırma.** Kurulan öğeler geri alınabilir: skills için `npx skills remove`, MCP için
+  `npx add-mcp remove`, hook'lar için kayıtlı girdinin config'ten silinmesi. Kaldırma **her harness'ı**
+  kapsar (skill dizinleri ortak); plan etkilenen dizinleri ve harness'ları önceden gösterir.
 - **Durum.** Kurulu öğelerin harness + kapsam haritası tek komutla görülebilir. Kayıt ile
   doğrulanabilen gerçek karşılaştırılır: `güncel` / `eksik` / `bilinmiyor`. Üç durum yeter: kayıtlı ama
   içeriği değişmiş hook da `eksik` sayılır, doğrulanamayan skills/MCP `bilinmiyor` der.

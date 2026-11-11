@@ -676,3 +676,27 @@ test('harness bir ön koşulsa plan onu da listeler ve uygular', async () => {
   assert.equal(outcome.requirements.find((r) => r.id === 'fake-harness')?.ok, false);
   assert.equal(outcome.items[0]?.status, 'error');
 });
+
+test('verify: codex MCP girdisi TOML config içinde okunur', () => {
+  const home = tempHome();
+  const { ctx } = setup(home);
+  const data = fixture();
+  const codex = {
+    id: 'codex',
+    detect: ['~/.codex'],
+    agentId: 'codex',
+    config: { path: '~/.codex/config.toml', format: 'toml' as const },
+    mcp: { path: '~/.codex/config.toml', key: 'mcp_servers', format: 'toml' as const },
+  };
+  const provider = { ...data.providers[1]!, supports: ['codex'] };
+  const item = data.items.get('mc')!;
+
+  assert.equal(verifyInstalled(codex, item, provider, ctx), 'missing', 'dosya yokken eksik olmalı');
+
+  fs.mkdirSync(path.join(home, '.codex'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.codex', 'config.toml'), '[mcp_servers.mc]\ncommand = "x"\n', 'utf8');
+  assert.equal(verifyInstalled(codex, item, provider, ctx), 'present');
+
+  fs.writeFileSync(path.join(home, '.codex', 'config.toml'), '[features]\nx = 1\n', 'utf8');
+  assert.equal(verifyInstalled(codex, item, provider, ctx), 'missing');
+});

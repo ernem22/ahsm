@@ -87,6 +87,35 @@ export function mergeHook(
   return { changed: true, text: applyEdits(source, edits), entry: added };
 }
 
+/** Removes our entry for this matcher+command; a document without it is returned untouched. */
+export function removeHook(
+  text: string,
+  path: string[],
+  spec: { matcher: string; command: string },
+): { changed: boolean; text: string } {
+  const source = text.trim().length > 0 ? text : '{}';
+  const errors: ParseError[] = [];
+  const root = parseJsonc(source, errors, { allowTrailingComma: true, disallowComments: false });
+  if (errors.length > 0) throw new HookConfigError();
+
+  const existing = getAt(root, path);
+  const list = Array.isArray(existing) ? (existing as Array<Record<string, unknown>>) : [];
+  const kept = list.filter(
+    (entry) =>
+      !(
+        entry?.matcher === spec.matcher &&
+        Array.isArray(entry?.hooks) &&
+        (entry.hooks as Array<Record<string, unknown>>).some((hook) => hook?.command === spec.command)
+      ),
+  );
+  if (kept.length === list.length) return { changed: false, text };
+
+  // Removing the last entry should also remove the empty event array, not leave `"PreToolUse": []`.
+  const value = kept.length === 0 ? undefined : kept;
+  const edits = modify(source, path, value, { formattingOptions: { insertSpaces: true, tabSize: 2 } });
+  return { changed: true, text: applyEdits(source, edits) };
+}
+
 export function readText(file: string): string {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
 }

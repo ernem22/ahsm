@@ -1,5 +1,7 @@
 export type Kind = 'skill' | 'mcp' | 'hook';
 
+export type ConfigFormat = 'jsonc' | 'toml';
+
 /** Identifies one installed thing: the item, the harness it went to, and who installed it. */
 export interface EntryRef {
   itemId: string;
@@ -16,10 +18,10 @@ export interface HarnessDef {
   agentId?: string;
   /** Requirements of the harness itself (its CLI), installed like any other prerequisite. */
   requires?: string[];
-  config: { path: string; format: 'jsonc' };
+  config: { path: string; format: ConfigFormat };
   hooks?: { path?: string; section: string };
   /** Where this harness keeps MCP servers, so a delegated install can still be verified. */
-  mcp?: { path: string; key: string };
+  mcp?: { path: string; key: string; format?: ConfigFormat };
 }
 
 export interface ProviderDef {

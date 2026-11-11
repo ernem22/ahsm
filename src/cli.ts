@@ -6,9 +6,10 @@ import { loadData } from './data.js';
 import { applyPlan, exitCodeFor, type ApplyOutcome } from './core/apply.js';
 import { buildPlan, type Plan, type PlanAction } from './core/plan.js';
 import { resolveSelection } from './core/selection.js';
+import { applyRemovePlan, buildRemovePlan } from './core/remove.js';
 import { readStatus } from './core/status.js';
 import { t } from './i18n.js';
-import { outcomeLines, planLines } from './render.js';
+import { outcomeLines, planLines, removeOutcomeLines, removePlanLines } from './render.js';
 import type { Data } from './types.js';
 
 /** `AGENTENV_ROOT` points the CLI at another data root (fixtures, e2e sandboxes). */
@@ -78,6 +79,24 @@ async function main(): Promise<void> {
     const outcome = await applyPlan(data, ctx, plan);
     printOutcome(outcome);
     process.exitCode = exitCodeFor(outcome);
+    return;
+  }
+
+  if (command === 'remove') {
+    const packageId = valueOf(argv, '--package');
+    const pkg = packageId ? data.packages.get(packageId) : undefined;
+    if (packageId && !pkg) throw new Error(t.packageNotFound(packageId));
+    const plan = buildRemovePlan(data, ctx, pkg?.items);
+    if (!argv.includes('--yes')) {
+      console.log(`
+${t.removeTitle}`);
+      for (const line of removePlanLines(plan)) console.log(line.text);
+      console.log(t.removeHint);
+      return;
+    }
+    const outcome = await applyRemovePlan(data, ctx, plan);
+    for (const line of removeOutcomeLines(outcome)) console.log(line.text);
+    process.exitCode = outcome.results.some((result) => result.status === 'error') ? 1 : 0;
     return;
   }
 

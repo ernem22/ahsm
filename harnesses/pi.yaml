@@ -1,0 +1,13 @@
+id: pi
+label: pi
+detect:
+  - ~/.pi
+  - path:pi
+agentId: pi
+requires: [pi]
+config:
+  path: ~/.pi/agent/settings.json
+  format: jsonc
+mcp:
+  path: ~/.pi/agent/mcp.json
+  key: mcpServers

@@ -48,7 +48,7 @@ packages/*.yaml     isimli paketler (note, link, items[])
 harnesses/*.yaml    harness tanımları
 providers/*.yaml    sağlayıcı tanımları (kind, supports, argv şablonları)
 requires/*.yaml     ön koşullar (check + platform kurulum komutu)
-src/core/           detect, plan, apply, state, status
+src/core/           detect, plan, apply, remove, state, status, verify
 src/apply/          hook-merger (tek yerli yazıcı)
 src/context.ts      Ctx, Runner (gerçek + kayıt eden), argv genişletme
 src/cli.ts          komutlar + TUI girişi
@@ -172,6 +172,15 @@ harness tanımında kalır.
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 
+## Harness'lar
+
+| harness | algılama | skills | MCP | hooks |
+|---|---|---|---|---|
+| claude-code | `~/.claude`, `path:claude` | `~/.claude/skills` | `~/.claude.json` → `mcpServers` (JSONC) | `settings.json` |
+| codex | `~/.codex`, `path:codex` | `~/.codex/skills` + ortak | `config.toml` → `[mcp_servers]` (**TOML**) | `hooks.json` |
+| pi | `~/.pi`, `path:pi` | ortak + `~/.pi/agent/skills` | `~/.pi/agent/mcp.json` → `mcpServers` | yok — extension |
+| opencode | `~/.config/opencode`, `path:opencode` | ortak + `~/.config/opencode/skills` | `opencode.jsonc` → `mcp` | yok — plugin |
+
 ## Bilinçli sınırlar
 
 - `npx` yoksa hiçbir sağlayıcı çalışmaz; plan bunu ön koşul olarak söyler (Node kurulumu önerilir).
@@ -186,6 +195,10 @@ harness tanımında kalır.
 - Hook komutu değişirse eski girdi yerinde değiştirilir (kayıttaki `hookCommand` ile bulunur); komut elle
   değiştirilmişse eski girdi kalır — hook'lar harness şemasında kimlik taşımadığı için tek işaret bu.
 - Hook'ta `event`/`matcher`/`hookCommand` eksikse plan `error` der; config'e boş değer yazılmaz.
+- Hook'lar yalnız JSON ile yapılandırılan harness'larda (claude-code, codex). pi ve opencode hook'u
+  extension/plugin olarak yapıyor — yani kod; agentenv kod yazmaz, plan `kapsanmıyor` der.
+- MCP doğrulaması üç biçim okur: JSON, JSONC ve TOML (codex). Yeni bir biçim gelirse `verify`'a bir
+  okuyucu eklenir.
 - Hook birleştirme yalnız JSONC hedefler için yazıldı; başka bir biçim gerekirse `hook-merger`'a yeni bir
   biçim eklenir, çekirdek değişmez.
 - MCP sırları (`${VAR}` → `add-mcp --env KEY=${VAR}`) henüz uygulanmadı; öğe tanımında env alanı yok.

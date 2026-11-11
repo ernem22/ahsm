@@ -1,0 +1,7 @@
+id: codex
+check:
+  command: [codex, --version]
+install:
+  win32: [npm, install, -g, "@openai/codex"]
+  darwin: [npm, install, -g, "@openai/codex"]
+  linux: [npm, install, -g, "@openai/codex"]

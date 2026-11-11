@@ -1,0 +1,17 @@
+id: codex
+label: Codex
+detect:
+  - ~/.codex
+  - path:codex
+agentId: codex
+requires: [codex]
+config:
+  path: ~/.codex/config.toml
+  format: toml
+hooks:
+  path: ~/.codex/hooks.json
+  section: hooks.{event}
+mcp:
+  path: ~/.codex/config.toml
+  key: mcp_servers
+  format: toml

@@ -5,3 +5,4 @@ requires: [node]
 priority: 10
 verify: { strategy: skill-lock, file: "~/.fake/.skill-lock.json" }
 install: [node, "{root}/bin/install-skill.mjs", "{source}", "{skill}"]
+remove: [node, "{root}/bin/remove-skill.mjs", "{skill}"]

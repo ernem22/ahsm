@@ -1,5 +1,6 @@
 import { t } from './i18n.js';
 import type { ApplyOutcome } from './core/apply.js';
+import type { RemoveOutcome, RemovePlan } from './core/remove.js';
 import type { Plan, PlanAction } from './core/plan.js';
 
 export type Tone = 'normal' | 'dim' | 'error' | 'warning';
@@ -76,4 +77,32 @@ export function toneColor(tone: Tone): string | undefined {
   if (tone === 'warning') return 'yellow';
   if (tone === 'dim') return undefined;
   return undefined;
+}
+
+export function removePlanLines(plan: RemovePlan): Line[] {
+  const lines: Line[] = [];
+  for (const entry of plan.entries) {
+    lines.push({
+      text: `- ${entry.itemId} [${entry.kind}] → ${entry.action === 'remove' ? t.removeTitle : entry.action}`,
+      tone: entry.action === 'error' ? 'error' : 'normal',
+    });
+    if (entry.harnesses.length > 0) lines.push({ text: `    ${t.removeAffects(entry.harnesses)}`, tone: 'dim' });
+    if (entry.paths.length > 0) lines.push({ text: `    ${t.removePaths(entry.paths)}`, tone: 'dim' });
+    if (entry.command) lines.push({ text: `    ${t.runPrefix}: ${entry.command.join(' ')}`, tone: 'dim' });
+    if (entry.reason) lines.push({ text: `    ${t.notePrefix}: ${entry.reason}`, tone: 'dim' });
+  }
+  for (const warning of plan.warnings) lines.push({ text: warning, tone: 'warning' });
+  return lines;
+}
+
+export function removeOutcomeLines(outcome: RemoveOutcome): Line[] {
+  const lines: Line[] = outcome.warnings.map((warning) => ({ text: `! ${warning}`, tone: 'warning' as Tone }));
+  for (const result of outcome.results) {
+    const suffix = result.message ? ` (${result.message})` : '';
+    lines.push({
+      text: `${t.removeLabels[result.status]}  ${result.entry.itemId}${suffix}`,
+      tone: result.status === 'error' ? 'error' : 'normal',
+    });
+  }
+  return lines;
 }
