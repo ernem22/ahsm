@@ -9,7 +9,7 @@ package is unaffected.
 
 **Status:** ready-for-agent
 
-- [ ] A definition without an install command for this platform reports "no install command", in plan
+- [x] A definition without an install command for this platform reports "no install command", in plan
       and in apply
-- [ ] A definition with a default command runs exactly that command, verbatim
-- [ ] A harness that cannot be installed leaves other harnesses' items usable
+- [x] A definition with a default command runs exactly that command, verbatim
+- [x] A harness that cannot be installed leaves other harnesses' items usable
