@@ -114,6 +114,8 @@ export const t = {
   hookTargetUnreadable: 'target file is not readable JSONC — nothing was written',
   commandMissing: 'command could not be built',
   skillsApiNoSource: 'this skill item has no source for the skills API',
+  installNotVerified: 'the install reported success, but the provider inventory does not show it — nothing was recorded',
+  nothingToInstall: 'the provider reported nothing to install, and the provider inventory does not show it',
   definitionMissing: 'definition not found',
   recordedInstalled: 'recorded as installed',
   recordNotInTarget: 'recorded but not found in the target — installing again',

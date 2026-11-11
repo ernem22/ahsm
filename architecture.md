@@ -164,7 +164,10 @@ items: [emil-skills, context7, bash-log]
    güncellenmez, bağımlı öğeler sebebiyle birlikte `hata` olarak raporlanır; eksikler, diğer harness'lar ve
    engellenmemiş öğeler devam eder.
 5. **apply** — sıralı uygulama; her hook yazımından önce hedef dosya, bozuk `state.json` kaydından önce
-   o dosya yedeklenir. Sonuç satırı: `kuruldu` / `zaten kurulu` / `kapsanmıyor` / `hata`. CLI
+   o dosya yedeklenir. Sonuç satırı: `kuruldu` / `zaten kurulu` / `kapsanmıyor` / `hata`. Skill kurulumu
+   yükleyicinin sözüyle bitmez: komut 0 dönse de (ya da adaptör "kuruldu" dese de) sağlayıcının envanteri
+   (lockfile) kontrol edilir — orada görünmüyorsa öğe `hata` olur ve **kaydedilmez**; "zaten kurulu" da
+   yalnız envanter doğruladığında söylenir. MCP ve hook bugün komutun kendi sonucuyla yetinir. CLI
    (`apply --yes`) çıkış kodu: bir öğe `hata` verdiyse ya da bir ön koşul karşılanmadıysa 1, yalnız
    uyarı varsa 0; etkileşimli TUI çıkış kodu ayarlamaz. "Bloklu" ayrı bir kapı değildir: apply, kendi
    ön koşul sonucuna bakıp öğeyi çalıştırmaz — plan yalnız aynı sonucu önceden gösterir.
@@ -194,14 +197,14 @@ harness tanımında kalır.
 ## Test
 
 - `npm test` — birim/entegrasyon: `node:test`, geçici HOME + kayıt eden runner, ağ yok.
-- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 21 senaryo: kurulum, idempotens,
+- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 22 senaryo: kurulum, idempotens,
   doğrulama, kendini onarma, bozuk JSONC, bozuk state, eksik ön koşul, plan/status'un yazmaması,
   status'un harness bölümü (hazır / çok eski + güncelleme komutu / yok), eski harness'ın planda
   sürüm/asgari/güncelleme komutuyla görünüp öğelerini bloklaması, `--update` verilmeden güncellemenin
   çalışmaması, eksik ön koşulun işaretsiz bootstrap edilmesi, `--update all`ın güncellemeyi bir kez
   çalıştırıp aynı çalıştırmada öğeleri kurması, bu platformda kurulum komutu olmayan tanımın plan ve
-  apply'da `no install command` demesi ve kurulamayan bir harness'ın diğer harness'ın öğelerini
-  bırakmaması.
+  apply'da `no install command` demesi, kurulamayan bir harness'ın diğer harness'ın öğelerini
+  bırakmaması ve hiçbir şey yazmayan bir skill kurulumunun `kuruldu` sayılmaması.
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 

@@ -395,6 +395,28 @@ check('elle silinen skill "eksik" görünür ve yeniden kurulur', () => {
   assert(fs.existsSync(path.join(home, '.fake', 'skills', 'alpha.md')), 'skill geri kurulmadı');
 });
 
+/** A root whose skill installer exits 0 without writing anything: the install left no trace. */
+function lyingInstallerRoot() {
+  const root = copiedRoot();
+  fs.writeFileSync(path.join(root, 'bin', 'install-skill.mjs'), "console.log('pretend installed');", 'utf8');
+  return root;
+}
+
+check('kurulum hiçbir şey yazmazsa "installed" denmez ve kaydedilmez', () => {
+  const home = sandbox();
+  const root = lyingInstallerRoot();
+  const { out, code } = run(home, PASS, root);
+  assert(code === 1, `çıkış kodu 1 değil: ${code}: ${out}`);
+  assert(/error {2}skill-a → fake \(the install reported success, but the provider inventory does not show it/.test(out), `hata sebebi yok: ${out}`);
+  assert(/installed {2}mcp-a/.test(out), 'diğer öğe kurulmadı');
+  const state = JSON.parse(fs.readFileSync(path.join(home, '.agentenv', 'state.json'), 'utf8'));
+  assert(!state.entries.some((entry) => entry.kind === 'skill'), 'kurulmayan skill kaydedildi');
+  assert(
+    state.entries.some((entry) => entry.itemId === 'mcp-a'),
+    'kurulan mcp kaydedilmedi',
+  );
+});
+
 check('bozuk settings.json: hata verir, dosyayı değiştirmez', () => {
   const broken = sandbox();
   fs.writeFileSync(path.join(broken, '.fake', 'settings.json'), '{ bozuk', 'utf8');

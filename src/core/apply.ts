@@ -5,8 +5,9 @@ import { mergeHook, readText } from '../apply/hook-merger.js';
 import { writeConfigFile } from '../apply/config-writer.js';
 import type { Data } from '../types.js';
 import { requirementState, type Plan, type PlanEntry } from './plan.js';
-import { requiredIds } from './entry.js';
+import { entryDefs, requiredIds } from './entry.js';
 import { meetsRequirement } from './requirements.js';
+import { verifyInstalled } from './verify.js';
 import { backupFile, findEntry, readState, recordEntry, statePath } from './state.js';
 import { t } from '../i18n.js';
 
@@ -47,6 +48,18 @@ export function exitCodeFor(outcome: ApplyOutcome): number {
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Skills only: after an install claims success, the inventory its provider maintains decides
+ * (ADR-0002). `undefined` means there was nothing to ask — another kind, or a provider without a
+ * verify recipe — and then the installer's own word stands. MCP and hooks are still in that state.
+ */
+function skillLanded(data: Data, entry: PlanEntry, ctx: Ctx): boolean | undefined {
+  if (entry.kind !== 'skill') return undefined;
+  const { harness, provider, item } = entryDefs(data, entry);
+  if (!harness || !item) return undefined;
+  return verifyInstalled(harness, item, provider, ctx) !== 'missing';
 }
 
 /** A runner that throws must not cost the whole report: treat it like an exit-1 result. */
@@ -185,6 +198,15 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan, options: Apply
           items.push({ entry, status: 'error', message: outcome.failed[0]?.message ?? t.commandMissing });
           continue;
         }
+        // A silent no-op is not "already installed" and not "installed": only the inventory says so.
+        if (skillLanded(data, entry, ctx) === false) {
+          items.push({
+            entry,
+            status: 'error',
+            message: outcome.installed.length > 0 ? t.installNotVerified : t.nothingToInstall,
+          });
+          continue;
+        }
         if (outcome.installed.length > 0) {
           record({ ref: { itemId: entry.itemId, harness: entry.harness, providerId: entry.providerId }, kind: entry.kind, command: entry.record });
         }
@@ -228,7 +250,10 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan, options: Apply
     }
 
     const result = await runSafe(ctx, entry.command);
-    if (result.code === 0) {
+    if (result.code === 0 && skillLanded(data, entry, ctx) === false) {
+      // The command exited 0 and wrote nothing: the record must not claim an install that did not land.
+      items.push({ entry, status: 'error', message: t.installNotVerified });
+    } else if (result.code === 0) {
       record({
         ref: entry,
         kind: entry.kind,

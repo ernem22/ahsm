@@ -15,6 +15,7 @@ import { mergeHook, readText } from '../src/apply/hook-merger.js';
 import { outcomeLines, planLines } from '../src/render.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
+import type { SkillsAdapter } from '../src/providers/skills-api.js';
 
 const HARNESS = 'claude-code';
 
@@ -81,8 +82,89 @@ function fixture(): Data {
   };
 }
 
-function setup(home: string, results: ConstructorParameters<typeof RecordingRunner>[0] = []) {
-  const runner = new RecordingRunner([
+/** The lockfile entry the skills provider keeps, i.e. the evidence apply and plan verify against. */
+function writeSkillLock(home: string, name: string, source: string): void {
+  const file = path.join(home, '.agents', '.skill-lock.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const lock = fs.existsSync(file)
+    ? (JSON.parse(fs.readFileSync(file, 'utf8')) as { skills: Record<string, { source: string }> })
+    : { skills: {} as Record<string, { source: string }> };
+  lock.skills[name] = { source };
+  fs.writeFileSync(file, JSON.stringify(lock), 'utf8');
+}
+
+/**
+ * The fake `skills` provider really installs: a successful `skills add` writes the lockfile entry that
+ * verification reads. Without it the install leaves no trace and apply must not claim one.
+ */
+function landSkills(argv: string[], home: string): void {
+  if (argv[0] !== 'npx' || argv[1] !== 'skills' || argv[2] !== 'add') return;
+  const source = argv[3] ?? 'unknown/source';
+  const named = argv.indexOf('--skill');
+  const name = named === -1 ? source.replace(/[^\w.-]+/g, '-') : argv[named + 1];
+  if (!name) return;
+  writeSkillLock(home, name, source);
+}
+
+/** A recording runner whose successful `skills add` also writes the lockfile the real provider keeps. */
+class InstallingRunner extends RecordingRunner {
+  constructor(
+    private readonly home: string,
+    results: RunResult[] = [],
+  ) {
+    super(results);
+  }
+
+  override async run(argv: string[]) {
+    const result = await super.run(argv);
+    if (result.code === 0) landSkills(argv, this.home);
+    return result;
+  }
+}
+
+/** The skills-API provider as `providers/skills-api.yaml` declares it: an adapter, no argv. */
+function adapterData(): Data {
+  const data = fixture();
+  data.providers.unshift({
+    id: 'skills-api',
+    kind: 'skill',
+    supports: [HARNESS],
+    requires: ['node'],
+    priority: 1,
+    adapter: 'skills-api',
+    install: [],
+    verify: { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' },
+  });
+  data.items.get('sk')!.skill = 'alpha';
+  return data;
+}
+
+/** A context whose skills API is a stub: the adapter surface is injected, never the network. */
+function adapterContext(home: string, skills: Partial<SkillsAdapter>) {
+  const runner: Runner = {
+    async run(argv: string[]) {
+      return argv.join(' ') === 'node --version'
+        ? { code: 0, stdout: 'v22.1.0', stderr: '' }
+        : { code: 0, stdout: '', stderr: '' };
+    },
+  };
+  const ctx = createContext({
+    root: process.cwd(),
+    home,
+    runner,
+    platform: 'linux',
+    skills: {
+      install: async () => ({ installed: [], failed: [] }),
+      remove: async () => ({ removed: [], notFound: [], failed: [] }),
+      list: async () => [],
+      ...skills,
+    },
+  });
+  return ctx;
+}
+
+function setup(home: string, results: RunResult[] = []) {
+  const runner = new InstallingRunner(home, [
     { code: 0, stdout: 'v22.1.0', stderr: '' },
     { code: 0, stdout: '', stderr: '' },
     { code: 0, stdout: '', stderr: '' },
@@ -188,18 +270,13 @@ test('apply: üç türü yazar, yedek alır, kaydı tutar; ikinci çalıştırma
 
   assert.equal(readState(ctx).state.entries.length, 3);
   assert.ok(fs.existsSync(statePath(ctx)));
+  // The skill provider wrote its lockfile, so the skill really is up-to-date; MCP has not been told yet.
   assert.deepEqual(
     (await readStatus(data, ctx)).rows.map((row) => row.value),
-    ['missing', 'missing', 'up-to-date'],
+    ['up-to-date', 'missing', 'up-to-date'],
   );
 
-  // the owners of the install now report it: lockfile for skills, harness config for MCP
-  fs.mkdirSync(path.join(home, '.agents'), { recursive: true });
-  fs.writeFileSync(
-    path.join(home, '.agents', '.skill-lock.json'),
-    JSON.stringify({ skills: { any: { source: 'owner/repo' } } }),
-    'utf8',
-  );
+  // the harness config now carries the MCP server too
   fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { mc: {} } }), 'utf8');
 
   const replan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk', 'mc', 'hk'] });
@@ -506,7 +583,8 @@ test('already: kayıt var ama skill-lock hedefte yoksa yeniden kurar', async () 
   const installed = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
   await applyPlan(data, ctx, installed);
 
-  // lock dosyası yok → gerçekte kurulu değil
+  // the lockfile entry is gone (the user deleted the skill by hand) → really not installed
+  fs.rmSync(path.join(home, '.agents', '.skill-lock.json'));
   const missing = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
   assert.equal(missing.entries[0]?.action, 'run');
   assert.match(missing.entries[0]?.reason ?? '', /not found/);
@@ -560,19 +638,16 @@ test('status: doğrulanabilen sağlayıcı için gerçeği söyler', async () =>
   const home = tempHome();
   const data = fixture();
   data.providers.find((p) => p.id === 'skills-cli')!.verify = { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' };
-  const { ctx } = setup(home);
+  const { ctx } = setup(home, [{ code: 0, stdout: 'v22.1.0', stderr: '' }, { code: 0, stdout: 'v22.1.0', stderr: '' }]);
 
   await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk', 'mc'] }));
 
+  // the skill file was deleted by hand: the record still lists it, the lockfile no longer does
+  fs.rmSync(path.join(home, '.agents', '.skill-lock.json'));
   const before = (await readStatus(data, ctx)).rows.map((row) => row.value);
   assert.equal(before[0], 'missing', 'lock yok → eksik');
 
-  fs.mkdirSync(path.join(home, '.agents'), { recursive: true });
-  fs.writeFileSync(
-    path.join(home, '.agents', '.skill-lock.json'),
-    JSON.stringify({ skills: { any: { source: 'owner/repo' } } }),
-    'utf8',
-  );
+  await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] }));
   fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { mc: {} } }), 'utf8');
 
   const after = (await readStatus(data, ctx)).rows.map((row) => row.value);
@@ -821,35 +896,24 @@ test('remove: etkilenen skill dizinleri harness tanımından gelir', async () =>
 
 test('adapter: plan/apply/remove skills API üzerinden yürür', async () => {
   const home = tempHome();
-  const data = fixture();
+  const data = adapterData();
   const installed: Array<{ name: string; source?: string; agents: string[] }> = [];
   const removedCalls: Array<{ names: string[]; agents?: string[] }> = [];
-  const skills = {
-    async install({ source, agents }: { source: string; agents: string[] }) {
+  const ctx = adapterContext(home, {
+    async install({ source, agents }) {
+      // The real package writes the lockfile; ours must too, or the install left no trace.
+      writeSkillLock(home, 'alpha', source);
       installed.push({ name: 'alpha', source, agents });
       return { installed: ['alpha'], failed: [] };
     },
-    async remove({ names, agents }: { names: string[]; agents?: string[] }) {
+    async remove({ names, agents }) {
       removedCalls.push({ names, agents });
       return { removed: names, notFound: [], failed: [] };
     },
     async list() {
       return installed;
     },
-  };
-  data.providers.unshift({
-    id: 'skills-api',
-    kind: 'skill',
-    supports: [HARNESS],
-    requires: ['node'],
-    priority: 1,
-    adapter: 'skills-api',
-    install: [],
-    verify: { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' },
   });
-  data.items.get('sk')!.skill = 'alpha';
-  const { ctx: base } = setup(home);
-  const ctx = createContext({ root: process.cwd(), home, runner: base.runner, platform: 'linux', skills });
 
   const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
   assert.equal(plan.entries[0]?.adapter, 'skills-api');
@@ -858,16 +922,12 @@ test('adapter: plan/apply/remove skills API üzerinden yürür', async () => {
   assert.equal((await applyPlan(data, ctx, plan)).items[0]?.status, 'ok');
   assert.equal(installed.length, 1);
 
-  // the provider's lockfile is the plan-time evidence, exactly as the real package keeps it
-  fs.mkdirSync(path.join(home, '.agents'), { recursive: true });
-  fs.writeFileSync(
-    path.join(home, '.agents', '.skill-lock.json'),
-    JSON.stringify({ skills: { alpha: { source: 'owner/repo' } } }),
-    'utf8',
-  );
-
+  // the lockfile the provider just wrote is the plan-time evidence: nothing left to do
   const replan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
   assert.equal(replan.entries[0]?.action, 'already');
+  const stateBefore = fs.readFileSync(statePath(ctx), 'utf8');
+  assert.equal((await applyPlan(data, ctx, replan)).items[0]?.status, 'already');
+  assert.equal(fs.readFileSync(statePath(ctx), 'utf8'), stateBefore, 'ikinci çalıştırma kaydı yeniden yazdı');
 
   const removal = buildRemovePlan(data, ctx);
   assert.equal(removal.entries[0]?.adapter, 'skills-api');
@@ -876,13 +936,130 @@ test('adapter: plan/apply/remove skills API üzerinden yürür', async () => {
   assert.equal(removedCalls[0]?.agents, undefined, 'kaldırma agent filtresi kullanmamalı');
 });
 
-/** Answers by command and keeps a queue per command, so a re-check can answer differently from the first read. */
-function scripted(answers: Record<string, RunResult[]>) {
+test('apply: kurulum komutu 0 dönse de iz bırakmadıysa "installed" denmez ve kaydedilmez', async () => {
+  const home = tempHome();
+  const data = fixture();
+  // Exits 0 without writing anything: the provider claims success, its inventory does not confirm it.
+  const runner = new RecordingRunner([
+    { code: 0, stdout: 'v22.1.0', stderr: '' },
+    { code: 0, stdout: '', stderr: '' },
+  ]);
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+
+  const outcome = await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] }));
+
+  assert.equal(outcome.items[0]?.status, 'error');
+  assert.equal(outcome.items[0]?.message, t.installNotVerified);
+  assert.equal(exitCodeFor(outcome), 1);
+  assert.equal(readState(ctx).state.entries.length, 0, 'kurulmayan öğe kaydedildi');
+  assert.deepEqual((await readStatus(data, ctx)).rows, [], 'kayıt olmayan kurulumu bildirdi');
+});
+
+test('adapter: envanter göstermezse "installed" denmez ve kaydedilmez', async () => {
+  const home = tempHome();
+  const data = adapterData();
+  const ctx = adapterContext(home, {
+    install: async () => ({ installed: ['alpha'], failed: [] }),
+  });
+
+  const outcome = await applyPlan(data, ctx, await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] }));
+
+  assert.equal(outcome.items[0]?.status, 'error');
+  assert.equal(outcome.items[0]?.message, t.installNotVerified);
+  assert.equal(readState(ctx).state.entries.length, 0, 'kurulmayan öğe kaydedildi');
+  assert.equal(fs.existsSync(path.join(home, '.agents', '.skill-lock.json')), false);
+});
+
+test('adapter: "already installed" yalnız envanter doğruladığında söylenir', async () => {
+  const home = tempHome();
+  const data = adapterData();
+  const ctx = adapterContext(home, {
+    install: async () => ({ installed: [], failed: [] }),
+  });
+  const selection = { harnessIds: [HARNESS], itemIds: ['sk'] };
+
+  // Nothing to install and no lockfile entry: the skill is not there, so nothing was "already".
+  const nothing = await applyPlan(data, ctx, await buildPlan(data, ctx, selection));
+  assert.equal(nothing.items[0]?.status, 'error');
+  assert.equal(nothing.items[0]?.message, t.nothingToInstall);
+  assert.equal(exitCodeFor(nothing), 1);
+
+  // The lockfile now lists it: the inventory is the evidence, and the run does not invent a record.
+  writeSkillLock(home, 'alpha', 'owner/repo');
+  const already = await applyPlan(data, ctx, await buildPlan(data, ctx, selection));
+  assert.equal(already.items[0]?.status, 'already');
+  assert.equal(readState(ctx).state.entries.length, 0, 'zaten kurulu öğe bizim kurulumumuz gibi kaydedildi');
+});
+
+test('adapter: elle silinen skill yeniden kurulur', async () => {
+  const home = tempHome();
+  const data = adapterData();
+  const installs: string[] = [];
+  const ctx = adapterContext(home, {
+    install: async ({ source }: { source: string }) => {
+      installs.push(source);
+      writeSkillLock(home, 'alpha', source);
+      return { installed: ['alpha'], failed: [] };
+    },
+  });
+  const selection = { harnessIds: [HARNESS], itemIds: ['sk'] };
+
+  const first = await applyPlan(data, ctx, await buildPlan(data, ctx, selection));
+  assert.equal(first.items[0]?.status, 'ok');
+  assert.equal(readState(ctx).state.entries.length, 1);
+
+  // Deleted by hand: the record still says installed, the inventory no longer does.
+  fs.rmSync(path.join(home, '.agents', '.skill-lock.json'));
+  const missing = await buildPlan(data, ctx, selection);
+  assert.equal(missing.entries[0]?.action, 'run', 'elle silinen skill yeniden kurulmadı');
+
+  const second = await applyPlan(data, ctx, missing);
+  assert.equal(second.items[0]?.status, 'ok');
+  assert.equal(installs.length, 2);
+  assert.ok(fs.existsSync(path.join(home, '.agents', '.skill-lock.json')), 'skill geri gelmedi');
+});
+
+test('adapter: bir harness\'taki hata diğerini durdurmaz, yalnız kurulan kaydedilir', async () => {
+  const home = tempHome();
+  const data = adapterData();
+  data.providers.find((provider) => provider.id === 'skills-api')!.supports = [HARNESS, 'other'];
+  data.harnesses.push({ ...data.harnesses[0]!, id: 'other', label: 'Other', detect: ['~/.other'], agentId: 'other' });
+  const ctx = adapterContext(home, {
+    install: async ({ source, agents }: { source: string; agents: string[] }) => {
+      if (agents[0] === 'other') return { installed: [], failed: [{ skill: 'alpha', message: 'source not found' }] };
+      writeSkillLock(home, 'alpha', source);
+      return { installed: ['alpha'], failed: [] };
+    },
+  });
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
+  const outcome = await applyPlan(data, ctx, plan);
+
+  const failed = outcome.items.find((item) => item.entry.harness === 'other');
+  const installed = outcome.items.find((item) => item.entry.harness === HARNESS);
+  assert.equal(failed?.status, 'error');
+  assert.equal(failed?.message, 'source not found');
+  assert.equal(installed?.status, 'ok', 'diğer harness devam etmedi');
+  assert.equal(exitCodeFor(outcome), 1);
+  assert.deepEqual(
+    readState(ctx).state.entries.map((entry) => entry.harness),
+    [HARNESS],
+    "kayıt yalnız kurulan harness'ı tutmalı",
+  );
+});
+
+/**
+ * Answers by command and keeps a queue per command, so a re-check can answer differently from the first
+ * read. `installsIn` makes its successful `skills add` really install, like `InstallingRunner` does.
+ */
+function scripted(answers: Record<string, RunResult[]>, options: { installsIn?: string } = {}) {
   const calls: string[][] = [];
   const runner: Runner = {
     async run(argv: string[]) {
       calls.push(argv);
-      return answers[argv.join(' ')]?.shift() ?? { code: 0, stdout: '', stderr: '' };
+      const result = answers[argv.join(' ')]?.shift() ?? { code: 0, stdout: '', stderr: '' };
+      if (options.installsIn && result.code === 0) landSkills(argv, options.installsIn);
+      return result;
     },
   };
   return { runner, calls };
@@ -969,7 +1146,7 @@ test('apply: markalanan güncelleme bir kez çalışır, sürüm yeniden okunur,
     ],
     'other --version': [{ code: 0, stdout: '1.5.0', stderr: '' }],
     [HARNESS_UPDATE.join(' ')]: [{ code: 0, stdout: '', stderr: '' }],
-  });
+  }, { installsIn: home });
   const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
   const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
 
@@ -994,7 +1171,7 @@ test('apply: markalanmayan güncelleme çalışmaz, bağımlı öğe bloklanır 
     'claude --version': [{ code: 0, stdout: '1.4.0', stderr: '' }],
     'other --version': [{ code: 0, stdout: '1.5.0', stderr: '' }],
     [HARNESS_UPDATE.join(' ')]: [{ code: 0, stdout: '', stderr: '' }],
-  });
+  }, { installsIn: home });
   const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
   const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
 
@@ -1021,7 +1198,7 @@ test('apply: --update verilmezse eski harness güncellenmez; eksik ön koşul yi
     'claude --version': [{ code: 0, stdout: '1.4.0', stderr: '' }],
     'other --version': [{ code: 0, stdout: '1.5.0', stderr: '' }],
     [HARNESS_UPDATE.join(' ')]: [{ code: 0, stdout: '', stderr: '' }],
-  });
+  }, { installsIn: home });
   const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
   const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
 
@@ -1039,7 +1216,7 @@ test('apply: --update verilmezse eski harness güncellenmez; eksik ön koşul yi
 test('apply: eksik ön koşul işaretsiz de kurulur (bootstrap yolu)', async () => {
   const home = tempHome();
   const data = fixture();
-  const runner = new RecordingRunner([
+  const runner = new InstallingRunner(home, [
     { code: 1, stdout: '', stderr: '' },
     { code: 0, stdout: '', stderr: '' },
     { code: 0, stdout: 'v22.1.0', stderr: '' },
@@ -1138,7 +1315,7 @@ test('apply: kurulamayan harness diğer harness\'ın öğelerini ve diğer ön k
     'claude --version': [{ code: 0, stdout: '2.5.0', stderr: '' }],
     'other --version': [{ code: 1, stdout: '', stderr: '' }],
     'install-other': [{ code: 0, stdout: '', stderr: '' }],
-  });
+  }, { installsIn: home });
   const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
   const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
 
