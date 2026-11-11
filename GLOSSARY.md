@@ -39,6 +39,14 @@ Something that must exist before an installation can succeed: a runtime (Node) o
 CLI.
 _Avoid_: dependency, prerequisite
 
+**Requirement state**:
+The three answers a requirement check gives, the same three `status` gives for a harness: **ready** (a
+usable version was read and it meets the declared minimum), **too old** (a version was read and it is
+below it), **absent** (no usable version was read, so it is bootstrapped). Plan and status print these
+words, and only these; a requirement has no fourth condition and no second name.
+_Avoid_: outdated (banned outright), old, unmet, version-mismatch — and `missing` for a requirement: that
+word belongs to the item states (`up-to-date` / `missing` / `unknown`)
+
 **Installation (kurulum)**:
 The act of making something present, always qualified by its object: harness installation, skill
 installation, MCP installation, hook installation, agentenv installation. There is no separate verb for
@@ -51,7 +59,8 @@ _Avoid_: target, destination, profile
 
 **Record (kayıt)**:
 What agentenv remembers about an installation: item, harness, provider, command, time. It says what we
-did, not what is true now.
+did, not what is true now — which is why an update that reinstalled one stale skill records that command,
+narrowed, and the plan recognises it as the item's own.
 _Avoid_: state (as a concept; `state.json` is just the file), history, log
 
 **Verification (doğrulama)**:

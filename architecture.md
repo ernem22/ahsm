@@ -162,13 +162,13 @@ items: [emil-skills, context7, bash-log]
    yapılır; harness başına ikinci bir yol yok. Bir harness'ın asgari sürümü karşılanmıyorsa satır
    `çok eski` der (status ile aynı sözcük). O ön koşula bağlı öğeler `bloklu` olarak ve sebebiyle
    gösterilir; başka bir harness'ın öğeleri etkilenmez. Hiçbir şey yazılmaz.
-4. **bootstrap** — ön koşullar planın bildirdiği iki duruma göre ele alınır: **eksik** (check kullanılabilir
-   sürüm üretmedi) her zaman platform komutuyla bir kez kurulur; **eski** (sürüm okundu ama `check.min`in
-   altında) yalnız kullanıcı işaretlediyse güncellenir. Kurulumdan sonra sürüm yeniden check edilir.
-   `apply --yes` varsayılanı hiçbir eski ön koşulu işaretlemez; `--update <id,id>` yalnız adı geçenleri,
-   `--update all` bütün teklifleri işaretler, `--update none` hiçbirini. İşaretlenmeyen eski ön koşul
-   güncellenmez, bağımlı öğeler sebebiyle birlikte `hata` olarak raporlanır; eksikler, diğer harness'lar ve
-   engellenmemiş öğeler devam eder.
+4. **bootstrap** — ön koşullar planın bildirdiği iki duruma göre ele alınır: **yok** (`absent`: check
+   kullanılabilir sürüm üretmedi) her zaman platform komutuyla bir kez kurulur; **çok eski** (`too-old`:
+   sürüm okundu ama `check.min`in altında) yalnız kullanıcı işaretlediyse güncellenir. Kurulumdan sonra sürüm yeniden check edilir.
+   `apply --yes` varsayılanı hiçbir çok eski ön koşulu işaretlemez; `--update <id,id>` yalnız adı geçenleri,
+   `--update all` bütün teklifleri işaretler, `--update none` hiçbirini. İşaretlenmeyen çok eski ön koşul
+   güncellenmez, bağımlı öğeler sebebiyle birlikte `hata` olarak raporlanır; yok olanlar, diğer harness'lar
+   ve engellenmemiş öğeler devam eder.
 5. **apply** — sıralı uygulama; her hook yazımından önce hedef dosya, bozuk `state.json` kaydından önce
    o dosya yedeklenir. Sonuç satırı: `kuruldu` / `zaten kurulu` / `kapsanmıyor` / `hata`. Skill kurulumu
    yükleyicinin sözüyle bitmez: komut 0 dönse de (ya da adaptör "kuruldu" dese de) sağlayıcının envanteri
@@ -258,10 +258,12 @@ harness tanımında kalır.
   `bilinmiyor` olması, kontrol hiç bitmezse `bilinmiyor`, hash kayıtlı değilse karşılaştırma yapılmaması
   ve bozuk `state.json`ın sonucu değiştirmemesi. Ağsız bir `check` "kaynağa ulaşılamıyor" demektir; bu,
   `bilinmiyor`un gerçek senaryosudur.
-- `node scripts/e2e-update.mjs` — `update` için ayrı, ağsız dört senaryo (`npm run e2e`'ye bağlı): bayat
+- `node scripts/e2e-update.mjs` — `update` için ayrı, ağsız beş senaryo (`npm run e2e`'ye bağlı): bayat
   skill yokken hiçbir şey yapmaması ve ağacın değişmemesi, planın bayat skill'i kurulum satırı olarak
   göstermesi ve hiçbir şey yazmaması, `--yes` ile skill'in gerçekten bir kez kurulması (elle silinen dosya
-  geri gelir) ve işaretsiz MCP öğesine dokunulmaması, ardından `status`un `güncel` demesi.
+  geri gelir) ve işaretsiz MCP öğesine dokunulmaması, ardından `status`un `güncel` demesi, son olarak
+  kaynak seviyesindeki öğenin (adlandırılmış skill'i olmayan) yalnız bayat skill adıyla kurulması ve taze
+  kardeşinin yeniden kurulmaması.
 - `node scripts/e2e-remove.mjs` — `remove` için ayrı, ağsız beş senaryo (`npm run e2e`'ye bağlı): planın
   etkilenen harness'ları ve dizinleri onaydan önce göstermesi ve hiçbir şey yazmaması, `--yes` ile her
   kayıtlı öğenin kalkması ve kaydın boşalması, agentenv'in kurmadığı skill'in adıyla kaldırılması (kayıt
@@ -367,7 +369,14 @@ plugin/keşif işi geldiğinde geçerli olacak.
 - MCP sırları (`${VAR}` → `add-mcp --env KEY=${VAR}`) henüz uygulanmadı; öğe tanımında env alanı yok.
 - `status` üç durum bilir (`güncel` / `eksik` / `bilinmiyor`); kayıtlı ama komutu değişmiş hook `eksik`
   sayılır — ayrı bir "farklı" durumu yok. Harness bölümü ayrı bir ölçek kullanır (`hazır` / `çok eski` /
-  `yok`): "eski" bir algılama hatası değildir, karşılanmamış bir ön koşuldur. Sürüm okunamazsa satır
-  `sürüm bilinmiyor` der ve asgari varsa `çok eski` sayılır.
+  `yok`); `plan` ön koşul satırları **aynı** üç sözcüğü ve aynı `harnessLabels` etiketlerini kullanır
+  (`ready` / `too-old` / `absent`) — "ön koşul için eksik/eski" diye ikinci bir ad yok, `outdated` sözcüğü
+  GLOSSARY'de yasaklı. `çok eski` bir algılama hatası değildir, karşılanmamış bir ön koşuldur. Sürüm
+  okunamazsa satır `sürüm bilinmiyor` der ve asgari varsa `çok eski` sayılır.
+- `update` daraltılmış kurulum yapar, kayıt da **gerçekten çalışan** argv'yi tutar: öğenin kurulum
+  komutunun tek skill'e daraltılmış hâli (adaptörde `['skills-api', kaynak, skill]` parmak izi). `plan`
+  böyle bir kaydı öğenin kendi kapsamı sayar: şablonun `{skill}` yerine bir değer koyarak üretebildiği her
+  argv eşleşir. Aksi hâlde güncellenmiş öğe her `plan`da yeniden kurulum görünür ve bir sonraki `apply`
+  tüm kaynağı yeniden kurardı. Kayıt hâlâ kanıt değildir: "var mı" sorusunu yalnız `verify` yanıtlar (ADR-0002).
 - Dosya erişimi `Ctx` üzerinden enjekte edilmiyor: `plan` hedef dosyayı okuyor, testler geçici HOME ile
   bunu gerçek dosya sistemi üzerinden doğruluyor.
