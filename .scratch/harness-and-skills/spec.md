@@ -102,8 +102,10 @@ MCP and hook freshness stay untouched in this slice; plugins and discovery stay 
   itself reuses the install path and the existing record.
 - **Listing reads the provider's inventory**, so skills installed by the CLI outside agentenv appear
   too; the record is only used for what we did (ADR-0002).
-- **Removal keeps its current shape** (all-harness, affected paths first, record cleaned) and gains
-  nothing new; "list" and "remove" share the inventory read.
+- **Removal keeps its shape** (all-harness, affected paths first, record cleaned) and answers both cases
+  with the same rules: the items the record holds, and a skill the user names (`--skill <name>`) that
+  agentenv may never have installed. `list` and `remove` share the inventory read, and what a removal
+  could not take out is reported while the rest continues.
 - **Phase gate**: each phase lands with its own tests and an end-to-end scenario before the next begins.
   The tracker holds the order; a phase is not started while the previous one is unsettled.
 
