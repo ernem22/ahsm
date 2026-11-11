@@ -451,3 +451,37 @@ test('update: tek skill adlandıran öğe yalnız o skill i eşler, kaynak seviy
   );
   assert.deepEqual(outcome.items.map((item) => item.status), ['ok', 'ok']);
 });
+
+test('update: kaynak seviyesindeki öğe skills API adaptöründe de yalnız bayat skill i kurar', async () => {
+  const home = tempHome();
+  const runner = new UpdateRunner(home, ['alpha']);
+  const data = withSourceLevel();
+  data.providers.unshift({
+    id: 'skills-api',
+    kind: 'skill',
+    supports: [CLAUDE, CODEX],
+    requires: ['node'],
+    priority: 1,
+    adapter: 'skills-api',
+    verify: { strategy: 'skill-lock', file: '~/.agents/.skill-lock.json' },
+  });
+  const installs: Array<{ source: string; skills?: string[]; agents: string[] }> = [];
+  const { ctx } = context(home, runner, {
+    async install({ source, skills, agents }) {
+      writeLock(home, { alpha: lockEntry(source) });
+      installs.push({ source, skills, agents });
+      return { installed: ['alpha'], failed: [] };
+    },
+  });
+  recordInstall(ctx, 'skill-all', CLAUDE, 'alpha');
+  writeLock(home, { alpha: lockEntry('fixture/all'), beta: lockEntry('fixture/all') });
+
+  const update = await buildUpdatePlan(data, ctx);
+
+  assert.equal(update.plan.entries[0]?.adapter, 'skills-api');
+  assert.deepEqual(update.plan.entries[0]?.skills, ['alpha'], 'adaptör çağrısı tek skill adı taşımalı');
+  const outcome = await applyPlan(data, ctx, update.plan);
+
+  assert.equal(outcome.items[0]?.status, 'ok');
+  assert.deepEqual(installs, [{ source: 'fixture/all', skills: ['alpha'], agents: [CLAUDE] }], 'adaptör tüm kaynağı kurmamalı');
+});
