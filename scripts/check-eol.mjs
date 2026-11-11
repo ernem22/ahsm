@@ -5,6 +5,9 @@
  * up as a diff that is not a change. This reads git's own report (`git ls-files --eol`), so it costs
  * one git call and never scans file contents itself.
  *
+ * A worktree file that differs from the index only in EOL shows as ` M` in `git status` with an empty
+ * `git diff` — exactly the state this guardrail exists to kill.
+ *
  * Only `w/crlf` fails: the index being CRLF (`i/crlf`) is reported by git as the other direction and
  * is what `git add --renormalize .` fixes, so it must not fail here.
  */
