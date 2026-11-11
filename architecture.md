@@ -31,7 +31,8 @@ Değer kurulum yapmakta değil, üç türü tek pakette birleştirmekte ve tek d
   `state.json`, yazılmadan önce yedeklenir; skills/MCP dosyalarını sağlayıcı yazar.
 - Skills ve MCP dosyalarını agentenv yazmaz (sağlayıcı yazar); hook birleştirmesi bizim.
 - Doğrulama hızlı kaynaktan okunur: skills için lockfile (~1 ms), MCP için harness config'i. `listSkills()`
-  plan için kullanılmaz — 103 skill'de ~7 s sürüyor; API kurulum/kaldırma yolunda kullanılır.
+  plan için kullanılmaz — 103 skill'de ~7 s sürüyor; API kurulum/kaldırma yolunda ve yalnız açık `list`
+  komutunda kullanılır. `plan` ve `status` onu hiç çağırmaz.
 - Kapsam bugün sağlayıcı komutunda sabit (`-g` = kullanıcı seviyesi); proje kapsamı açılınca
   `{scope}` değişkeni olarak plana girer, ayrı kod yolu açılmaz.
 - Sıralı uygulama hatada durmaz: başarısız öğe `hata` olarak raporlanır, kalanlar devam eder.
@@ -50,7 +51,7 @@ packages/*.yaml     isimli paketler (note, link, items[])
 harnesses/*.yaml    harness tanımları
 providers/*.yaml    sağlayıcı tanımları (kind, supports, argv şablonları)
 requires/*.yaml     ön koşullar (check + platform kurulum komutu)
-src/core/           detect, plan, apply, remove, state, status, verify
+src/core/           detect, plan, apply, remove, state, status, verify, list
 src/apply/          hook-merger + config-writer (tek yerli yazıcı)
 src/providers/      skills-api adaptörü (in-process, `skills` paketi)
 src/context.ts      Ctx, Runner (gerçek + kayıt eden), argv genişletme
@@ -187,6 +188,13 @@ items: [emil-skills, context7, bash-log]
      plana girmiyor.
 
    İki bölüm de tek biçimlendiriciden (`src/render.ts`) geçer; CLI satırı yazar, TUI tonu renge çevirir.
+8. **list** — açık komut (`agentenv list`, `src/core/list.ts`): sağlayıcının kendi envanteri (`listSkills`)
+   okunur ve satır başına skill adı, kapsam ve o skill'i taşıyan harness'lar yazılır. Kaynak envanter
+   olduğu için agentenv dışında (elle, başka bir CLI'yla) kurulmuş skill'ler de görünür; hiçbir harness'ın
+   bildirmediği skill `no harness reports it` olarak yine listelenir, tanımsız sağlayıcı ajanı kendi adıyla
+   görünür. Kayıt okunmaz (ADR-0002) ve hiçbir şey yazılmaz: bozuk `state.json` listeyi değiştirmez, yedek
+   bile alınmaz ve hiçbir komut çalıştırılmaz. Kapsam bugün yalnız kullanıcı seviyesidir (sağlayıcı `-g`),
+   satır bunu söyler. Envanter yavaş olduğu için bu okuma `plan`/`status`'a girmez — `list` tek kapıdır.
 
 ## Skill hedefleri ortak
 
@@ -205,6 +213,10 @@ harness tanımında kalır.
   çalıştırıp aynı çalıştırmada öğeleri kurması, bu platformda kurulum komutu olmayan tanımın plan ve
   apply'da `no install command` demesi, kurulamayan bir harness'ın diğer harness'ın öğelerini
   bırakmaması ve hiçbir şey yazmayan bir skill kurulumunun `kuruldu` sayılmaması.
+- `node scripts/e2e-list.mjs` — `list` için ayrı, ağsız dört senaryo (henüz `npm run check`'e bağlı değil):
+  elle kurulmuş skill'in adı ve kapsamıyla görünmesi, hiçbir şey yazmaması, bozuk `state.json` ile
+  çalışmaya devam etmesi ve `plan`/`status`'un envanteri hiç okumaması. Envanter makinenin gerçek
+  `~/.agents` deposunu da okuduğu için bu senaryolar tam liste yerine davranışı doğrular.
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 
@@ -244,7 +256,12 @@ plugin/keşif işi geldiğinde geçerli olacak.
 - Harness sürümü harness'ın **kendi CLI'sına** sorulur (`claude --version`); agentenv yazmaz, ama CLI
   kendi önbelleğini oluşturabilir (ör. `opencode` ilk çalıştırmada `~/.cache/opencode`, `~/.local/state`).
   `status`'un "yazmaz" garantisi agentenv'in kendi dosyaları içindir.
-- Proje kapsamı bugün kapalı: iki sağlayıcı da `-g` alır, yani yalnız kullanıcı seviyesine yazar.
+- Proje kapsamı bugün kapalı: iki sağlayıcı da `-g` alır, yani yalnız kullanıcı seviyesine yazar. `list`
+  de envanteri yalnız kullanıcı kapsamında okur; adaptör satır başına kapsam vermediği için her satır `user`
+  der. Proje kapsamı açılınca kapsam satır başına adaptörden gelir, ayrı kod yolu açılmaz.
+- `list`, harness tanımlarında `agentId`si olmayan sağlayıcı ajanlarını harness'a çeviremez; onları
+  sağlayıcının kendi adıyla gösterir (ör. `hermes-agent`). Bunlar agentenv'in yönetmediği harness'lardır —
+  listenin kendisi de zaten yalnız agentenv'in kurduklarıyla sınırlı değildir.
 - `status`/`plan` bir kurulumu yalnız sağlayıcının kendi envanteri doğruluyorsa "kurulu" sayar; `verify`
   tarifi olmayan sağlayıcıda `bilinmiyor` der ve plan öğeyi yeniden kurar.
 - `skill-lock` doğrulaması harness'e göre ayırmaz: lockfile'da hangi harness için kurulduğu yazmaz

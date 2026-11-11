@@ -8,8 +8,9 @@ import { buildPlan, type Plan, type PlanAction } from './core/plan.js';
 import { resolveSelection } from './core/selection.js';
 import { applyRemovePlan, buildRemovePlan } from './core/remove.js';
 import { readStatus } from './core/status.js';
+import { readSkillInventory } from './core/list.js';
 import { t } from './i18n.js';
-import { outcomeLines, planLines, removeOutcomeLines, removePlanLines, statusLines } from './render.js';
+import { listLines, outcomeLines, planLines, removeOutcomeLines, removePlanLines, statusLines } from './render.js';
 import type { Data } from './types.js';
 
 /** `AGENTENV_ROOT` points the CLI at another data root (fixtures, e2e sandboxes). */
@@ -31,6 +32,12 @@ function printOutcome(outcome: ApplyOutcome): void {
 async function printStatus(data: Data, ctx: Ctx): Promise<void> {
   const report = await readStatus(data, ctx);
   for (const line of statusLines(report)) console.log(line.text);
+}
+
+/** `agentenv list`: an explicit, read-only read of the provider's inventory (never plan or status). */
+async function printInventory(data: Data, ctx: Ctx): Promise<void> {
+  const report = await readSkillInventory(data, ctx);
+  for (const line of listLines(report)) console.log(line.text);
 }
 
 function valueOf(argv: string[], flag: string): string | undefined {
@@ -105,6 +112,11 @@ ${t.removeTitle}`);
 
   if (command === 'status') {
     await printStatus(data, ctx);
+    return;
+  }
+
+  if (command === 'list') {
+    await printInventory(data, ctx);
     return;
   }
 

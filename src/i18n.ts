@@ -3,6 +3,7 @@ import type { ApplyStatus } from './core/apply.js';
 import type { RemoveAction } from './core/remove.js';
 import type { PlanAction } from './core/plan.js';
 import type { HarnessStatus, StatusValue } from './core/status.js';
+import type { InventoryScope } from './core/list.js';
 
 /**
  * All user-facing strings live here, in English. Swapping in another locale means adding a second
@@ -45,6 +46,13 @@ export const t = {
   applyHint: 'to run it: agentenv apply --yes (add --update <ids|all> to mark outdated prerequisites; default: none)',
   statusEmpty: 'record is empty — nothing installed yet',
   itemsTitle: 'items',
+  skillsTitle: 'skills (provider inventory)',
+  /** Scope is asked for one level at a time; the row says which one it answers. */
+  scopeLabels: { user: 'user' } as Record<InventoryScope, string>,
+  listEmpty: 'the provider inventory reports no installed skill',
+  listNoHarness: 'no harness reports it',
+  listCount: (count: number) => `${count} skill(s) — inventory read only, nothing written`,
+  listHint: 'agentenv list reads the skills provider inventory; it never writes and does not depend on the record',
   harnessLabels: {
     ready: 'ready',
     'too-old': 'too old',
@@ -126,6 +134,7 @@ export const t = {
     'agentenv plan [--package id]          print the plan only',
     'agentenv apply --yes [--package id]   apply the plan (--update <ids|all> marks outdated prerequisites; default: none)',
     'agentenv status                       show what is installed',
+    'agentenv list                         list every skill the provider inventory reports (read-only)',
     'agentenv remove [--package id]        remove every recorded item (all harnesses)',
     '',
     'flags: --package <id> (default: the package marked default) · --harness <id,id>',

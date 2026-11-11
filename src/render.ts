@@ -2,6 +2,7 @@ import { t } from './i18n.js';
 import type { ApplyOutcome } from './core/apply.js';
 import type { HarnessStatus, HarnessStatusRow, StatusReport } from './core/status.js';
 import type { RemoveOutcome, RemovePlan } from './core/remove.js';
+import type { SkillInventoryReport } from './core/list.js';
 import { requirementState, type Plan, type PlanAction, type PlanRequirement } from './core/plan.js';
 
 export type Tone = 'normal' | 'dim' | 'error' | 'warning';
@@ -125,6 +126,28 @@ export function removeOutcomeLines(outcome: RemoveOutcome): Line[] {
       tone: result.status === 'error' ? 'error' : 'normal',
     });
   }
+  return lines;
+}
+
+/**
+ * The one listing formatter: name, scope, and the harnesses the provider says carry each skill,
+ * including skills agentenv never installed. A skill no harness reports is still listed.
+ */
+export function listLines(report: SkillInventoryReport): Line[] {
+  const lines: Line[] = [{ text: t.skillsTitle, tone: 'dim' }];
+  if (report.rows.length === 0) {
+    lines.push({ text: t.listEmpty, tone: 'dim' });
+    return lines;
+  }
+  for (const row of report.rows) {
+    const carriers = [...row.harnesses, ...row.otherAgents];
+    const source = row.source ? ` [${row.source}]` : '';
+    lines.push({
+      text: `${t.scopeLabels[row.scope]}  ${row.name}${source} → ${carriers.length > 0 ? carriers.join(', ') : t.listNoHarness}`,
+      tone: 'normal',
+    });
+  }
+  lines.push({ text: t.listCount(report.rows.length), tone: 'dim' });
   return lines;
 }
 
