@@ -191,7 +191,8 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan, options: Apply
       try {
         const outcome = await ctx.skills.install({
           source: item.source,
-          skills: item.skill ? [item.skill] : undefined,
+          // The entry may narrow a source-level item to the skills an update is about.
+          skills: entry.skills ?? (item.skill ? [item.skill] : undefined),
           agents: [harness.agentId ?? harness.id],
         });
         if (outcome.failed.length > 0) {

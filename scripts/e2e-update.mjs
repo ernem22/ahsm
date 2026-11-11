@@ -55,9 +55,9 @@ function sandbox() {
 }
 
 /** The lockfile entry the real provider keeps: source plus the hash and path `stale` compares with. */
-function recorded(name) {
+function recorded(name, source = 'fixture/skills') {
   return {
-    source: 'fixture/skills',
+    source,
     sourceType: 'github',
     skillPath: `skills/${name}/SKILL.md`,
     skillFolderHash: HASH,
@@ -171,6 +171,33 @@ check('update --yes sonrası status gerçekle aynı fikirde', () => {
   assert(skillRows[0].startsWith(t.statusLabels['up-to-date']), `status güncel demiyor: ${skillRows[0]}`);
   const record = JSON.parse(fs.readFileSync(path.join(home, '.agentenv', 'state.json'), 'utf8'));
   assert(record.entries.filter((entry) => entry.itemId === 'skill-a').length === 1, 'kayıt tazelenmedi/çoğaldı');
+});
+
+// The real catalogue's skill items are source-level (`source:` and no `skill:`), while the stale rows are
+// the individual skills that source holds. The update must map one to the other and install only the skill
+// the provider marked, never the whole source again.
+check('update: kaynak seviyesindeki öğe yalnız bayat skill adıyla kurulur', () => {
+  const home = sandbox();
+  const install = run(home, ['apply', '--yes', '--package', 'group']);
+  assert(install.code === 0, `apply ${install.code} ile çıktı: ${install.out}`);
+  const skills = path.join(home, '.fake', 'skills');
+  fs.rmSync(skills, { recursive: true, force: true });
+  writeLock(home, { alpha: recorded('alpha', 'fixture/group'), beta: recorded('beta', 'fixture/group') });
+  markUpstream(home, 'alpha');
+
+  const before = treeHash(home);
+  const planned = run(home, ['update']);
+  assert(planned.code === 0, `update ${planned.code} ile çıktı: ${planned.out}`);
+  assert(planned.out.includes('skill-group/alpha'), `plan satırı skill adını taşımıyor: ${planned.out}`);
+  assert(planned.out.includes(t.updateCount(1, 1)), `özet satırı yok: ${planned.out}`);
+  assert(treeHash(home) === before, 'plan hiçbir şey yazmamalıydı');
+
+  const { code, out } = run(home, ['update', '--yes']);
+  assert(code === 0, `update --yes ${code} ile çıktı: ${out}`);
+  assert(out.includes(`${t.applyLabels.ok}  skill-group/alpha → fake`), `kurulum satırı yok: ${out}`);
+  assert((out.match(new RegExp(`^${t.applyLabels.ok}`, 'gm')) ?? []).length === 1, `tek kurulum değil: ${out}`);
+  assert(fs.existsSync(path.join(skills, 'alpha.md')), 'bayat skill kurulmadı — kurulum yolu çalışmadı');
+  assert(!fs.existsSync(path.join(skills, 'beta.md')), 'taze skill yeniden kuruldu');
 });
 
 if (failures > 0) {

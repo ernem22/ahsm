@@ -361,3 +361,93 @@ test('update: biçimlendirici planı ve sonucu skill + harness olarak yazar', as
   const done = updateOutcomeLines(update, await applyPlan(data, ctx, update.plan)).map((line) => line.text);
   assert.ok(done.includes(`${t.applyLabels.ok}  skill-a → claude-code`), done.join('\n'));
 });
+
+/** The same data plus a source-level item: it names no skill, so it owns every skill its source holds. */
+function withSourceLevel(id = 'skill-all', source = 'fixture/all'): Data {
+  const data = fixture();
+  data.items.set(id, { id, kind: 'skill' as const, source, targets: '*' as const });
+  return data;
+}
+
+test('update: kaynak seviyesindeki öğe bayat skill adıyla kurulur, taze olan yeniden kurulmaz', async () => {
+  const home = tempHome();
+  const runner = new UpdateRunner(home, ['alpha']);
+  const { ctx, advance } = context(home, runner);
+  const data = withSourceLevel();
+  recordInstall(ctx, 'skill-all', CLAUDE, 'alpha');
+  writeLock(home, { alpha: lockEntry('fixture/all'), beta: lockEntry('fixture/all') });
+
+  const update = await buildUpdatePlan(data, ctx);
+
+  assert.deepEqual(
+    update.plan.entries.map((entry) => [entry.itemId, entry.skills, entry.harness]),
+    [['skill-all', ['alpha'], CLAUDE]],
+    'bayat skill kaynağındaki öğeye eşlenmedi',
+  );
+  // The entry carries the skill name, so the provider installs that one skill and not the whole source.
+  assert.deepEqual(update.plan.entries[0]?.command, ['npx', 'skills', 'add', 'fixture/all', '-g', '-a', CLAUDE, '--skill', 'alpha']);
+
+  advance();
+  const outcome = await applyPlan(data, ctx, update.plan);
+
+  assert.deepEqual(outcome.items.map((item) => item.status), ['ok']);
+  assert.equal(runner.installs.length, 1, 'yalnız bayat skill kurulmalı');
+  assert.ok(runner.installs[0]?.includes('alpha'), 'bayat skill kurulmadı');
+  assert.ok(!runner.installs[0]?.includes('beta'), 'taze skill yeniden kuruldu');
+  assert.equal(recordedAt(ctx, 'skill-all', CLAUDE), T1, 'kayıt tazelenmedi');
+});
+
+test('update: aynı kaynak seviyesindeki öğenin iki bayat skill i ayrı ayrı kurulur', async () => {
+  const home = tempHome();
+  const runner = new UpdateRunner(home, ['alpha', 'beta']);
+  const { ctx } = context(home, runner);
+  const data = withSourceLevel();
+  recordInstall(ctx, 'skill-all', CLAUDE, 'alpha');
+  writeLock(home, { alpha: lockEntry('fixture/all'), beta: lockEntry('fixture/all') });
+
+  const update = await buildUpdatePlan(data, ctx);
+  const outcome = await applyPlan(data, ctx, update.plan);
+
+  assert.deepEqual(
+    update.plan.entries.map((entry) => [entry.itemId, entry.skills]),
+    [
+      ['skill-all', ['alpha']],
+      ['skill-all', ['beta']],
+    ],
+    'her bayat skill kendi girdisini almalı',
+  );
+  assert.deepEqual(outcome.items.map((item) => item.status), ['ok', 'ok'], 'sonuç skill başına olmalı');
+  assert.deepEqual(
+    runner.installs.map((argv) => argv[argv.indexOf('--skill') + 1]),
+    ['alpha', 'beta'],
+    'her bayat skill bir kez kurulmalı',
+  );
+});
+
+test('update: tek skill adlandıran öğe yalnız o skill i eşler, kaynak seviyesindeki öğe gerisini alır', async () => {
+  const home = tempHome();
+  const runner = new UpdateRunner(home, ['alpha', 'beta']);
+  const { ctx } = context(home, runner);
+  const data = withSourceLevel('skill-all', 'fixture/skills');
+  data.items.delete('skill-b');
+  recordInstall(ctx, 'skill-a', CLAUDE, 'alpha');
+  recordInstall(ctx, 'skill-all', CLAUDE, 'beta');
+  writeLock(home, { alpha: lockEntry('fixture/skills'), beta: lockEntry('fixture/skills') });
+
+  const update = await buildUpdatePlan(data, ctx);
+  const outcome = await applyPlan(data, ctx, update.plan);
+
+  assert.deepEqual(
+    update.plan.entries.map((entry) => [entry.itemId, entry.skills]),
+    [
+      ['skill-a', undefined],
+      ['skill-all', ['beta']],
+    ],
+    'adlandırılmış öğe adıyla, kaynak seviyesindeki öğe kaynağıyla eşleşmeli',
+  );
+  assert.deepEqual(
+    runner.installs.map((argv) => argv[argv.indexOf('--skill') + 1]),
+    ['alpha', 'beta'],
+  );
+  assert.deepEqual(outcome.items.map((item) => item.status), ['ok', 'ok']);
+});

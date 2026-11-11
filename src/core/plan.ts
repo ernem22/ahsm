@@ -2,7 +2,7 @@ import { expandArgs, type Ctx } from '../context.js';
 import { mergeHook, readText, type HookEntry } from '../apply/hook-merger.js';
 import { hookTarget, type HookTarget } from '../apply/hook-target.js';
 import { t } from '../i18n.js';
-import type { Data, ItemDef, Kind, ProviderDef, RequirementDef, Selection } from '../types.js';
+import type { Data, HarnessDef, ItemDef, Kind, ProviderDef, RequirementDef, Selection } from '../types.js';
 import { requiredIds } from './entry.js';
 import { pickProvider } from './providers.js';
 import { checkRequirement } from './requirements.js';
@@ -18,6 +18,12 @@ export interface PlanEntry {
   providerId?: string;
   action: PlanAction;
   command?: string[];
+  /**
+   * The item's skills this entry installs, when the plan was narrowed to some of them: `update` knows
+   * which installed skills the provider marked stale, and a source-level item would otherwise reinstall
+   * its whole source. Absent means the item's own scope (`skill`, or the entire source).
+   */
+  skills?: string[];
   /** Set when a built-in adapter performs the work instead of a shell command. */
   adapter?: 'skills-api';
   /** Human description of what an adapter will do (no argv to show). */
@@ -64,6 +70,51 @@ export interface Plan {
 
 export function itemTargets(item: ItemDef, harnessId: string): boolean {
   return item.targets === '*' || item.targets.includes(harnessId);
+}
+
+/** The fingerprint the skills adapter records: the source and which skill of it (or the whole source). */
+function adapterRecord(item: ItemDef, skill: string | undefined): string[] {
+  return ['skills-api', item.source ?? item.id, skill ?? '*'];
+}
+
+/** What the adapter will do, in words: an adapter entry has no argv to show. */
+function adapterVia(item: ItemDef, skill: string | undefined, harness: HarnessDef): string {
+  return `skills-api → ${item.source}${skill ? ` (${skill})` : ''} → ${harness.agentId ?? harness.id}`;
+}
+
+/** The argv the provider runs for this item; `{skill}` is the item's own skill unless one is named. */
+function installArgv(provider: ProviderDef, item: ItemDef, harness: HarnessDef, ctx: Ctx, skill = item.skill): string[] {
+  return expandArgs(provider.install ?? [], {
+    source: item.source,
+    skill,
+    package: item.package ?? item.url,
+    agentId: harness.agentId ?? harness.id,
+    harness: harness.id,
+    item: item.id,
+    root: ctx.root,
+  });
+}
+
+/**
+ * The install entry for one skill of an item. An item that already names one skill needs no narrowing —
+ * its own scope is that skill. A source-level item would otherwise reinstall everything its source
+ * holds, so the names ride on the entry itself (`skills`): the catalogue model stays as it is and
+ * `apply` still runs the same provider argv, only with `{skill}` filled in.
+ */
+export function narrowToSkill(data: Data, ctx: Ctx, entry: PlanEntry, skill: string): PlanEntry {
+  if (entry.kind !== 'skill') return entry;
+  const item = data.items.get(entry.itemId);
+  const harness = data.harnesses.find((candidate) => candidate.id === entry.harness);
+  if (!item || !harness || item.skill) return entry;
+  const provider = data.providers.find((candidate) => candidate.id === entry.providerId);
+  const narrowed: PlanEntry = { ...entry, skills: [skill] };
+  if (provider?.adapter === 'skills-api') {
+    narrowed.record = adapterRecord(item, skill);
+    narrowed.via = adapterVia(item, skill, harness);
+  } else if (provider?.install?.length) {
+    narrowed.command = installArgv(provider, item, harness, ctx, skill);
+  }
+  return narrowed;
 }
 
 /**
@@ -134,7 +185,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
       }
 
       if (provider.adapter === 'skills-api') {
-        const record = ['skills-api', item.source ?? item.id, item.skill ?? '*'];
+        const record = adapterRecord(item, item.skill);
         const recordedEntry = findEntry(state, itemId, harnessId);
         const matchesRecord = Boolean(recordedEntry && sameCommand(recordedEntry.command, record));
         // The lockfile answers in milliseconds; listSkills() scans every skill dir (~7s for 103).
@@ -143,22 +194,14 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
           ...base,
           action: matchesRecord && present ? 'already' : 'run',
           adapter: 'skills-api',
-          via: `skills-api → ${item.source}${item.skill ? ` (${item.skill})` : ''} → ${harness.agentId ?? harness.id}`,
+          via: adapterVia(item, item.skill, harness),
           record,
           reason: present ? t.recordedInstalled : undefined,
         });
         continue;
       }
 
-      const command = expandArgs(provider.install ?? [], {
-        source: item.source,
-        skill: item.skill,
-        package: item.package ?? item.url,
-        agentId: harness.agentId ?? harness.id,
-        harness: harness.id,
-        item: item.id,
-        root: ctx.root,
-      });
+      const command = installArgv(provider, item, harness, ctx);
       const recorded = findEntry(state, itemId, harnessId);
       const matchesRecord = Boolean(recorded && sameCommand(recorded.command, command));
 

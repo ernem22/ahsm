@@ -24,3 +24,8 @@ mark.
   writes nothing (unit test snapshots the sandbox tree).
 - A stale skill with no catalogue item, no record, or a harness this data root does not define is reported
   with its reason instead of being dropped; the provider offering no `check` reports "not covered".
+- A stale row is matched to its item by scope: an item naming one skill (`skill:`) owns only that skill,
+  and an item naming none (a source-level item, the shape the catalogue mostly uses) owns every skill its
+  `source` holds. A source-level item is then narrowed per entry (`PlanEntry.skills`), so the install
+  carries that skill's name (`{skill}` / the adapter's `skills`) instead of reinstalling the whole source;
+  one entry per stale skill keeps the results per skill even when two of them share an item.

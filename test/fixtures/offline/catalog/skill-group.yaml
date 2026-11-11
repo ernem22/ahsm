@@ -1,0 +1,5 @@
+id: skill-group
+kind: skill
+source: fixture/group
+targets: "*"
+note: "offline source-level skill item (names no single skill)"

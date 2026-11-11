@@ -5,7 +5,7 @@ import type { RemoveOutcome, RemovePlan } from './core/remove.js';
 import type { SkillInventoryReport } from './core/list.js';
 import type { StaleReport } from './core/stale.js';
 import type { UpdatePlan } from './core/update.js';
-import { requirementState, type Plan, type PlanAction, type PlanRequirement } from './core/plan.js';
+import { requirementState, type Plan, type PlanAction, type PlanEntry, type PlanRequirement } from './core/plan.js';
 
 export type Tone = 'normal' | 'dim' | 'error' | 'warning';
 
@@ -15,6 +15,14 @@ export interface Line {
 }
 
 const ACTION_MARK: Record<PlanAction, string> = { run: '+', already: '=', unsupported: '!', error: '!' };
+
+/**
+ * What an entry installs, in one word: an entry narrowed to some of an item's skills names them, so two
+ * rows for one source-level item stay apart and a per-skill result says which skill it is about.
+ */
+function entryName(entry: PlanEntry): string {
+  return entry.skills?.length ? `${entry.itemId}/${entry.skills.join(',')}` : entry.itemId;
+}
 
 /** An unmet requirement either names the command we would run or says there is none on this platform. */
 function requirementOffer(requirement: PlanRequirement): string {
@@ -34,7 +42,7 @@ export function planLines(plan: Plan): Line[] {
     // A blocked entry keeps its action but is reported as blocked: apply still has the final word.
     const blocked = entry.blockedBy !== undefined;
     lines.push({
-      text: `${blocked ? '!' : ACTION_MARK[entry.action]} ${entry.itemId} → ${entry.harness} [${entry.kind}/${entry.providerId ?? '-'}]`,
+      text: `${blocked ? '!' : ACTION_MARK[entry.action]} ${entryName(entry)} → ${entry.harness} [${entry.kind}/${entry.providerId ?? '-'}]`,
       tone: blocked ? 'warning' : entry.action === 'error' ? 'error' : 'normal',
     });
     if (entry.command) lines.push({ text: `    ${t.runPrefix}: ${entry.command.join(' ')}`, tone: 'dim' });
@@ -87,7 +95,7 @@ export function outcomeLines(outcome: ApplyOutcome): Line[] {
   for (const result of outcome.items) {
     const suffix = result.message ? ` (${result.message})` : '';
     lines.push({
-      text: `${t.applyLabels[result.status]}  ${result.entry.itemId} → ${result.entry.harness}${suffix}`,
+      text: `${t.applyLabels[result.status]}  ${entryName(result.entry)} → ${result.entry.harness}${suffix}`,
       tone: result.status === 'error' ? 'error' : 'normal',
     });
   }
