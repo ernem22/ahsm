@@ -78,7 +78,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan, options: Apply
       continue;
     }
     if (!requirement.installCommand) {
-      requirements.push({ id: requirement.id, ok: false, message: t.notDefined });
+      requirements.push({ id: requirement.id, ok: false, message: t.noInstallCommand });
       unmet.add(requirement.id);
       continue;
     }

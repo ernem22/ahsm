@@ -29,7 +29,8 @@ export const t = {
   keysPlan: ['space mark updates', 'y apply', 'n back', 'q quit'],
   keysDone: ['Enter to exit'],
   selectionLabel: 'package',
-  notDefined: 'no install command defined',
+  /** No install argv for the running platform: reported, never guessed or silently skipped. */
+  noInstallCommand: 'no install command for this platform',
   plan: 'PLAN',
   providerMissing: 'no provider for this harness',
   writePrefix: 'write',

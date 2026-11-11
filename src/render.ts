@@ -44,8 +44,12 @@ export function planLines(plan: Plan): Line[] {
     const name = requirement.label ?? requirement.id;
     const version = requirement.version ? ` ${requirement.version}` : '';
     const minimum = requirement.minimum ? ` · ${t.minimum(requirement.minimum)}` : '';
-    const offered =
-      !requirement.present && requirement.installCommand ? ` → ${requirement.installCommand.join(' ')}` : '';
+    // An unmet requirement either names the command we would run or says there is none on this platform.
+    const offered = !requirement.present
+      ? requirement.installCommand
+        ? ` → ${requirement.installCommand.join(' ')}`
+        : ` — ${t.noInstallCommand}`
+      : '';
     // "too old" is the same word status uses: an unmet minimum is a requirement, not a detection failure.
     const current = requirementState(requirement);
     const state = current === 'ready' ? t.ready : current === 'outdated' ? t.harnessLabels['too-old'] : t.missing;

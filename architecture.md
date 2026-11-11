@@ -150,9 +150,12 @@ items: [emil-skills, context7, bash-log]
    `(kind, öğe, harness)` üçlüleri.
 3. **plan** — her üçlü için sağlayıcı çözümlenir (`supports` içinde mi), komut (hook için yazılacak girdi) üretilir; kayıt varsa
    sağlayıcının `verify` tarifiyle gerçek kontrol edilir; eksik ön koşullar listelenir. Her ön koşul satırı
-   okunan sürümü, tanımın asgarisini (`check.min`) ve eksikse güncelleme komutunu taşır; bir harness'ın
-   asgari sürümü karşılanmıyorsa satır `çok eski` der (status ile aynı sözcük). O ön koşula bağlı öğeler
-   `bloklu` olarak ve sebebiyle gösterilir; başka bir harness'ın öğeleri etkilenmez. Hiçbir şey yazılmaz.
+   okunan sürümü, tanımın asgarisini (`check.min`) ve eksikse güncelleme komutunu taşır; tanımın bu
+   platform için `install` argv'si yoksa satır komut uydurmaz, `no install command` der — `apply` de aynı
+   sebebi raporlar ve o ön koşula bağlı öğeler `hata` olur. Kurulum yalnız tanımdaki varsayılan komutla
+   yapılır; harness başına ikinci bir yol yok. Bir harness'ın asgari sürümü karşılanmıyorsa satır
+   `çok eski` der (status ile aynı sözcük). O ön koşula bağlı öğeler `bloklu` olarak ve sebebiyle
+   gösterilir; başka bir harness'ın öğeleri etkilenmez. Hiçbir şey yazılmaz.
 4. **bootstrap** — ön koşullar planın bildirdiği iki duruma göre ele alınır: **eksik** (check kullanılabilir
    sürüm üretmedi) her zaman platform komutuyla bir kez kurulur; **eski** (sürüm okundu ama `check.min`in
    altında) yalnız kullanıcı işaretlediyse güncellenir. Kurulumdan sonra sürüm yeniden check edilir.
@@ -191,12 +194,14 @@ harness tanımında kalır.
 ## Test
 
 - `npm test` — birim/entegrasyon: `node:test`, geçici HOME + kayıt eden runner, ağ yok.
-- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 18 senaryo: kurulum, idempotens,
+- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 21 senaryo: kurulum, idempotens,
   doğrulama, kendini onarma, bozuk JSONC, bozuk state, eksik ön koşul, plan/status'un yazmaması,
   status'un harness bölümü (hazır / çok eski + güncelleme komutu / yok), eski harness'ın planda
   sürüm/asgari/güncelleme komutuyla görünüp öğelerini bloklaması, `--update` verilmeden güncellemenin
-  çalışmaması, eksik ön koşulun işaretsiz bootstrap edilmesi ve `--update all`ın güncellemeyi bir kez
-  çalıştırıp aynı çalıştırmada öğeleri kurması.
+  çalışmaması, eksik ön koşulun işaretsiz bootstrap edilmesi, `--update all`ın güncellemeyi bir kez
+  çalıştırıp aynı çalıştırmada öğeleri kurması, bu platformda kurulum komutu olmayan tanımın plan ve
+  apply'da `no install command` demesi ve kurulamayan bir harness'ın diğer harness'ın öğelerini
+  bırakmaması.
 - `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
   kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 

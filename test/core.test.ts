@@ -12,7 +12,7 @@ import { readStatus } from '../src/core/status.js';
 import { findEntry, readState, statePath, type State } from '../src/core/state.js';
 import { verifyInstalled } from '../src/core/verify.js';
 import { mergeHook, readText } from '../src/apply/hook-merger.js';
-import { planLines } from '../src/render.js';
+import { outcomeLines, planLines } from '../src/render.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
 
@@ -1054,4 +1054,109 @@ test('apply: eksik ön koşul işaretsiz de kurulur (bootstrap yolu)', async () 
   assert.deepEqual(runner.calls.slice(0, 3), [['node', '--version'], ['install-node'], ['node', '--version']]);
   assert.equal(outcome.requirements[0]?.ok, true);
   assert.equal(outcome.items[0]?.status, 'ok');
+});
+
+test('apply: tanımın bu platformdaki kurulum komutu olduğu gibi, tek sefer çalışır', async () => {
+  const home = tempHome();
+  const data = withHarnessRequirement();
+  // Boşluk ve değişken içeren bir argv: komut genişletilmeden, parçalanmadan geçmeli.
+  const INSTALL = ['fake-installer', 'install', '--prefix', '/opt/fake dir', '{item}'];
+  data.requires.find((requirement) => requirement.id === HARNESS)!.install = { darwin: INSTALL };
+  const { runner, calls } = scripted({
+    'node --version': [{ code: 0, stdout: 'v22.1.0', stderr: '' }],
+    'claude --version': [
+      { code: 1, stdout: '', stderr: '' },
+      { code: 0, stdout: '2.5.0', stderr: '' },
+    ],
+    [INSTALL.join(' ')]: [{ code: 0, stdout: '', stderr: '' }],
+  });
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'darwin' });
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  assert.deepEqual(plan.requirements.find((requirement) => requirement.id === HARNESS)?.installCommand, INSTALL);
+
+  await applyPlan(data, ctx, plan);
+
+  assert.deepEqual(calls.filter((call) => call[0] === 'fake-installer'), [INSTALL], 'komut olduğu gibi çalışmadı');
+});
+
+test('plan: bu platformda kurulum komutu olmayan tanım "no install command" der', async () => {
+  const home = tempHome();
+  const data = withHarnessRequirement();
+  data.requires.find((requirement) => requirement.id === HARNESS)!.install = { win32: ['install-on-windows'] };
+  const { runner } = scripted({
+    'node --version': [{ code: 0, stdout: 'v22.1.0', stderr: '' }],
+    'claude --version': [{ code: 1, stdout: '', stderr: '' }],
+  });
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+
+  const row = plan.requirements.find((requirement) => requirement.id === HARNESS);
+  assert.equal(row?.installCommand, undefined, 'olmayan komut uydurulmamalı');
+  const text = planLines(plan)
+    .map((line) => line.text)
+    .join('\n');
+  assert.match(
+    text,
+    new RegExp(`^missing {2}requirement ${HARNESS} · min 2\\.0 — ${t.noInstallCommand}$`, 'm'),
+    `plan satırı yok:\n${text}`,
+  );
+});
+
+test('apply: bu platformda kurulum komutu olmayan tanımı "no install command" olarak raporlar', async () => {
+  const home = tempHome();
+  const data = withHarnessRequirement();
+  data.requires.find((requirement) => requirement.id === HARNESS)!.install = { win32: ['install-on-windows'] };
+  const { runner, calls } = scripted({
+    'node --version': [{ code: 0, stdout: 'v22.1.0', stderr: '' }],
+    'claude --version': [{ code: 1, stdout: '', stderr: '' }],
+    'install-on-windows': [{ code: 0, stdout: '', stderr: '' }],
+  });
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+
+  const outcome = await applyPlan(data, ctx, plan);
+  const text = outcomeLines(outcome)
+    .map((line) => line.text)
+    .join('\n');
+
+  assert.equal(outcome.requirements.find((requirement) => requirement.id === HARNESS)?.message, t.noInstallCommand);
+  assert.equal(calls.some((call) => call[0] === 'install-on-windows'), false, 'başka platformun komutu çalıştı');
+  assert.equal(outcome.requirements.find((requirement) => requirement.id === HARNESS)?.ok, false);
+  assert.equal(outcome.items[0]?.status, 'error');
+  assert.equal(exitCodeFor(outcome), 1);
+});
+
+test('apply: kurulamayan harness diğer harness\'ın öğelerini ve diğer ön koşulları bırakmaz', async () => {
+  const home = tempHome();
+  const data = twoHarnesses();
+  // "other" harness'ının CLI'ı bu platformda kurulamıyor: ne komut var ne de sürüm okunuyor.
+  data.requires.find((requirement) => requirement.id === 'other-cli')!.install = { win32: ['install-other'] };
+  const { runner, calls } = scripted({
+    'node --version': [{ code: 0, stdout: 'v22.1.0', stderr: '' }],
+    'claude --version': [{ code: 0, stdout: '2.5.0', stderr: '' }],
+    'other --version': [{ code: 1, stdout: '', stderr: '' }],
+    'install-other': [{ code: 0, stdout: '', stderr: '' }],
+  });
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS, 'other'], itemIds: ['sk'] });
+
+  const outcome = await applyPlan(data, ctx, plan);
+  const text = outcomeLines(outcome)
+    .map((line) => line.text)
+    .join('\n');
+
+  const otherRequirement = outcome.requirements.find((requirement) => requirement.id === 'other-cli');
+  assert.equal(otherRequirement?.ok, false);
+  assert.equal(otherRequirement?.message, t.noInstallCommand);
+  assert.equal(outcome.requirements.find((requirement) => requirement.id === 'node')?.ok, true, 'diğer ön koşul etkilendi');
+  assert.equal(outcome.items.find((item) => item.entry.harness === HARNESS)?.status, 'ok', 'diğer harness kurulmadı');
+  const blocked = outcome.items.find((item) => item.entry.harness === 'other');
+  assert.equal(blocked?.status, 'error');
+  assert.equal(blocked?.message, t.requirementUnmet('other-cli'));
+  assert.ok(text.includes(t.requirementFailed('other-cli', t.noInstallCommand)), `uygulama sonucu söylemiyor:
+${text}`);
+  assert.equal(calls.some((call) => call[0] === 'install-other'), false, 'başka platformun komutu çalıştı');
+  assert.equal(exitCodeFor(outcome), 1, 'başarısızlık kuralı dışında bir sebeple çıkış kodu değişti');
 });
