@@ -2,7 +2,7 @@ import { t } from './i18n.js';
 import type { ApplyOutcome } from './core/apply.js';
 import type { HarnessStatus, HarnessStatusRow, StatusReport } from './core/status.js';
 import type { RemoveOutcome, RemovePlan } from './core/remove.js';
-import { requirementState, type Plan, type PlanAction } from './core/plan.js';
+import { requirementState, type Plan, type PlanAction, type PlanRequirement } from './core/plan.js';
 
 export type Tone = 'normal' | 'dim' | 'error' | 'warning';
 
@@ -12,6 +12,13 @@ export interface Line {
 }
 
 const ACTION_MARK: Record<PlanAction, string> = { run: '+', already: '=', unsupported: '!', error: '!' };
+
+/** An unmet requirement either names the command we would run or says there is none on this platform. */
+function requirementOffer(requirement: PlanRequirement): string {
+  if (requirement.present) return '';
+  if (!requirement.installCommand) return ` — ${t.noInstallCommand}`;
+  return ` → ${requirement.installCommand.join(' ')}`;
+}
 
 /**
  * One renderer for both surfaces: the CLI prints `line.text`, the TUI maps `line.tone` to a colour.
@@ -44,12 +51,7 @@ export function planLines(plan: Plan): Line[] {
     const name = requirement.label ?? requirement.id;
     const version = requirement.version ? ` ${requirement.version}` : '';
     const minimum = requirement.minimum ? ` · ${t.minimum(requirement.minimum)}` : '';
-    // An unmet requirement either names the command we would run or says there is none on this platform.
-    const offered = !requirement.present
-      ? requirement.installCommand
-        ? ` → ${requirement.installCommand.join(' ')}`
-        : ` — ${t.noInstallCommand}`
-      : '';
+    const offered = requirementOffer(requirement);
     // "too old" is the same word status uses: an unmet minimum is a requirement, not a detection failure.
     const current = requirementState(requirement);
     const state = current === 'ready' ? t.ready : current === 'outdated' ? t.harnessLabels['too-old'] : t.missing;
