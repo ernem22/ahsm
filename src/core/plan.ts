@@ -2,7 +2,7 @@ import { expandArgs, type Ctx } from '../context.js';
 import { mergeHook, readText, type HookEntry } from '../apply/hook-merger.js';
 import { hookTarget, type HookTarget } from '../apply/hook-target.js';
 import { t } from '../i18n.js';
-import type { Data, ItemDef, Kind, ProviderDef, Selection } from '../types.js';
+import type { Data, ItemDef, Kind, ProviderDef, RequirementDef, Selection } from '../types.js';
 import { meetsRequirement } from './requirements.js';
 import { verifyInstalled } from './verify.js';
 import { findEntry, readState, sameCommand } from './state.js';
@@ -143,10 +143,15 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
   for (const provider of usedProviders.values()) {
     for (const id of provider.requires ?? []) requirementIds.add(id);
   }
+  // A missing harness CLI is a prerequisite too: the setup is useless without the thing it configures.
+  for (const harness of data.harnesses) {
+    if (!selection.harnessIds.includes(harness.id)) continue;
+    for (const id of harness.requires ?? []) requirementIds.add(id);
+  }
 
   const requirements: PlanRequirement[] = [];
   for (const id of requirementIds) {
-    const def = data.requires.find((candidate) => candidate.id === id);
+    const def: RequirementDef | undefined = data.requires.find((candidate) => candidate.id === id);
     if (!def) {
       warnings.push(t.unknownRequirement(id));
       continue;

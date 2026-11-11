@@ -648,3 +648,31 @@ test('findEntry matches on itemId and harness together and exposes the recorded 
   assert.equal(findEntry(state, 'sk', HARNESS), undefined);
   assert.equal(findEntry(state, 'nope', 'nope'), undefined);
 });
+
+test('harness bir ön koşulsa plan onu da listeler ve uygular', async () => {
+  const home = tempHome();
+  const data = fixture();
+  data.harnesses[0]!.requires = ['fake-harness'];
+  data.requires.push({
+    id: 'fake-harness',
+    check: { command: ['ghost-harness', '--version'] },
+    install: { linux: ['node', '-e', 'process.exit(0)'], darwin: ['node', '-e', 'process.exit(0)'], win32: ['node', '-e', 'process.exit(0)'] },
+  });
+  const runner = new RecordingRunner([
+    { code: 0, stdout: 'v22.1.0', stderr: '' },
+    { code: 1, stdout: '', stderr: '' },
+    { code: 0, stdout: '', stderr: '' },
+    { code: 1, stdout: '', stderr: '' },
+  ]);
+  const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
+
+  const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
+  const harnessRequirement = plan.requirements.find((requirement) => requirement.id === 'fake-harness');
+  assert.ok(harnessRequirement, 'harness ön koşulu planda yok');
+  assert.equal(harnessRequirement.present, false);
+  assert.deepEqual(harnessRequirement.installCommand, ['node', '-e', 'process.exit(0)']);
+
+  const outcome = await applyPlan(data, ctx, plan);
+  assert.equal(outcome.requirements.find((r) => r.id === 'fake-harness')?.ok, false);
+  assert.equal(outcome.items[0]?.status, 'error');
+});

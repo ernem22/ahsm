@@ -132,7 +132,8 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
   };
 
   for (const entry of plan.entries) {
-    const blocked = entryDefs(data, entry).provider?.requires?.find((id) => unmet.has(id));
+    const defs = entryDefs(data, entry);
+    const blocked = [...(defs.provider?.requires ?? []), ...(defs.harness?.requires ?? [])].find((id) => unmet.has(id));
 
     if (entry.action === 'run' && blocked) {
       items.push({ entry, status: 'error', message: t.requirementUnmet(blocked) });

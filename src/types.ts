@@ -14,6 +14,8 @@ export interface HarnessDef {
   detect: string[];
   /** Value passed to providers as `-a` (npx skills / add-mcp agent id). */
   agentId?: string;
+  /** Requirements of the harness itself (its CLI), installed like any other prerequisite. */
+  requires?: string[];
   config: { path: string; format: 'jsonc' };
   hooks?: { path?: string; section: string };
   /** Where this harness keeps MCP servers, so a delegated install can still be verified. */

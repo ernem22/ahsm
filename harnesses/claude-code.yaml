@@ -4,6 +4,7 @@ detect:
   - ~/.claude
   - path:claude
 agentId: claude-code
+requires: [claude-code]
 config:
   path: ~/.claude/settings.json
   format: jsonc
