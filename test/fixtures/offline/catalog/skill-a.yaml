@@ -1,0 +1,6 @@
+id: skill-a
+kind: skill
+source: fixture/skills
+skill: alpha
+targets: "*"
+note: "offline skill"

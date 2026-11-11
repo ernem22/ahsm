@@ -1,0 +1,7 @@
+id: builtin-hooks
+kind: hook
+supports: [fake]
+priority: 10
+writes:
+  path: "{harness.config}"
+  section: hooks.{event}

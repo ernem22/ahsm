@@ -1,0 +1,8 @@
+id: node
+check:
+  command: [node, --version]
+  min: "20"
+install:
+  win32: [node, -e, "process.exit(1)"]
+  darwin: [node, -e, "process.exit(1)"]
+  linux: [node, -e, "process.exit(1)"]

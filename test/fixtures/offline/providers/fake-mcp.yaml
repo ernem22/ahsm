@@ -1,0 +1,7 @@
+id: fake-mcp
+kind: mcp
+supports: [fake]
+requires: [node]
+priority: 10
+verify: { strategy: json-key }
+install: [node, "{root}/bin/install-mcp.mjs", "{package}", "{item}"]

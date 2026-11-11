@@ -1,0 +1,7 @@
+id: hook-a
+kind: hook
+event: PreToolUse
+matcher: Bash
+hookCommand: "node -e \"require('fs').appendFileSync('hook.log','x')\""
+targets: [fake]
+note: "offline hook"

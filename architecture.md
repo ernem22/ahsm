@@ -100,7 +100,8 @@ install:
   linux:  [bash, -lc, "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt install -y nodejs"]
 ```
 
-Komutlar **argv dizisi** olarak yazılır; bir elemanın `{değişken}`i boşsa o eleman düşer (ör. `skill`
+`AGENTENV_ROOT` veri kökünü değiştirir (fotoğraf/test setleri için); `{root}` değişkeni argv'de o kökü
+verir. Komutlar **argv dizisi** olarak yazılır; bir elemanın `{değişken}`i boşsa o eleman düşer (ör. `skill`
 tanımlı değilse `--skill {skill}` hiç eklenmez). Öğe tanımları: `kind`, kaynak alanı (`source`+`skill` /
 `package` ya da `url` / `event`+`matcher`+`hookCommand`), `targets`, `note`, `link`. Paketler:
 `id`, `items[]`, `note`, `link`, isteğe bağlı `default: true` (kimse paket adı vermezse o kurulur) — hepsi
@@ -162,6 +163,14 @@ items: [emil-skills, context7, bash-log]
 `npx skills` tablosunda `codex`, `pi`, `opencode` aynı global dizini (`~/.agents/skills/`) kullanır,
 `claude-code` ayrı (`~/.claude/skills/`). TUI hedefi harness adıyla sorar; dizin eşlemesi sağlayıcı ve
 harness tanımında kalır.
+
+## Test
+
+- `npm test` — birim/entegrasyon: `node:test`, geçici HOME + kayıt eden runner, ağ yok.
+- `npm run e2e` — `scripts/e2e.mjs`, `test/fixtures/offline` ile **ağsız** 10 senaryo: kurulum, idempotens,
+  doğrulama, kendini onarma, bozuk JSONC, bozuk state, eksik ön koşul, plan/status'un yazmaması.
+- `npm run e2e:network` — üsttekine ek olarak gerçek `npx skills` / `npx add-mcp` ile geçici bir HOME'da
+  kurulum, `status` ve ikinci çalıştırmanın hiçbir şey yapmaması.
 
 ## Bilinçli sınırlar
 

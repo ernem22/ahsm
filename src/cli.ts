@@ -11,7 +11,10 @@ import { t } from './i18n.js';
 import { outcomeLines, planLines } from './render.js';
 import type { Data } from './types.js';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+/** `AGENTENV_ROOT` points the CLI at another data root (fixtures, e2e sandboxes). */
+const root = process.env.AGENTENV_ROOT
+  ? path.resolve(process.env.AGENTENV_ROOT)
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function printPlan(plan: Plan): void {
   console.log(`

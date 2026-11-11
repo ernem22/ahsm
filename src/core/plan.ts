@@ -119,6 +119,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
         agentId: harness.agentId ?? harness.id,
         harness: harness.id,
         item: item.id,
+        root: ctx.root,
       });
       const recorded = findEntry(state, itemId, harnessId);
       const matchesRecord = Boolean(recorded && sameCommand(recorded.command, command));

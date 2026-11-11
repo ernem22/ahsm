@@ -1,0 +1,14 @@
+id: fake
+label: Fake Harness
+detect:
+  - ~/.fake
+agentId: fake
+config:
+  path: ~/.fake/settings.json
+  format: jsonc
+hooks:
+  path: ~/.fake/settings.json
+  section: hooks.{event}
+mcp:
+  path: ~/.fake/mcp.json
+  key: mcpServers

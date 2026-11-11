@@ -1,0 +1,4 @@
+id: base
+default: true
+note: "offline package"
+items: [skill-a, mcp-a, hook-a]

@@ -48,17 +48,16 @@ async function runSafe(ctx: Ctx, argv: string[]): Promise<RunResult> {
   }
 }
 
-function tailLine(stderr: string, fallback: string): string {
-  return (
-    stderr
-      .trim()
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .slice(-1)[0] ?? fallback
-  );
+/** Picks the line a human needs from a failed command: an error line beats a trailing banner. */
+function failureLine(stderr: string, fallback: string): string {
+  const lines = stderr
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const interesting = lines.find((line) => /error|not found|cannot|denied|invalid/i.test(line));
+  return (interesting ?? lines[0] ?? fallback).slice(0, 160);
 }
 
-/** Runs the plan: bootstrap requirements, then each entry in order; a failure is reported, not fatal. */
 export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<ApplyOutcome> {
   const requirements: RequirementResult[] = [];
   const unmet = new Set<string>();
@@ -76,7 +75,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
 
     const install = await runSafe(ctx, requirement.installCommand);
     if (install.code !== 0) {
-      requirements.push({ id: requirement.id, ok: false, message: tailLine(install.stderr, t.missing) });
+      requirements.push({ id: requirement.id, ok: false, message: failureLine(install.stderr, t.missing) });
       unmet.add(requirement.id);
       continue;
     }
@@ -196,7 +195,7 @@ export async function applyPlan(data: Data, ctx: Ctx, plan: Plan): Promise<Apply
       });
       items.push({ entry, status: 'ok' });
     } else {
-      items.push({ entry, status: 'error', message: tailLine(result.stderr, t.exitCode(result.code)) });
+      items.push({ entry, status: 'error', message: failureLine(result.stderr, t.exitCode(result.code)) });
     }
   }
 

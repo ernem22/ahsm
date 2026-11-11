@@ -1,0 +1,5 @@
+id: mcp-a
+kind: mcp
+url: https://mcp.example.invalid/mcp
+targets: "*"
+note: "offline mcp"
