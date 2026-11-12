@@ -40,6 +40,16 @@ export function expectFrame(lines: string[], expected: FrameExpectation): void {
   assert.ok((lines[0] ?? '').startsWith(t.title), `the first line is not the header: ${lines[0]}`);
 }
 
+/**
+ * The frame with every run of blanks removed: a wrapped path, long source or absolute name may be split
+ * at a hard cut, so containment ignores whitespace and the whole value can still be asserted.
+ */
+export function expectFrameText(lines: string[], text: string): void {
+  const flat = lines.join('').replace(/\s+/g, '');
+  const wanted = text.replace(/\s+/g, '');
+  assert.ok(flat.includes(wanted), `the frame does not contain: ${text}\n${lines.join('\n')}`);
+}
+
 /** Captures one chunk per rendered frame; `columns` and `rows` are the window the frame is laid out for. */
 export class CapturingStdout extends Writable {
   readonly chunks: string[] = [];

@@ -8,7 +8,7 @@ import { loadData } from '../src/data.js';
 import { readStatus } from '../src/core/status.js';
 import { t } from '../src/i18n.js';
 import { statusLines, type Line } from '../src/render.js';
-import { expectFrame, fixture, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, fixture, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
 
 /** Where the detail column starts at 120 columns: the 50-column list, then the 2-column gutter. */
 const DETAIL_AT = 52;
@@ -173,8 +173,7 @@ test('at 80 columns the focused row wraps under itself: the whole item row arriv
     await tui.press('\u001B[B');
     expectFrame(tui.lines(), { width: 80, rows: 30 });
     const row = `${t.statusLabels.unknown}  ${id} → fake [skill]`;
-    const squash = (text: string): string => text.replace(/\s+/g, '');
-    assert.ok(squash(tui.frame()).includes(squash(row)), `the focused row was cut:\n${tui.frame()}`);
+    expectFrameText(tui.lines(), row);
     assert.ok(tui.lines().some((line) => line.startsWith(`${t.tui.marks.focused}${t.statusLabels.unknown}`)), tui.frame());
   } finally {
     await tui.stop();
@@ -237,7 +236,15 @@ test('no key on the status surface writes: the record and the tree are untouched
 
 test('the slow read is named and timed, and Esc stops waiting without leaving', async () => {
   const dir = home([entry('skill-a', 'skill')], { '.fake/.skill-lock.json': '{"skills":{}}' });
-  const pending = createContext({ home: dir, root: OFFLINE_ROOT, runner: { run: () => new Promise(() => {}) }, platform: 'linux' });
+  // The read is held open until the test releases it, so the busy frame cannot lose a race with it.
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const pending = createContext({
+    home: dir,
+    root: OFFLINE_ROOT,
+    runner: { run: () => gate.then(() => version('v20.0.0\n')) },
+    platform: 'linux',
+  });
   const tui = await startTui({ data: loadData(OFFLINE_ROOT), ctx: pending, width: 120 });
   try {
     await tui.press('s');
@@ -254,6 +261,7 @@ test('the slow read is named and timed, and Esc stops waiting without leaving', 
     assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'the previous surface is not reachable');
     expectFrame(tui.lines(), { width: 120, rows: 30 });
   } finally {
+    release();
     await tui.stop();
   }
 });

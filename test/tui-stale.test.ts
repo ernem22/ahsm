@@ -7,7 +7,7 @@ import { createContext, RecordingRunner, type Ctx, type Runner } from '../src/co
 import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
-import { expectFrame, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
 
 const HASH = '0123456789abcdef0123456789abcdef01234567';
 /** The rows of the body start below the header's two lines and the surface's own name. */
@@ -353,8 +353,7 @@ test('at 80 columns the focused row wraps under itself: the provider reason arri
     // One column: the focus is on the first row, and its whole line is on screen, wrapped.
     assert.ok(at(lines, ROWS_AT).startsWith(`${t.tui.marks.focused}stale  alpha`), at(lines, ROWS_AT));
     const row = `stale  alpha [owner/repo] — ${t.staleNewer}`;
-    const squash = (text: string): string => text.replace(/\s+/g, '');
-    assert.ok(squash(tui.frame()).includes(squash(row)), `the focused row was cut:\n${tui.frame()}`);
+    expectFrameText(lines, row);
     // Nothing of the focused row ends in an ellipsis: it wraps, it is not truncated.
     assert.equal(lines[ROWS_AT]?.includes(t.tui.ellipsis), false, at(lines, ROWS_AT));
   } finally {

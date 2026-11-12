@@ -8,7 +8,7 @@ import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
 import type { InstalledSkill, SkillsAdapter } from '../src/providers/skills-api.js';
 import type { Data } from '../src/types.js';
-import { expectFrame, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
 
 /** Where the detail column starts at 120 columns: the 50-column list, then the 2-column gutter. */
 const DETAIL_AT = 52;
@@ -294,8 +294,7 @@ test('at 80 columns the focused row wraps under itself: the long source arrives 
     expectFrame(lines, { width: 80, rows: 30 });
     assert.ok(at(lines, ROWS_AT).startsWith(`${t.tui.marks.focused}user  ask-sonner`), at(lines, ROWS_AT));
     // One column: the focused row wraps under itself, and nothing of it is dropped.
-    const squash = (text: string): string => text.replace(/\s+/g, '');
-    assert.ok(squash(tui.frame()).includes(squash(row)), `the focused row was cut:\n${tui.frame()}`);
+    expectFrameText(lines, row);
     assert.equal(tui.frame().includes(t.tui.ellipsis), false, 'a focused row was truncated at 80 columns');
   } finally {
     await tui.stop();

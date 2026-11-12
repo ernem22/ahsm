@@ -7,7 +7,7 @@ import { readState, statePath, writeState, type StateEntry } from '../src/core/s
 import { t } from '../src/i18n.js';
 import type { InstalledSkill, SkillsAdapter } from '../src/providers/skills-api.js';
 import type { Data, Kind } from '../src/types.js';
-import { expectFrame, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
 
 const HOOK_COMMAND = `node -e "require('fs').appendFileSync('hook.log','x')"`;
 
@@ -180,11 +180,6 @@ async function openRemove(tui: TuiHarness): Promise<void> {
   );
 }
 
-/** The frame with every run of whitespace removed: a path wrapped in the detail column is still one path. */
-function squash(text: string): string {
-  return text.replace(/\s+/g, '');
-}
-
 /** The rows in the row column, focused or not: each entry begins with the formatter's `- id [kind]`. */
 function planRows(lines: string[]): string[] {
   return lines
@@ -218,8 +213,8 @@ test('x shows every affected harness and path before any key writes, and the rec
     assert.deepEqual(planRows(lines), ['- skill-a [skill] → will be removed', '- hook-a [hook] → will be removed']);
     // The focused skill entry names its harnesses, its shared directories and the provider's own words.
     const paths = `paths: ${skillPaths(shared.home).join(', ')}`;
-    assert.ok(tui.frame().includes(t.removeAffects(['fake'])), tui.frame());
-    assert.ok(squash(tui.frame()).includes(squash(paths)), tui.frame());
+    expectFrameText(lines, t.removeAffects(['fake']));
+    expectFrameText(lines, paths);
     assert.equal(lines.some((line) => line.startsWith(`> - skill-a [skill]`)), true, lines.join('\n'));
     // The confirm line states the one thing the destructive key does, and how many entries it acts on.
     assert.equal(lines.includes(t.tui.removeConfirm(2)), true, lines.join('\n'));
@@ -227,10 +222,7 @@ test('x shows every affected harness and path before any key writes, and the rec
     // The next row is one Down away, and its own path is on screen too.
     await tui.press('\u001B[B');
     assert.equal(tui.lines().some((line) => line.startsWith('> - hook-a [hook]')), true, tui.frame());
-    assert.ok(
-      squash(tui.frame()).includes(squash(`paths: ${path.join(shared.home, '.fake', 'settings.json')}`)),
-      tui.frame(),
-    );
+    expectFrameText(tui.lines(), `paths: ${path.join(shared.home, '.fake', 'settings.json')}`);
 
     // Nothing was read from the inventory and nothing was written or run: the plan is the record's.
     assert.equal(shared.stub.listCalls, 0, 'the recorded path read the provider inventory');
@@ -304,11 +296,11 @@ test('a name agentenv never installed is planned, removed, and writes no record'
     await tui.press('\r');
     await settle(tui, () => tui.frame().includes('- ghost [skill] → will be removed'));
     assert.equal(shared.stub.listCalls, 1, 'the named plan did not read the inventory exactly once');
-    assert.ok(squash(tui.frame()).includes(squash(`note: ${t.removeNotInInventory('ghost')}`)), tui.frame());
+    expectFrameText(tui.lines(), `note: ${t.removeNotInInventory('ghost')}`);
     // A name with no record behind it says so, rather than claiming a record was cleared.
     assert.ok(tui.frame().includes(t.tui.removeNamedConfirm(1)), tui.frame());
     assert.equal(tui.frame().includes(t.tui.removeConfirm(1)), false, 'the named-only plan claimed a record was cleared');
-    assert.ok(squash(tui.frame()).includes(squash(`paths: ${path.join(shared.home, '.agents')}`)), tui.frame());
+    expectFrameText(tui.lines(), `paths: ${path.join(shared.home, '.agents')}`);
 
     // The same name typed again is not planned twice and does not read the inventory again.
     await tui.press('a');
@@ -378,11 +370,11 @@ test('not covered and needs a name — remove by hand stay separate words in the
     assert.ok(lines.some((line) => line.startsWith('  - mcp-a [mcp] → not covered')), lines.join('\n'));
     // The focused row carries the core's reason in full, so `manual` is never the whole story.
     assert.ok(tui.frame().includes('- skill-group [skill] → needs a name — remove by hand'), tui.frame());
-    assert.ok(squash(tui.frame()).includes(squash(t.removeNoSkills('fixture/group'))), tui.frame());
+    expectFrameText(lines, t.removeNoSkills('fixture/group'));
     // The other row is one Down away, and its own word and reason are just as distinct.
     await tui.press('\u001B[B');
     assert.ok(tui.frame().includes('- mcp-a [mcp] → not covered'), tui.frame());
-    assert.ok(squash(tui.frame()).includes(squash(t.removeNotCovered('mcp'))), tui.frame());
+    expectFrameText(tui.lines(), t.removeNotCovered('mcp'));
   } finally {
     await tui.stop();
   }

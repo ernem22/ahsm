@@ -10,7 +10,7 @@ import { t } from '../src/i18n.js';
 import { planLines } from '../src/render.js';
 import { orderedPlan } from '../src/tui/plan.js';
 import type { Data } from '../src/types.js';
-import { expectFrame, OFFLINE_ROOT, fixture, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, OFFLINE_ROOT, fixture, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
 
 const ITEMS = ['skill-a', 'mcp-a', 'hook-a'];
 /** Where the detail column starts at 120 columns: the 50-column list, then the 2-column gutter. */
@@ -119,8 +119,7 @@ test('at 80 columns the focused entry wraps under itself, so its whole row arriv
     assert.ok(lines.some((line) => line.trimStart().startsWith('> +')), lines.join('\n'));
     // One column: the focused entry wraps under itself with a 4-space indent, and nothing is dropped.
     const row = `${LONG_ID} → fake [mcp/fake-mcp]`;
-    const squash = (text: string): string => text.replace(/\s+/g, '');
-    assert.ok(squash(tui.frame()).includes(squash(row)), `the focused entry was cut:\n${tui.frame()}`);
+    expectFrameText(lines, row);
   } finally {
     await tui.stop();
   }
