@@ -234,8 +234,9 @@ exceeds the frame width.
 **Tone and marks.** Four tones: normal, dim, warning, error. Colour comes from the existing `toneColor`
 mapping; `NO_COLOR` or a dumb terminal drops colour and keeps dim, marks and words. Every row leads with
 its state word, so no information depends on colour. Marks are ASCII (`>`, `[x]`, `[ ]`, `+`, `=`, `!`,
-`-`, `·`); `…`, `→` and the window's `–` (as in `1–12 of 103`) are the only non-ASCII glyphs. Focus is `>` plus
-inverse video on the row text, never a colour.
+`-`); `…` and `→` are the only non-ASCII glyphs a mark or a pointer may use, and the copy separates its
+parts with `·`, `–` (as in `1–12 of 103`) and `—`. Focus is `>` plus inverse video on the row text, never
+a colour.
 
 **Density.** A rows surface renders only the visible slice, with a 2-row scrolloff and one `Text` per line.
 The window and the filter count sit right-aligned on the surface's heading line. No virtualization library,
