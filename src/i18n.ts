@@ -5,6 +5,7 @@ import type { AdapterVia } from './core/plan.js';
 import type { HarnessStatus, StatusValue } from './core/status.js';
 import type { InventoryScope } from './core/list.js';
 import type { StaleValue } from './core/stale.js';
+import type { SurfaceId } from './tui/keys.js';
 
 /**
  * All user-facing strings live here, in English. Swapping in another locale means adding a second
@@ -165,6 +166,39 @@ export const t = {
   recordNotInTarget: 'recorded but not found in the target — installing again',
   recordUnverified: 'recorded, but this provider cannot be checked — installing again',
   providerOwns: 'provider owns this',
+  /**
+   * Chrome the TUI adds that the CLI never prints: surface names, key names, keybar labels, the rail.
+   * The domain sentences stay in `render.ts`; nothing here builds a plan, status or inventory line.
+   */
+  tui: {
+    surfaces: {
+      install: 'install',
+      plan: 'plan',
+      status: 'status',
+      list: 'list',
+      stale: 'stale',
+      update: 'update',
+      remove: 'remove',
+    } as Record<SurfaceId, string>,
+    keyNames: {
+      escape: 'Esc',
+      return: 'Enter',
+      space: 'space',
+      up: 'Up',
+      down: 'Down',
+      pageup: 'PgUp',
+      pagedown: 'PgDn',
+      backspace: 'Backspace',
+    } as Record<string, string>,
+    keys: {
+      help: 'keys',
+      quit: 'quit',
+      back: 'back',
+      close: 'close',
+    },
+    helpTitle: (surface: string) => `keys — ${surface}`,
+    keybarSeparator: ' · ',
+  },
   help: [
     'agentenv                              TUI (pick harnesses and a package, review, install)',
     'agentenv plan [--package id]          print the plan only',
