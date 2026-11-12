@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
+import { buildPlan } from '../core/plan.js';
 import type { Ctx } from '../context.js';
 import { t } from '../i18n.js';
 import type { Data } from '../types.js';
@@ -17,10 +18,18 @@ import {
   type KeyHost,
   type SurfaceId,
 } from './keys.js';
+import { planSelection } from './plan.js';
+import { useRead } from './read.js';
 import { SurfaceBody } from './surfaces.js';
+import { emptyWindow } from './window.js';
 
 /** The rail needs 100 columns; below it the letters still work, so width never changes what is reachable. */
 export const RAIL_MIN_WIDTH = 100;
+
+/** Header (two lines), status line when there is one, and the keybar: what the body may use. */
+export function bodyHeight(rows: number, status: string | undefined): number {
+  return Math.max(1, rows - 3 - (status === undefined ? 0 : 1));
+}
 
 export interface ShellProps {
   data: Data;
@@ -36,17 +45,30 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const [status, setStatus] = useState<string | undefined>();
   // The form lives here, not in the install component: leaving the surface keeps every choice.
   const [install, setInstall] = useState(() => initialForm(data, ctx));
+  const [planWindow, setPlanWindow] = useState(emptyWindow);
+  // The plan asks the core the same question `agentenv plan` does, for the selection on screen.
+  const plan = useRead(() => buildPlan(data, ctx, planSelection(install)));
+
+  // Entering the plan reads it; `r` is the same call, so a second look costs one key.
+  useEffect(() => {
+    if (surface === 'plan') plan.load();
+  }, [surface, plan.load]);
 
   const host: KeyHost = {
     surface,
     help,
     install,
+    plan: planWindow,
+    planCount: plan.state.value?.entries.length ?? 0,
+    page: Math.max(1, rows - 6),
     go: setSurface,
     openHelp: () => setHelp(true),
     closeHelp: () => setHelp(false),
     quit: () => exit(),
     say: setStatus,
     setInstall,
+    setPlanWindow,
+    rebuildPlan: plan.load,
   };
 
   useInput((input, key) => {
@@ -76,7 +98,15 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
         {help ? (
           <HelpOverlay title={t.tui.helpTitle(surfaceLabel)} keys={keys} />
         ) : (
-          <SurfaceBody surface={surface} data={data} install={install} width={columns} />
+          <SurfaceBody
+            surface={surface}
+            data={data}
+            install={install}
+            width={columns}
+            height={bodyHeight(rows, status)}
+            plan={plan.state}
+            planWindow={planWindow}
+          />
         )}
       </Box>
       {status ? <Text dimColor>{status}</Text> : null}

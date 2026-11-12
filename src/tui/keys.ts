@@ -1,6 +1,7 @@
 import type { Key } from 'ink';
 import { t } from '../i18n.js';
 import { advance, moveCursor, stepBack, toggleFocused, toggleSection, type InstallForm } from './install.js';
+import { goTo, moveBy, type RowWindow } from './window.js';
 
 /** The eight surfaces of the window; the seven commands of the rail plus the home surface. */
 export type SurfaceId = 'install' | 'plan' | 'status' | 'list' | 'stale' | 'update' | 'remove';
@@ -10,12 +11,19 @@ export interface KeyHost {
   readonly surface: SurfaceId;
   readonly help: boolean;
   readonly install: InstallForm;
+  /** The plan's row window and how many rows it can focus; read from the surface's own read. */
+  readonly plan: RowWindow;
+  readonly planCount: number;
+  /** How many rows `PgUp`/`PgDn` move: one window of the frame the user is looking at. */
+  readonly page: number;
   go(surface: SurfaceId): void;
   openHelp(): void;
   closeHelp(): void;
   quit(): void;
   say(message: string | undefined): void;
   setInstall(form: InstallForm): void;
+  setPlanWindow(window: RowWindow): void;
+  rebuildPlan(): void;
 }
 
 export interface KeyBinding {
@@ -134,10 +142,61 @@ const installTable: KeyTable = [
   },
 ];
 
+/**
+ * The plan body, read-only: the window moves and `r` reads the plan again. No key here writes, and no
+ * key here is missing from the table, so the keybar and the overlay always say what the body offers.
+ */
+const planTable: KeyTable = [
+  {
+    keys: ['up'],
+    label: t.tui.keys.move,
+    hidden: true,
+    run: (host) => host.setPlanWindow(moveBy(host.plan, host.planCount, -1)),
+  },
+  {
+    keys: ['down'],
+    label: t.tui.keys.move,
+    hidden: true,
+    run: (host) => host.setPlanWindow(moveBy(host.plan, host.planCount, 1)),
+  },
+  {
+    keys: ['pageup'],
+    label: t.tui.keys.move,
+    hidden: true,
+    run: (host) => host.setPlanWindow(moveBy(host.plan, host.planCount, -host.page)),
+  },
+  {
+    keys: ['pagedown'],
+    label: t.tui.keys.move,
+    hidden: true,
+    run: (host) => host.setPlanWindow(moveBy(host.plan, host.planCount, host.page)),
+  },
+  {
+    keys: ['g'],
+    label: t.tui.keys.first,
+    hidden: true,
+    run: (host) => host.setPlanWindow(goTo(0, host.planCount)),
+  },
+  {
+    keys: ['G'],
+    label: t.tui.keys.last,
+    hidden: true,
+    run: (host) => host.setPlanWindow(goTo(host.planCount - 1, host.planCount)),
+  },
+  {
+    keys: ['r'],
+    label: t.tui.keys.rebuild,
+    run: (host) => {
+      host.say(undefined);
+      host.rebuildPlan();
+    },
+  },
+];
+
 /** One table per surface; its keys are dispatched before the global ones and listed in its keybar. */
 export const surfaceKeys: Record<SurfaceId, KeyTable> = {
   install: installTable,
-  plan: [],
+  plan: planTable,
   status: [],
   list: [],
   stale: [],

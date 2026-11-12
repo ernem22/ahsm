@@ -134,7 +134,7 @@ test('? opens one key set: the keybar and the overlay agree on every key they bo
     assert.equal(tui.lines().includes(t.tui.helpTitle('plan')), false, 'Esc did not close the overlay');
     assert.equal(tui.lines()[0]?.startsWith('agentenv  plan'), true, 'Esc closed the surface too');
     assert.equal(tui.lines()[2], 'plan');
-    assert.equal(tui.lines()[tui.lines().length - 1], '? keys · Esc back · q quit');
+    assert.equal(tui.lines()[tui.lines().length - 1], 'r rebuild · ? keys · Esc back · q quit');
   } finally {
     await tui.stop();
   }
@@ -145,11 +145,18 @@ test('the overlay lists the surface keys once, and Esc is called close while it 
   try {
     await tui.press('p');
     const keybar = tui.lines()[tui.lines().length - 1] as string;
-    assert.equal(keybar, '? keys · Esc back · q quit');
+    assert.equal(keybar, 'r rebuild · ? keys · Esc back · q quit');
 
     await tui.press('?');
     const rows = overlayRows(tui.lines(), 'plan');
     assert.deepEqual(rows, [
+      'Up move',
+      'Down move',
+      'PgUp move',
+      'PgDn move',
+      'g first',
+      'G last',
+      'r rebuild',
       'i install',
       'p plan',
       's status',
