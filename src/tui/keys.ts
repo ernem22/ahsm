@@ -7,6 +7,19 @@ import type { RowWindow } from './window.js';
 /** The eight surfaces of the window; the seven commands of the rail plus the home surface. */
 export type SurfaceId = 'install' | 'plan' | 'apply' | 'status' | 'list' | 'stale' | 'update' | 'remove';
 
+/**
+ * A rows surface with nothing else on it: one window, a page the size of the frame it shows, and the
+ * read that fills it. `status` is the first one; a surface that only lists rows needs nothing more.
+ */
+export interface RowsHost {
+  /** How many rows `PgUp`/`PgDn` move: one window of the frame the user is looking at. */
+  readonly page: number;
+  move(delta: number): void;
+  pageBy(delta: number): void;
+  edge(at: 'first' | 'last'): void;
+  reload(): void;
+}
+
 /** What a key is allowed to do: the shell owns every piece of state the tables change. */
 export interface KeyHost {
   readonly surface: SurfaceId;
@@ -26,6 +39,8 @@ export interface KeyHost {
   readonly applying: boolean;
   /** The write finished, so the apply surface shows the result rather than the plan. */
   readonly result: boolean;
+  /** The status surface's own rows: its window, its page and its read. */
+  readonly status: RowsHost;
   go(surface: SurfaceId): void;
   openHelp(): void;
   closeHelp(): void;
@@ -306,12 +321,33 @@ const resultTable: KeyTable = [
   },
 ];
 
+/**
+ * The status surface, read-only: the rows window moves and `r` reads the report again. No key here
+ * writes, so the surface binds nothing a visitor has to be careful with.
+ */
+const statusTable: KeyTable = [
+  { keys: ['up'], label: t.tui.keys.move, hidden: true, run: (host) => host.status.move(-1) },
+  { keys: ['down'], label: t.tui.keys.move, hidden: true, run: (host) => host.status.move(1) },
+  { keys: ['pageup'], label: t.tui.keys.move, hidden: true, run: (host) => host.status.pageBy(-host.status.page) },
+  { keys: ['pagedown'], label: t.tui.keys.move, hidden: true, run: (host) => host.status.pageBy(host.status.page) },
+  { keys: ['g'], label: t.tui.keys.first, hidden: true, run: (host) => host.status.edge('first') },
+  { keys: ['G'], label: t.tui.keys.last, hidden: true, run: (host) => host.status.edge('last') },
+  {
+    keys: ['r'],
+    label: t.tui.keys.refresh,
+    run: (host) => {
+      host.say(undefined);
+      host.status.reload();
+    },
+  },
+];
+
 /** One table per surface; its keys are dispatched before the global ones and listed in its keybar. */
 export const surfaceKeys: Record<SurfaceId, KeyTable> = {
   install: installTable,
   plan: planTable,
   apply: applyTable,
-  status: [],
+  status: statusTable,
   list: [],
   stale: [],
   update: [],

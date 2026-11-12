@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import { buildPlan } from '../core/plan.js';
 import { applyPlan } from '../core/apply.js';
+import { readStatus } from '../core/status.js';
 import type { Ctx } from '../context.js';
 import { t } from '../i18n.js';
 import { toneColor, type Tone } from '../render.js';
@@ -26,6 +27,7 @@ import {
 import { planPage } from './plan-body.js';
 import { allUpdates, focusedRequirement, markableUpdates, planSelection, toggleUpdate } from './plan.js';
 import { useRead } from './read.js';
+import { statusBody, statusPage } from './status.js';
 import { SurfaceBody } from './surfaces.js';
 import { emptyWindow, goTo, moveBy } from './window.js';
 
@@ -63,6 +65,7 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   // The form lives here, not in the install component: leaving the surface keeps every choice.
   const [install, setInstall] = useState(() => initialForm(data, ctx));
   const [planWindow, setPlanWindow] = useState(emptyWindow);
+  const [statusWindow, setStatusWindow] = useState(emptyWindow);
   // `Down` past the last entry walks the requirement rows; `space` marks the one under that focus.
   const [requirementFocus, setRequirementFocus] = useState<number | undefined>();
   // The requirement ids the user marked; a rebuild keeps them until they no longer exist.
@@ -70,10 +73,14 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const [write, setWrite] = useState<WriteState>({ status: 'idle' });
   // The plan asks the core the same question `agentenv plan` does, for the selection on screen.
   const plan = useRead(() => buildPlan(data, ctx, planSelection(install)));
+  // `status` asks the core the same question `agentenv status` does, and writes nothing to answer it.
+  const statusRead = useRead(() => readStatus(data, ctx));
 
   const applying = isApplying(write);
   const result = hasResult(write);
   const entryCount = plan.state.value?.entries.length ?? 0;
+  const reportBody = statusBody(statusRead.state.value);
+  const statusRows = reportBody.focusable.length;
   const requirementCount = plan.state.value?.requirements.length ?? 0;
   const focus = requirementFocus !== undefined && requirementFocus < requirementCount ? requirementFocus : undefined;
 
@@ -147,10 +154,13 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     );
   };
 
-  // Entering the plan reads it; `r` is the same call, so a second look costs one key.
+  // Entering a surface reads it; `r` is the same call, so a second look costs one key.
   useEffect(() => {
     if (surface === 'plan') plan.load();
   }, [surface, plan.load]);
+  useEffect(() => {
+    if (surface === 'status') statusRead.load();
+  }, [surface, statusRead.load]);
 
   const host: KeyHost = {
     surface,
@@ -171,6 +181,13 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     pagePlan,
     resetPlan,
     rebuildPlan: plan.load,
+    status: {
+      page: statusPage(reportBody, columns, bodyHeight(rows, status, columns), statusWindow.index),
+      move: (delta) => setStatusWindow((window) => moveBy(window, statusRows, delta)),
+      pageBy: (delta) => setStatusWindow((window) => moveBy(window, statusRows, delta)),
+      edge: (at) => setStatusWindow(goTo(at === 'first' ? 0 : statusRows - 1, statusRows)),
+      reload: statusRead.load,
+    },
     updates,
     applying,
     result,
@@ -223,6 +240,8 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
             height={bodyHeight(rows, status, columns)}
             plan={plan.state}
             planWindow={planWindow}
+            status={statusRead.state}
+            statusWindow={statusWindow}
             marked={updates}
             requirementFocus={focus}
             write={write}

@@ -11,10 +11,10 @@ no key that writes.
 **Proves it:** `s` on a machine with one too-old harness: the row reads `too old  pi  1.2.0 · min 1.4` and the
 detail column carries `update: npm install -g @earendil-works/pi-coding-agent`. `r` re-reads without leaving.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Both sections render with their own vocabulary and no renamed states
-- [ ] A too-old harness shows its minimum and its update command in full
-- [ ] The empty record state renders the existing sentence
-- [ ] No key on this surface writes; a test asserts the record and the tree are untouched after a visit
-- [ ] Headless tests cover the two sections, the too-old row and the empty state
+- [x] Both sections render with their own vocabulary and no renamed states
+- [x] A too-old harness shows its minimum and its update command in full
+- [x] The empty record state renders the existing sentence
+- [x] No key on this surface writes; a test asserts the record and the tree are untouched after a visit
+- [x] Headless tests cover the two sections, the too-old row and the empty state

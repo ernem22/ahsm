@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text } from 'ink';
 import type { Plan } from '../core/plan.js';
+import type { StatusReport } from '../core/status.js';
 import type { Data } from '../types.js';
 import { t } from '../i18n.js';
 import { ApplyBody } from './apply-body.js';
@@ -10,6 +11,7 @@ import type { InstallForm } from './install.js';
 import type { SurfaceId } from './keys.js';
 import { PlanSurface } from './plan-body.js';
 import type { ReadState } from './read.js';
+import { StatusSurface } from './status-surface.js';
 import type { RowWindow } from './window.js';
 
 export interface SurfaceBodyProps {
@@ -21,6 +23,9 @@ export interface SurfaceBodyProps {
   height: number;
   plan: ReadState<Plan>;
   planWindow: RowWindow;
+  /** The report `status` read, and the window its rows are shown through. */
+  status: ReadState<StatusReport>;
+  statusWindow: RowWindow;
   /** The requirement ids the user marked: the plan body prints them and the confirm hands them on. */
   marked: readonly string[];
   /** The requirement row the focus is on, when it is below the last entry. */
@@ -48,7 +53,9 @@ const BODIES: Record<SurfaceId, React.ComponentType<SurfaceBodyProps>> = {
     ) : (
       <ApplyBody write={write} width={width} height={height} />
     ),
-  status: Pending,
+  status: ({ status, width, height, statusWindow }) => (
+    <StatusSurface read={status} width={width} height={height} window={statusWindow} />
+  ),
   list: Pending,
   stale: Pending,
   update: Pending,

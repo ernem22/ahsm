@@ -195,8 +195,12 @@ export const t = {
       apply: 'apply',
       decline: 'decline',
       exit: 'exit',
+      /** `r` on a surface whose read only fills rows again: a fresh answer, not a changed one. */
+      refresh: 'refresh',
     },
     helpTitle: (surface: string) => `keys — ${surface}`,
+    /** A read that has not answered yet: the surface says what it is waiting for instead of going blank. */
+    statusReading: 'reading status…',
     keybarSeparator: ' · ',
     /** While a write runs: what it is doing, how much of it, and what is not happening beside it. */
     applying: (seconds: number) => `applying… ${seconds}s`,
