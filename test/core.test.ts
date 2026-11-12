@@ -1322,9 +1322,6 @@ test('apply: bu platformda kurulum komutu olmayan tanımı "no install command" 
   const plan = await buildPlan(data, ctx, { harnessIds: [HARNESS], itemIds: ['sk'] });
 
   const outcome = await applyPlan(data, ctx, plan);
-  const text = outcomeLines(outcome)
-    .map((line) => line.text)
-    .join('\n');
 
   assert.equal(outcome.requirements.find((requirement) => requirement.id === HARNESS)?.message, t.noInstallCommand);
   assert.equal(calls.some((call) => call[0] === 'install-on-windows'), false, 'başka platformun komutu çalıştı');

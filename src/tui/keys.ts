@@ -351,7 +351,7 @@ function stopWaitingKey(host: SlowRowsKeys): KeyBinding {
 }
 
 /** `Esc` with a filter set clears it: one step takes the text and the state filter both. */
-function clearFilterKey(host: SlowRowsKeys, filter: FilterKeys, extra: () => boolean): KeyBinding {
+function clearFilterKey(filter: FilterKeys, extra: () => boolean): KeyBinding {
   return {
     keys: ['escape'],
     label: t.tui.keys.filterClear,
@@ -389,7 +389,7 @@ export function statusKeys(host: StatusHost): KeyTable {
 export function listKeys(host: ListHost): KeyTable {
   return [
     stopWaitingKey(host),
-    clearFilterKey(host, host.filter, () => host.carriers),
+    clearFilterKey(host.filter, () => host.carriers),
     ...rowsNavigation(host),
     { keys: ['/'], label: host.filter.text === '' ? t.tui.keys.filter : t.tui.keys.edit, run: () => host.filter.start() },
     {
@@ -414,7 +414,7 @@ export function listKeys(host: ListHost): KeyTable {
 export function staleKeys(host: StaleHost): KeyTable {
   return [
     stopWaitingKey(host),
-    clearFilterKey(host, host.filter, () => host.state !== undefined),
+    clearFilterKey(host.filter, () => host.state !== undefined),
     ...rowsNavigation(host),
     { keys: ['/'], label: host.filter.text === '' ? t.tui.keys.search : t.tui.keys.edit, run: () => host.filter.start() },
     {

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createContext, RecordingRunner, type Ctx, type RunResult } from '../src/context.js';
-import { applyRemovePlan, buildRemovePlan, planRemoval, type RemoveSelection } from '../src/core/remove.js';
+import { applyRemovePlan, planRemoval, type RemoveSelection } from '../src/core/remove.js';
 import { readStatus } from '../src/core/status.js';
 import { readState, statePath, writeState, type StateEntry } from '../src/core/state.js';
 import { removeOutcomeLines, removePlanLines } from '../src/render.js';

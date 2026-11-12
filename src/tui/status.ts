@@ -1,6 +1,6 @@
 import type { StatusReport } from '../core/status.js';
 import { statusLines, type Line } from '../render.js';
-import { padLines, rowsBody, rowsFrame, rowsView, rowsRoom, wrapped, type BodyLine, type RowBlock } from './rows-frame.js';
+import { rowsBody, rowsView, rowsRoom, wrapped, type BodyLine, type RowBlock } from './rows-frame.js';
 import { goTo } from './window.js';
 
 /** The surface prints one heading line above the body it hands to `statusFrame`. */

@@ -36,7 +36,7 @@ function withRunner(results: RunResult[], root = OFFLINE_ROOT): { data: Data; ct
 type Ctx = ReturnType<typeof createContext>;
 
 /** A read is a promise: the frame that shows its result arrives a turn after the key that started it. */
-async function settle(tui: TuiHarness, done: () => boolean): Promise<void> {
+async function settle(done: () => boolean): Promise<void> {
   const deadline = Date.now() + 500;
   while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
 }
@@ -44,7 +44,7 @@ async function settle(tui: TuiHarness, done: () => boolean): Promise<void> {
 /** `p`, then the plan itself: the surface prints `building plan…` until the read resolves. */
 async function openPlan(tui: TuiHarness): Promise<void> {
   await tui.press('p');
-  await settle(tui, () => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
+  await settle(() => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
 }
 
 /** A root whose only item has an id longer than a narrow frame: its entry row has to wrap. */
@@ -286,7 +286,7 @@ test('a slow read says building plan…, a failed one prints its message, and r 
   const slow = await startTui({ data: loadData(OFFLINE_ROOT), ctx: slowCtx, width: 120 });
   try {
     await slow.press('p');
-    await settle(slow, () => slow.frame() !== '');
+    await settle(() => slow.frame() !== '');
     assert.equal(slow.frame().includes(t.planBuilding), true, slow.frame());
   } finally {
     await slow.stop();
@@ -300,7 +300,7 @@ test('a slow read says building plan…, a failed one prints its message, and r 
   const broken = await startTui({ data: loadData(OFFLINE_ROOT), ctx: brokenCtx, width: 120 });
   try {
     await broken.press('p');
-    await settle(broken, () => broken.frame().includes('the check died'));
+    await settle(() => broken.frame().includes('the check died'));
     const lines = broken.lines();
     assert.equal(lines[0]?.startsWith('agentenv  plan'), true, 'the failure left the surface');
     assert.equal(lines.includes('the check died'), true, lines.join('|'));
@@ -317,7 +317,7 @@ test('a slow read says building plan…, a failed one prints its message, and r 
     assert.ok(rebuilt.frame().includes('too old  requirement Fake Harness 1.0.0'), rebuilt.frame());
 
     await rebuilt.press('r');
-    await settle(rebuilt, () => rebuilt.frame().includes('ready  requirement Fake Harness'));
+    await settle(() => rebuilt.frame().includes('ready  requirement Fake Harness'));
     assert.ok(rebuilt.frame().includes('ready  requirement Fake Harness 22.0.0'), rebuilt.frame());
     assert.equal(rebuilt.frame().includes('too old'), false, 'the rebuilt plan kept the old verdict');
   } finally {
@@ -332,7 +332,7 @@ test('a rebuild keeps the plan rows in their order', async () => {
     assert.ok(tui.frame().includes('blocked:'), tui.frame());
     const first = tui.lines();
     await tui.press('r');
-    await settle(tui, () => tui.frame().includes('blocked:'));
+    await settle(() => tui.frame().includes('blocked:'));
     assert.deepEqual(tui.lines(), first, 'the same plan rendered differently after r');
   } finally {
     await tui.stop();

@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import type { Ctx, RunResult } from '../context.js';
 import { mergeHook, readText } from '../apply/hook-merger.js';
 import { writeConfigFile } from '../apply/config-writer.js';

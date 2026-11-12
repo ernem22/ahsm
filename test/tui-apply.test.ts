@@ -112,7 +112,7 @@ class BrokenRunner implements Runner {
 }
 
 /** Waits up to `deadlineMs` for a frame that makes `done` true; the deadline bounds a key that did nothing. */
-async function until(tui: TuiHarness, done: () => boolean, deadlineMs = 1000): Promise<void> {
+async function until(done: () => boolean, deadlineMs = 1000): Promise<void> {
   const deadline = Date.now() + deadlineMs;
   while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
 }
@@ -120,15 +120,15 @@ async function until(tui: TuiHarness, done: () => boolean, deadlineMs = 1000): P
 /** `agentenv`, three `Enter`s and the confirm screen: the form, the plan and the apply in one path. */
 async function journey(tui: TuiHarness): Promise<void> {
   await tui.press('\r', '\r', '\r');
-  await until(tui, () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`) ?? false);
-  await until(tui, () => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
+  await until(() => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`) ?? false);
+  await until(() => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
   await tui.press('\r');
   assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
 }
 
 /** Waits for the result screen, which is the only body that prints the result heading. */
 async function result(tui: TuiHarness): Promise<string[]> {
-  await until(tui, () => tui.frame().includes(t.tui.resultTitle), 2500);
+  await until(() => tui.frame().includes(t.tui.resultTitle), 2500);
   assert.ok(tui.frame().includes(t.tui.resultTitle), `no result screen:\n${tui.frame()}`);
   return tui.lines();
 }
@@ -175,14 +175,14 @@ function setup(): { data: ReturnType<typeof loadData>; ctx: ReturnType<typeof cr
   };
 }
 
-async function settle(tui: TuiHarness, done: () => boolean): Promise<void> {
+async function settle(done: () => boolean): Promise<void> {
   const deadline = Date.now() + 1000;
   while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
 }
 
 async function openPlan(tui: TuiHarness): Promise<void> {
   await tui.press('p');
-  await settle(tui, () => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
+  await settle(() => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
 }
 
 /** The plan has one entry, then the node and the fake harness requirement rows in that order. */
@@ -242,7 +242,7 @@ test('y hands the core exactly the marked requirement: only its update runs', as
     assert.ok((tui.lines().at(-1) ?? '').includes('y apply'), tui.lines().at(-1) ?? '');
 
     await tui.press('y');
-    await settle(tui, () => ran(shared.runner, NODE_UPDATE));
+    await settle(() => ran(shared.runner, NODE_UPDATE));
     assert.equal(ran(shared.runner, NODE_UPDATE), true, 'the marked update did not run');
     assert.equal(ran(shared.runner, FAKE_UPDATE), false, 'an unmarked requirement update ran');
   } finally {
@@ -262,7 +262,7 @@ test('a marks every offered update, and y runs each once', async () => {
     assert.ok(tui.frame().includes(t.updatesMarked), tui.frame());
 
     await tui.press('\r', 'y');
-    await settle(tui, () => ran(shared.runner, NODE_UPDATE) && ran(shared.runner, FAKE_UPDATE));
+    await settle(() => ran(shared.runner, NODE_UPDATE) && ran(shared.runner, FAKE_UPDATE));
     assert.equal(ran(shared.runner, NODE_UPDATE), true, 'the node update did not run');
     assert.equal(ran(shared.runner, FAKE_UPDATE), true, 'the harness update did not run');
     assert.equal(
@@ -317,7 +317,7 @@ test('n and Esc decline without writing, and the install selection is still ther
   const tui = await startTui({ ...shared, width: 120 });
   try {
     await tui.press('\r', '\r', '\r');
-    await settle(tui, () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`) ?? false);
+    await settle(() => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`) ?? false);
     await tui.press('a');
 
     await tui.press('\r');
@@ -385,7 +385,7 @@ test('while the write runs the body names the work, counts real seconds and refu
     }
 
     // The count comes from the clock, so wait for the tick instead of guessing a duration.
-    await until(tui, () => /applying… [1-9]/.test(tui.frame()), 2500);
+    await until(() => /applying… [1-9]/.test(tui.frame()), 2500);
     assert.match(tui.frame(), /applying… [1-9]\d*s/, 'the busy line never counted a second');
     assert.equal(tui.frame().includes('%'), false, 'a percentage appeared');
 
@@ -522,7 +522,7 @@ test('a status line wider than the frame takes lines from the body, not from the
   const tui = await startTui({ ...fixture(), width: 20 });
   try {
     await tui.press('l');
-    await settle(tui, () => tui.frame().includes(t.skillsTitle));
+    await settle(() => tui.frame().includes(t.skillsTitle));
     await tui.press('f');
     const lines = tui.lines();
     expectFrame(lines, { width: 20, rows: 30 });
@@ -550,7 +550,7 @@ test('a second apply starts from nothing: the previous result is not the new con
     // Back to the plan, then the confirm again: this plan's answer is the confirm, not the old result.
     await tui.press('n');
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`), true, tui.lines()[0] ?? '');
-    await settle(tui, () => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
+    await settle(() => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
     await tui.press('\r');
     const lines = tui.lines();
     assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, lines[0] ?? '');
@@ -564,7 +564,7 @@ test('a second apply starts from nothing: the previous result is not the new con
     // And the key works: a second write runs, it is not refused by a stale write state.
     const before = shared.runner.calls.length;
     await tui.press('y');
-    await settle(tui, () => shared.runner.calls.length > before);
+    await settle(() => shared.runner.calls.length > before);
     assert.ok(shared.runner.calls.length > before, 'the second apply ran nothing');
     assert.match(tui.frame(), /applying… \d+s/, tui.frame());
   } finally {
@@ -588,7 +588,7 @@ test('a plan with an update to mark offers the mark keys, and one without offers
   const satisfied = await startTui({ ...fixture(), width: 120 });
   try {
     await satisfied.press('p');
-    await settle(satisfied, () => satisfied.frame() !== '' && !satisfied.frame().includes(t.planBuilding));
+    await settle(() => satisfied.frame() !== '' && !satisfied.frame().includes(t.planBuilding));
     const keybar = satisfied.lines()[satisfied.lines().length - 1] ?? '';
     assert.equal(keybar.includes('space mark'), false, keybar);
     assert.equal(keybar.includes('a mark all'), false, keybar);

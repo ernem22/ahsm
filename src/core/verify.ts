@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { parse as parseToml } from 'smol-toml';
 import { expandPath, type Ctx } from '../context.js';
-import type { Data, HarnessDef, ItemDef, ProviderDef } from '../types.js';
+import type { HarnessDef, ItemDef, ProviderDef } from '../types.js';
 
 export type Verified = 'present' | 'missing' | 'unknown';
 

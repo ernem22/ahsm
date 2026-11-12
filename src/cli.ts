@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createContext, type Ctx } from './context.js';
 import { loadData } from './data.js';
 import { applyPlan, exitCodeFor, type ApplyOutcome } from './core/apply.js';
-import { buildPlan, type Plan, type PlanAction } from './core/plan.js';
+import { buildPlan, type Plan } from './core/plan.js';
 import { resolveSelection } from './core/selection.js';
 import { applyRemovePlan, planRemoval } from './core/remove.js';
 import { readStatus } from './core/status.js';
