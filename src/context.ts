@@ -53,7 +53,12 @@ export class ProcessRunner implements Runner {
 /** A runner that records commands instead of executing them (used by tests). */
 export class RecordingRunner implements Runner {
   readonly calls: string[][] = [];
-  constructor(private readonly results: RunResult[] = []) {}
+  private readonly results: RunResult[];
+
+  /** The answers are copied, so a fixture array a test shares is not consumed by the first reader. */
+  constructor(results: RunResult[] = []) {
+    this.results = [...results];
+  }
 
   async run(argv: string[]): Promise<RunResult> {
     this.calls.push(argv);
