@@ -54,10 +54,26 @@ export function wrapped(text: string, tone: Tone, width: number): BodyLine[] {
   return wrap(text, width).map((piece) => [{ text: piece, tone }]);
 }
 
-/** A row's height in the list: one line, plus the continuation lines when it wraps under itself. */
+/**
+ * The focused row in one column: its own line wraps under itself behind the focus mark, and its
+ * continuation lines follow. Nothing of the row is cut — a truncated focus would hide the one thing the
+ * user is reading.
+ */
+function focusedRow(block: RowBlock, width: number): BodyLine[] {
+  const [first, ...rest] = block.lines;
+  const lines: BodyLine[] = [];
+  if (first) {
+    const marked = `${t.tui.marks.focused}${first.text}`;
+    for (const piece of wrap(marked, width)) lines.push([{ text: piece, tone: first.tone, inverse: true }]);
+  }
+  for (const line of rest) lines.push(...wrapped(line.text, line.tone, width));
+  return lines;
+}
+
+/** A row's height in the list: one line, plus everything the focused row wraps to under itself. */
 function entryHeight(block: RowBlock, focused: boolean, width: number): number {
   if (!focused) return 1;
-  return 1 + block.lines.slice(1).reduce((total, line) => total + wrap(line.text, width).length, 0);
+  return Math.max(1, focusedRow(block, width).length);
 }
 
 function cellsWidth(cells: Cell[]): number {
@@ -72,14 +88,11 @@ function detailCell(block: RowBlock, width: number, height: number): BodyLine[] 
 
 /**
  * The rows in view at this window: at two columns each row is one line, and at one column the focused
- * row's wrapped continuations consume the window like any other line.
+ * row's wrapped lines consume the window like any other line.
  */
 export function rowsView(blocks: RowBlock[], window: RowWindow, width: number, height: number): WindowView {
   const index = goTo(window.index, blocks.length).index;
-  const heights = columns(width)
-    ? blocks.map(() => 1)
-    : blocks.map((block, at) => entryHeight(block, at === index, width));
-  return rowsInView({ index }, heights, height);
+  return rowsInView({ index }, blocksHeight(blocks, index, width), height);
 }
 
 /** The rows the window shows, one column or two, padded to exactly `height` lines. */
@@ -93,10 +106,10 @@ function rowLines(blocks: RowBlock[], window: RowWindow, width: number, height: 
   if (!split) {
     const lines: BodyLine[] = [];
     for (let at = view.start; at < view.end; at += 1) {
-      lines.push(heads[at] ?? []);
       const block = blocks[at];
-      if (!block || at !== index) continue;
-      for (const line of block.lines.slice(1)) lines.push(...wrapped(line.text, line.tone, width));
+      if (!block) continue;
+      if (at === index) lines.push(...focusedRow(block, width));
+      else lines.push(head(block, false, width));
     }
     return padLines(lines, height);
   }
@@ -144,6 +157,51 @@ export function headingLine(heading: Line, meta: string[], width: number): BodyL
     { text: ' '.repeat(width - heading.text.length - chosen.length), tone: 'dim' },
     { text: chosen, tone: 'dim' },
   ];
+}
+
+/**
+ * A body's parts, in print order: the heading with the window and filter that fit beside it, the
+ * sentence a surface states before its rows, the rows themselves, and the lines pinned below them.
+ * Every rows surface composes this instead of re-deriving the shape.
+ */
+export interface RowsBodyParts {
+  heading?: { line: Line; meta(view: WindowView): string[] };
+  note?: BodyLine[];
+  blocks: RowBlock[];
+  tail: BodyLine[];
+}
+
+/** The lines the row window gets: the body it was given, minus the heading, the note and the tail. */
+export function rowsRoom(parts: RowsBodyParts, height: number, least = 0): number {
+  const fixed = (parts.heading ? 1 : 0) + (parts.note?.length ?? 0) + parts.tail.length;
+  return Math.max(least, Math.max(1, height) - fixed);
+}
+
+/** The whole body as cells, exactly `height` lines: heading, note, the rows in their window, then the tail. */
+export function rowsBody(parts: RowsBodyParts, width: number, height: number, window: RowWindow, least = 0): BodyLine[] {
+  const room = rowsRoom(parts, height, least);
+  const at = goTo(window.index, parts.blocks.length);
+  const view = rowsInView({ index: at.index }, blocksHeight(parts.blocks, at.index, width), room);
+  const kept = room > 0 && parts.blocks.length > 0 ? rowsFrame(parts.blocks, width, room, at) : padLines([], room);
+  return [
+    ...(parts.heading ? [headingLine(parts.heading.line, parts.heading.meta(view), width)] : []),
+    ...(parts.note ?? []),
+    ...kept,
+    ...parts.tail,
+  ];
+}
+
+/** One page is one window of rows, so `PgDn` never lands past a row the user could have seen. */
+export function rowsPage(parts: RowsBodyParts, width: number, height: number, window: RowWindow, least = 0): number {
+  const room = Math.max(1, rowsRoom(parts, height, least));
+  const at = goTo(window.index, parts.blocks.length);
+  const view = rowsInView({ index: at.index }, blocksHeight(parts.blocks, at.index, width), room);
+  return Math.max(1, view.end - view.start);
+}
+
+/** The two-column split is one line per row; one column lets the focused row wrap under itself. */
+function blocksHeight(blocks: RowBlock[], index: number, width: number): number[] {
+  return columns(width) ? blocks.map(() => 1) : blocks.map((block, at) => entryHeight(block, at === index, width));
 }
 
 /** One body line: each cell keeps its own tone, and focus is the inverse video the design asks for. */

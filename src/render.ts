@@ -9,9 +9,16 @@ import { requirementState, type Plan, type PlanAction, type PlanEntry, type Plan
 
 export type Tone = 'normal' | 'dim' | 'error' | 'warning';
 
+/**
+ * What a line is in its formatter's own output, so a surface can split it into a heading, a row and a
+ * row's continuation without reading the text back and guessing.
+ */
+export type LineKind = 'heading' | 'row' | 'continuation' | 'note' | 'count';
+
 export interface Line {
   text: string;
   tone: Tone;
+  kind?: LineKind;
 }
 
 const ACTION_MARK: Record<PlanAction, string> = { run: '+', already: '=', unsupported: '!', error: '!' };
@@ -230,13 +237,13 @@ export function updateOutcomeLines(update: UpdatePlan, outcome: ApplyOutcome): L
  * the version its own CLI reports, the declared minimum, and the update we would run when it is too old.
  */
 export function statusLines(report: StatusReport): Line[] {
-  const lines: Line[] = report.warnings.map((warning) => ({ text: `! ${warning}`, tone: 'warning' as Tone }));
+  const lines: Line[] = report.warnings.map((warning) => ({ text: `! ${warning}`, tone: 'warning' as Tone, kind: 'note' as LineKind }));
 
-  lines.push({ text: t.harnesses, tone: 'dim' });
+  lines.push({ text: t.harnesses, tone: 'dim', kind: 'heading' });
   for (const row of report.harnesses) {
     const status = harnessStatus(row);
     if (status === 'absent') {
-      lines.push({ text: `${t.harnessLabels.absent}  ${row.id}`, tone: 'dim' });
+      lines.push({ text: `${t.harnessLabels.absent}  ${row.id}`, tone: 'dim', kind: 'row' });
       continue;
     }
     const version = row.version ?? t.versionUnknown;
@@ -244,13 +251,14 @@ export function statusLines(report: StatusReport): Line[] {
     lines.push({
       text: `${t.harnessLabels[status]}  ${row.id}  ${version}${minimum}`,
       tone: status === 'too-old' ? 'warning' : 'normal',
+      kind: 'row',
     });
-    if (row.updateCommand) lines.push({ text: `    ${t.harnessUpdate(row.updateCommand)}`, tone: 'dim' });
+    if (row.updateCommand) lines.push({ text: `    ${t.harnessUpdate(row.updateCommand)}`, tone: 'dim', kind: 'continuation' });
   }
 
-  lines.push({ text: t.itemsTitle, tone: 'dim' });
+  lines.push({ text: t.itemsTitle, tone: 'dim', kind: 'heading' });
   if (report.rows.length === 0) {
-    lines.push({ text: t.statusEmpty, tone: 'dim' });
+    lines.push({ text: t.statusEmpty, tone: 'dim', kind: 'note' });
     return lines;
   }
   for (const row of report.rows) {
@@ -258,6 +266,7 @@ export function statusLines(report: StatusReport): Line[] {
     lines.push({
       text: `${t.statusLabels[row.value]}  ${row.itemId} → ${row.harness} [${row.kind}]${detail}`,
       tone: 'normal',
+      kind: 'row',
     });
   }
   return lines;

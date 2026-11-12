@@ -2,8 +2,8 @@ import type { SkillInventoryReport } from '../core/list.js';
 import { t } from '../i18n.js';
 import { listLines, type Line } from '../render.js';
 import { truncate, wrap } from './format.js';
-import { headingLine, padLines, rowsFrame, rowsView, type BodyLine, type RowBlock } from './rows-frame.js';
-import { goTo, type RowWindow } from './window.js';
+import { rowsBody, rowsPage, type BodyLine, type RowBlock, type RowsBodyParts } from './rows-frame.js';
+import type { RowWindow, WindowView } from './window.js';
 
 /** The surface prints its own name, then the heading line `listFrame` owns. */
 export const LIST_HEADING = 2;
@@ -72,13 +72,8 @@ function tailLines(body: ListBody, filter: ListFilter, width: number): BodyLine[
   return lines;
 }
 
-/** The lines the row window gets: the body it was given, minus what the tail pins. */
-function rowHeight(body: ListBody, filter: ListFilter, width: number, height: number): number {
-  return Math.max(0, Math.max(1, height) - 1 - tailLines(body, filter, width).length);
-}
-
 /** The window and the filter, shortest last, so a narrow frame drops words rather than the count. */
-function metaLines(body: ListBody, filter: ListFilter, view: { start: number; end: number }): string[] {
+function metaLines(body: ListBody, filter: ListFilter, view: WindowView): string[] {
   const window = body.total === 0 ? t.tui.windowEmpty : t.tui.windowCount(view.start + 1, view.end, body.total);
   const own = filter.text === '' ? t.tui.filterNone : t.tui.filterText(filter.text);
   const carriers = filter.carriers ? t.tui.listCarriers([...filter.harnessIds]) : undefined;
@@ -89,23 +84,24 @@ function metaLines(body: ListBody, filter: ListFilter, view: { start: number; en
   ];
 }
 
+/** The inventory as a body: the heading with its window and filter, the rows, then the counts. */
+function parts(body: ListBody, filter: ListFilter, width: number): RowsBodyParts {
+  return {
+    heading: { line: body.heading, meta: (view) => metaLines(body, filter, view) },
+    blocks: body.blocks,
+    tail: tailLines(body, filter, width),
+  };
+}
+
 /**
  * The whole body as cells, exactly `height` lines: the heading with its window and filter, the rows in
  * their window, then the match count and the formatter's trailer. Nothing here writes a skill row.
  */
 export function listFrame(body: ListBody, filter: ListFilter, width: number, height: number, window: RowWindow): BodyLine[] {
-  const tail = tailLines(body, filter, width);
-  const rows = rowHeight(body, filter, width, height);
-  const at = goTo(window.index, body.blocks.length);
-  const view = rowsView(body.blocks, at, width, rows);
-  const kept = rows > 0 && body.blocks.length > 0 ? rowsFrame(body.blocks, width, rows, at) : padLines([], rows);
-  return [headingLine(body.heading, metaLines(body, filter, view), width), ...kept, ...tail];
+  return rowsBody(parts(body, filter, width), width, height, window);
 }
 
 /** One page is one window of rows, so `PgDn` never lands past a row the user could have seen. */
 export function listPage(body: ListBody, filter: ListFilter, width: number, height: number, window: RowWindow): number {
-  const frame = Math.max(1, height - LIST_HEADING);
-  const rows = rowHeight(body, filter, width, frame);
-  const view = rowsView(body.blocks, goTo(window.index, body.blocks.length), width, rows);
-  return Math.max(1, view.end - view.start);
+  return rowsPage(parts(body, filter, width), width, Math.max(1, height - LIST_HEADING), window);
 }

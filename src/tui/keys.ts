@@ -9,10 +9,25 @@ import type { RowWindow } from './window.js';
 export type SurfaceId = 'install' | 'plan' | 'apply' | 'status' | 'list' | 'stale' | 'update' | 'remove';
 
 /**
- * A rows surface: one window over rows, a page the size of the frame it shows, and the read that fills
- * it. `status` is the first one; a surface that only lists rows needs nothing more.
+ * What the shell owns and every table may use: where the user is, what a key may change outside the
+ * surface, and the one status line a key can write. Everything else a key touches belongs to the
+ * surface that declares the key.
  */
-export interface RowsHost {
+export interface ChromeHost {
+  readonly surface: SurfaceId;
+  /** A write is in flight: its own keys are off until it finishes. */
+  readonly applying: boolean;
+  /** The write finished, so the apply surface shows the result rather than the plan. */
+  readonly result: boolean;
+  go(surface: SurfaceId): void;
+  openHelp(): void;
+  closeHelp(): void;
+  quit(): void;
+  say(message: string | undefined, tone?: Tone): void;
+}
+
+/** One window over rows, a page the size of the frame it shows, and the read that fills it. */
+export interface RowsKeys {
   /** How many rows `PgUp`/`PgDn` move: one window of the frame the user is looking at. */
   readonly page: number;
   move(delta: number): void;
@@ -22,74 +37,92 @@ export interface RowsHost {
 }
 
 /** A rows surface whose read is slow enough that `Esc` has a wait to stop. */
-export interface SlowRowsHost extends RowsHost {
+export interface SlowRowsKeys extends RowsKeys {
   /** The read is in flight, so `Esc` has a wait to stop. */
   readonly busy: boolean;
   stopWaiting(): void;
 }
 
-/** The list surface's own state beyond the window: the carrier toggle and the carriers it asks about. */
-export interface ListHost extends SlowRowsHost {
-  /** `f`: keep only the skills the chosen harnesses carry. */
-  readonly carriers: boolean;
-  toggleCarriers(): void;
+/** The typed filter one surface owns: `/` opens it, a letter is text, `Esc` clears it. */
+export interface FilterKeys {
+  readonly text: string;
+  /** The text mode is open: a letter is text here, not a key. */
+  readonly typing: boolean;
+  start(): void;
+  /** A character or a backspace while the mode is open: the text is what the user is typing. */
+  edit(change: (text: string) => string): void;
+  /** `Esc`: empty the filter — its text and its state filter both — and leave the mode. */
+  clear(): void;
+  /** `Enter`: keep the text and leave the mode. */
+  keep(): void;
 }
 
-/** The stale surface's own state beyond the window: the verdict `f` cycles through. */
-export interface StaleHost extends SlowRowsHost {
+/** The install form's own state: the three sections and the choices that survive leaving. */
+export interface InstallKeys {
+  readonly form: InstallForm;
+  set(form: InstallForm): void;
+}
+
+/** The plan's own state: the row window, the requirement focus and the marks. */
+export interface PlanKeys {
+  readonly window: RowWindow;
+  readonly count: number;
+  readonly page: number;
+  readonly requirementFocus: number | undefined;
+  /** The requirement ids the user marked; the apply passes exactly these to the core. */
+  readonly updates: readonly string[];
+  /** How many requirements offer an update: with none, `space` and `a` have nothing to mark. */
+  readonly markable: number;
+  move(delta: number): void;
+  pageBy(delta: number): void;
+  edge(at: 'first' | 'last'): void;
+  rebuild(): void;
+  toggleUpdate(): void;
+  markAllUpdates(): void;
+}
+
+/** The confirm: the plan's keys plus the one that writes. */
+export interface ApplyKeys extends PlanKeys {
+  runApply(): void;
+}
+
+/** The list's own state beyond the window: the carrier toggle, the harnesses it asks about, its filter. */
+export interface ListKeys extends SlowRowsKeys {
+  /** `f`: keep only the skills the chosen harnesses carry. */
+  readonly carriers: boolean;
+  /** The harness ids chosen on the install surface: without one, `f` has nothing to ask about. */
+  readonly harnessIds: readonly string[];
+  toggleCarriers(): void;
+  readonly filter: FilterKeys;
+}
+
+/** The stale surface's own state beyond the window: the verdict `f` cycles and its filter. */
+export interface StaleKeys extends SlowRowsKeys {
   /** The state filter, or `undefined` when every recorded skill is listed. */
   readonly state: StaleValue | undefined;
   cycleState(): void;
-  clearState(): void;
+  readonly filter: FilterKeys;
 }
 
-/** What a key is allowed to do: the shell owns every piece of state the tables change. */
-export interface KeyHost {
-  readonly surface: SurfaceId;
-  readonly help: boolean;
-  /** The filter is being typed: its own mode, where a letter is text and not a key. */
-  readonly filter: boolean;
-  readonly install: InstallForm;
-  /** The plan's row window and how many rows it can focus; read from the surface's own read. */
-  readonly plan: RowWindow;
-  readonly planCount: number;
-  /** How many rows `PgUp`/`PgDn` move: one window of the frame the user is looking at. */
-  readonly page: number;
-  /** The requirement row the focus is on, when it is below the last entry; `space` marks it. */
-  readonly requirementFocus: number | undefined;
-  readonly requirementCount: number;
-  /** The requirement ids the user marked; the apply passes exactly these to the core. */
-  readonly updates: readonly string[];
-  /** A write is in flight: its own keys are off until it finishes. */
-  readonly applying: boolean;
-  /** The write finished, so the apply surface shows the result rather than the plan. */
-  readonly result: boolean;
-  /** The status surface's own rows: its window, its page and its read. */
-  readonly status: RowsHost;
-  /** The list surface: the same window, plus its carrier toggle. */
-  readonly list: ListHost;
-  /** The stale surface: the same window, plus the state filter `f` cycles. */
-  readonly stale: StaleHost;
-  /** The typed filter of the surface that is current; empty means nothing is filtered. */
-  readonly filterText: string;
-  go(surface: SurfaceId): void;
-  openHelp(): void;
-  closeHelp(): void;
-  quit(): void;
-  say(message: string | undefined, tone?: Tone): void;
-  setInstall(form: InstallForm): void;
-  movePlan(delta: number): void;
-  pagePlan(delta: number): void;
-  resetPlan(at: 'first' | 'last'): void;
-  rebuildPlan(): void;
-  toggleUpdate(): void;
-  markAllUpdates(): void;
-  runApply(): void;
-  startFilter(): void;
-  /** `Esc` in the filter: empty it and leave the text mode. */
-  clearFilter(): void;
-  /** `Enter` in the filter: keep the text and leave the text mode. */
-  keepFilter(): void;
+/** Each surface's host is its own keys plus the chrome every table may use. */
+export type InstallHost = ChromeHost & InstallKeys;
+export type PlanHost = ChromeHost & PlanKeys;
+export type ApplyHost = ChromeHost & ApplyKeys;
+export type RowsHost = ChromeHost & RowsKeys;
+export type StatusHost = ChromeHost & SlowRowsKeys;
+export type ListHost = ChromeHost & ListKeys;
+export type StaleHost = ChromeHost & StaleKeys;
+
+/** Every surface's host, named once so a table is handed only the host it owns. */
+export interface SurfaceHosts {
+  install: InstallHost;
+  plan: PlanHost;
+  apply: ApplyHost;
+  status: StatusHost;
+  list: ListHost;
+  stale: StaleHost;
+  update: ChromeHost;
+  remove: ChromeHost;
 }
 
 export interface KeyBinding {
@@ -99,10 +132,10 @@ export interface KeyBinding {
   /** Absent from the keybar; the rail and the help overlay still print it, because it is a real key. */
   hidden?: boolean;
   /** Inactive and unlisted while it returns false. */
-  when?(host: KeyHost): boolean;
+  when?(): boolean;
   /** Returns the reason it does not act; the key stays listed and pressing it says so. */
-  refuses?(host: KeyHost): string | undefined;
-  run(host: KeyHost): void;
+  refuses?(): string | undefined;
+  run(): void;
 }
 
 export type KeyTable = readonly KeyBinding[];
@@ -122,417 +155,315 @@ export const RAIL: readonly { key: string; surface: SurfaceId }[] = [
  * A write is in flight. Every key that would leave the surface — or start a second write — says why it
  * does not, because writes cannot be cancelled and the result is the only honest thing to wait for.
  */
-function refusesDuringWrite(host: KeyHost): string | undefined {
-  return host.applying ? t.tui.applyRefusal : undefined;
-}
-
-/** The rows keys act on a body that is on screen: during the write the body is the busy block. */
-function notWhileWriting(host: KeyHost): boolean {
-  return !host.applying;
+function refusesDuringWrite(host: ChromeHost): () => string | undefined {
+  return () => (host.applying ? t.tui.applyRefusal : undefined);
 }
 
 /** The rail letters as bindings: the rail prints them in the header, so they are not keybar entries. */
-const navigation: KeyTable = RAIL.map(({ key, surface }) => ({
-  keys: [key],
-  label: t.tui.surfaces[surface],
-  hidden: true,
-  refuses: refusesDuringWrite,
-  run: (host: KeyHost) => host.go(surface),
-}));
+function railBindings(host: ChromeHost): KeyTable {
+  return RAIL.map(({ key, surface }) => ({
+    keys: [key],
+    label: t.tui.surfaces[surface],
+    hidden: true,
+    refuses: refusesDuringWrite(host),
+    run: () => host.go(surface),
+  }));
+}
 
-/**
- * `Esc` while the overlay is open. The overlay and the keybar share this one binding, so a frame can
- * never say `Esc back` in one place and `Esc close` in the other.
- */
-const closeBinding: KeyBinding = { keys: ['escape'], label: t.tui.keys.close, run: (host) => host.closeHelp() };
-
-/** Quitting is the one key that stays live in every mode; a write in flight is the one exception. */
-const quitBinding: KeyBinding = { keys: ['q'], label: t.tui.keys.quit, refuses: refusesDuringWrite, run: (host) => host.quit() };
+/** The overlay is a mode: only closing it and quitting stay live while it is open. */
+export function helpKeys(host: ChromeHost): KeyTable {
+  return [
+    { keys: ['escape'], label: t.tui.keys.close, run: () => host.closeHelp() },
+    { keys: ['?'], label: t.tui.keys.close, hidden: true, run: () => host.closeHelp() },
+    { keys: ['q'], label: t.tui.keys.quit, refuses: refusesDuringWrite(host), run: () => host.quit() },
+  ];
+}
 
 /** Keys that work on every surface; `?` and `q` also appear in every keybar. */
-export const globalKeys: KeyTable = [
-  ...navigation,
-  { keys: ['?'], label: t.tui.keys.help, run: (host) => host.openHelp() },
-  {
-    keys: ['escape'],
-    label: t.tui.keys.back,
-    when: (host) => host.surface !== 'install',
-    refuses: refusesDuringWrite,
-    // The confirm declines back to the plan; a finished write has no plan left to decline to.
-    run: (host) => host.go(host.surface === 'apply' && !host.result ? 'plan' : 'install'),
-  },
-  quitBinding,
-];
+export function globalKeys(host: ChromeHost): KeyTable {
+  return [
+    ...railBindings(host),
+    { keys: ['?'], label: t.tui.keys.help, run: () => host.openHelp() },
+    {
+      keys: ['escape'],
+      label: t.tui.keys.back,
+      when: () => host.surface !== 'install',
+      refuses: refusesDuringWrite(host),
+      // The confirm declines back to the plan; a finished write has no plan left to decline to.
+      run: () => host.go(host.surface === 'apply' && !host.result ? 'plan' : 'install'),
+    },
+    { keys: ['q'], label: t.tui.keys.quit, refuses: refusesDuringWrite(host), run: () => host.quit() },
+  ];
+}
 
 /**
  * The install form: one focused section at a time. `space` and `a` change rows, `Up`/`Down` move the
  * cursor (hidden from the keybar, listed in the overlay), `Enter` goes forward and `Esc` back — and a
  * refused `Enter` says why instead of doing nothing.
  */
-const installTable: KeyTable = [
-  {
-    keys: ['space'],
-    label: t.tui.keys.choose,
-    run: (host) => {
-      host.say(undefined);
-      host.setInstall(toggleFocused(host.install));
+export function installKeys(host: InstallHost): KeyTable {
+  return [
+    {
+      keys: ['space'],
+      label: t.tui.keys.choose,
+      run: () => {
+        host.say(undefined);
+        host.set(toggleFocused(host.form));
+      },
     },
-  },
-  {
-    keys: ['a'],
-    label: t.tui.keys.all,
-    // The package section is a single choice, so "all" has nothing to mean there.
-    when: (host) => host.install.stage !== 'package',
-    run: (host) => {
-      host.say(undefined);
-      host.setInstall(toggleSection(host.install));
+    {
+      keys: ['a'],
+      label: t.tui.keys.all,
+      // The package section is a single choice, so "all" has nothing to mean there.
+      when: () => host.form.stage !== 'package',
+      run: () => {
+        host.say(undefined);
+        host.set(toggleSection(host.form));
+      },
     },
-  },
-  {
-    keys: ['up'],
-    label: t.tui.keys.move,
-    hidden: true,
-    run: (host) => host.setInstall(moveCursor(host.install, -1)),
-  },
-  {
-    keys: ['down'],
-    label: t.tui.keys.move,
-    hidden: true,
-    run: (host) => host.setInstall(moveCursor(host.install, 1)),
-  },
-  {
-    keys: ['return'],
-    label: t.tui.keys.next,
-    run: (host) => {
-      const next = advance(host.install);
-      if (next.kind === 'refused') {
-        host.say(next.message);
-        return;
-      }
-      host.say(undefined);
-      if (next.kind === 'plan') host.go('plan');
-      else host.setInstall(next.form);
+    { keys: ['up'], label: t.tui.keys.move, hidden: true, run: () => host.set(moveCursor(host.form, -1)) },
+    { keys: ['down'], label: t.tui.keys.move, hidden: true, run: () => host.set(moveCursor(host.form, 1)) },
+    {
+      keys: ['return'],
+      label: t.tui.keys.next,
+      run: () => {
+        const next = advance(host.form);
+        if (next.kind === 'refused') {
+          host.say(next.message);
+          return;
+        }
+        host.say(undefined);
+        if (next.kind === 'plan') host.go('plan');
+        else host.set(next.form);
+      },
     },
-  },
-  {
-    keys: ['escape'],
-    label: t.tui.keys.back,
-    // While the overlay is open `Esc` closes it, and the overlay shares this frame's key set.
-    when: (host) => !host.help && host.install.stage !== 'harnesses',
-    run: (host) => {
-      host.say(undefined);
-      host.setInstall(stepBack(host.install));
+    {
+      keys: ['escape'],
+      label: t.tui.keys.back,
+      when: () => host.form.stage !== 'harnesses',
+      run: () => {
+        host.say(undefined);
+        host.set(stepBack(host.form));
+      },
     },
-  },
-];
-
-/** `space` and `a` act on the focused requirement row, the same on the plan and the confirm. */
-const markBinding: KeyBinding = {
-  keys: ['space'],
-  label: t.tui.keys.mark,
-  when: notWhileWriting,
-  run: (host) => host.toggleUpdate(),
-};
-
-const markAllBinding: KeyBinding = {
-  keys: ['a'],
-  label: t.tui.keys.markAll,
-  when: notWhileWriting,
-  run: (host) => host.markAllUpdates(),
-};
-
-/** `Enter` opens the confirm: the same body and marks, with the one key that writes. */
-const confirmBinding: KeyBinding = {
-  keys: ['return'],
-  label: t.tui.keys.apply,
-  run: (host) => host.go('apply'),
-};
+  ];
+}
 
 /**
  * The rows keys, shared by the plan and its confirm: the window moves through the entries, and `Down`
  * past the last entry walks the requirement rows, where `space` has something to mark.
  */
-const planNavigation: KeyTable = [
-  {
-    keys: ['up'],
-    label: t.tui.keys.move,
-    hidden: true,
-    when: notWhileWriting,
-    run: (host) => host.movePlan(-1),
-  },
-  {
-    keys: ['down'],
-    label: t.tui.keys.move,
-    hidden: true,
-    when: notWhileWriting,
-    run: (host) => host.movePlan(1),
-  },
-  {
-    keys: ['pageup'],
-    label: t.tui.keys.move,
-    hidden: true,
-    when: notWhileWriting,
-    run: (host) => host.pagePlan(-host.page),
-  },
-  {
-    keys: ['pagedown'],
-    label: t.tui.keys.move,
-    hidden: true,
-    when: notWhileWriting,
-    run: (host) => host.pagePlan(host.page),
-  },
-  {
-    keys: ['g'],
-    label: t.tui.keys.first,
-    hidden: true,
-    when: notWhileWriting,
-    run: (host) => host.resetPlan('first'),
-  },
-  {
-    keys: ['G'],
-    label: t.tui.keys.last,
-    hidden: true,
-    when: notWhileWriting,
-    run: (host) => host.resetPlan('last'),
-  },
-];
+function planNavigation(host: PlanHost): KeyTable {
+  return [
+    { keys: ['up'], label: t.tui.keys.move, hidden: true, when: () => !host.applying, run: () => host.move(-1) },
+    { keys: ['down'], label: t.tui.keys.move, hidden: true, when: () => !host.applying, run: () => host.move(1) },
+    { keys: ['pageup'], label: t.tui.keys.move, hidden: true, when: () => !host.applying, run: () => host.pageBy(-host.page) },
+    { keys: ['pagedown'], label: t.tui.keys.move, hidden: true, when: () => !host.applying, run: () => host.pageBy(host.page) },
+    { keys: ['g'], label: t.tui.keys.first, hidden: true, when: () => !host.applying, run: () => host.edge('first') },
+    { keys: ['G'], label: t.tui.keys.last, hidden: true, when: () => !host.applying, run: () => host.edge('last') },
+  ];
+}
+
+/**
+ * `space` and `a` act on the focused requirement row. A plan with no markable update has nothing for
+ * them to change, so they are not offered at all rather than listed and inert.
+ */
+function markKeys(host: PlanHost): KeyTable {
+  const offered = (): boolean => !host.applying && host.markable > 0;
+  return [
+    { keys: ['space'], label: t.tui.keys.mark, when: offered, run: () => host.toggleUpdate() },
+    { keys: ['a'], label: t.tui.keys.markAll, when: offered, run: () => host.markAllUpdates() },
+  ];
+}
 
 /**
  * The plan body, read-only: the window moves, requirements are marked and `r` reads the plan again.
  * No key here writes; `Enter` opens the confirm, where `y` is the only writer.
  */
-const planTable: KeyTable = [
-  ...planNavigation,
-  markBinding,
-  markAllBinding,
-  confirmBinding,
-  {
-    keys: ['r'],
-    label: t.tui.keys.rebuild,
-    run: (host) => {
-      host.say(undefined);
-      host.rebuildPlan();
+export function planKeys(host: PlanHost): KeyTable {
+  return [
+    ...planNavigation(host),
+    ...markKeys(host),
+    { keys: ['return'], label: t.tui.keys.apply, run: () => host.go('apply') },
+    {
+      keys: ['r'],
+      label: t.tui.keys.rebuild,
+      run: () => {
+        host.say(undefined);
+        host.rebuild();
+      },
     },
-  },
-];
+  ];
+}
 
 /**
  * The confirm: the plan body plus the one key that writes. `y` hands the core exactly the marks, `n`
  * and `Esc` decline without running anything and keep the selection.
  */
-const applyTable: KeyTable = [
-  {
-    keys: ['y'],
-    label: t.tui.keys.apply,
-    refuses: refusesDuringWrite,
-    run: (host) => host.runApply(),
-  },
-  ...planNavigation,
-  markBinding,
-  markAllBinding,
-  {
-    keys: ['n'],
-    label: t.tui.keys.decline,
-    refuses: refusesDuringWrite,
-    run: (host) => host.go('plan'),
-  },
-];
+export function applyKeys(host: ApplyHost): KeyTable {
+  return [
+    { keys: ['y'], label: t.tui.keys.apply, refuses: refusesDuringWrite(host), run: () => host.runApply() },
+    ...planNavigation(host),
+    ...markKeys(host),
+    { keys: ['n'], label: t.tui.keys.decline, refuses: refusesDuringWrite(host), run: () => host.go('plan') },
+  ];
+}
 
 /**
  * The result: every key here leaves, and each names its own destination. `Enter` exits, `s` opens the
  * follow-up question, `Esc` goes back to the form with the selection, `n` returns to the plan, and `r`
  * reads the plan again after the write so the rows show what is now true.
  */
-const resultTable: KeyTable = [
-  { keys: ['return'], label: t.tui.keys.exit, run: (host) => host.quit() },
-  { keys: ['s'], label: t.tui.surfaces.status, run: (host) => host.go('status') },
-  { keys: ['n'], label: t.tui.surfaces.plan, run: (host) => host.go('plan') },
-  {
-    keys: ['r'],
-    label: t.tui.keys.rebuild,
-    run: (host) => {
-      host.rebuildPlan();
-      host.go('plan');
+export function resultKeys(host: ApplyHost): KeyTable {
+  return [
+    { keys: ['return'], label: t.tui.keys.exit, run: () => host.quit() },
+    { keys: ['s'], label: t.tui.surfaces.status, run: () => host.go('status') },
+    { keys: ['n'], label: t.tui.surfaces.plan, run: () => host.go('plan') },
+    {
+      keys: ['r'],
+      label: t.tui.keys.rebuild,
+      run: () => {
+        host.rebuild();
+        host.go('plan');
+      },
     },
-  },
-];
+  ];
+}
 
 /**
- * The status surface, read-only: the rows window moves and `r` reads the report again. No key here
- * writes, so the surface binds nothing a visitor has to be careful with.
+ * A read-only rows surface: the window moves through the rows and `Esc` first spends itself on a
+ * running read, so the keybar names the step the press would take.
  */
-const statusTable: KeyTable = [
-  { keys: ['up'], label: t.tui.keys.move, hidden: true, run: (host) => host.status.move(-1) },
-  { keys: ['down'], label: t.tui.keys.move, hidden: true, run: (host) => host.status.move(1) },
-  { keys: ['pageup'], label: t.tui.keys.move, hidden: true, run: (host) => host.status.pageBy(-host.status.page) },
-  { keys: ['pagedown'], label: t.tui.keys.move, hidden: true, run: (host) => host.status.pageBy(host.status.page) },
-  { keys: ['g'], label: t.tui.keys.first, hidden: true, run: (host) => host.status.edge('first') },
-  { keys: ['G'], label: t.tui.keys.last, hidden: true, run: (host) => host.status.edge('last') },
-  {
+function rowsNavigation(host: SlowRowsKeys): KeyTable {
+  return [
+    { keys: ['up'], label: t.tui.keys.move, hidden: true, run: () => host.move(-1) },
+    { keys: ['down'], label: t.tui.keys.move, hidden: true, run: () => host.move(1) },
+    { keys: ['pageup'], label: t.tui.keys.move, hidden: true, run: () => host.pageBy(-host.page) },
+    { keys: ['pagedown'], label: t.tui.keys.move, hidden: true, run: () => host.pageBy(host.page) },
+    { keys: ['g'], label: t.tui.keys.first, hidden: true, run: () => host.edge('first') },
+    { keys: ['G'], label: t.tui.keys.last, hidden: true, run: () => host.edge('last') },
+  ];
+}
+
+/** `Esc` while a read runs stops the wait; the copy says the provider may still be working. */
+function stopWaitingKey(host: SlowRowsKeys): KeyBinding {
+  return { keys: ['escape'], label: t.tui.keys.stopWaiting, when: () => host.busy, run: () => host.stopWaiting() };
+}
+
+/** `Esc` with a filter set clears it: one step takes the text and the state filter both. */
+function clearFilterKey(host: SlowRowsKeys, filter: FilterKeys, extra: () => boolean): KeyBinding {
+  return {
+    keys: ['escape'],
+    label: t.tui.keys.filterClear,
+    when: () => filter.text !== '' || extra(),
+    run: () => filter.clear(),
+  };
+}
+
+/** `r` reads the surface again, and the status line the previous answer wrote goes with it. */
+function reloadKey(host: ChromeHost & RowsKeys): KeyBinding {
+  return {
     keys: ['r'],
     label: t.tui.keys.refresh,
-    run: (host) => {
+    run: () => {
       host.say(undefined);
-      host.status.reload();
+      host.reload();
     },
-  },
-];
+  };
+}
+
+/**
+ * The status surface, read-only: the rows window moves and `r` reads the report again. Its read spawns
+ * the harness version checks, so it is slow enough to be named, timed and stopped like the other slow
+ * reads — one `Esc` rule, four rows surfaces.
+ */
+export function statusKeys(host: StatusHost): KeyTable {
+  return [stopWaitingKey(host), ...rowsNavigation(host), reloadKey(host)];
+}
 
 /**
  * The list surface, read-only: `/` narrows as you type, `f` keeps only what the chosen harnesses carry,
- * the window moves, and `r` reads the slow inventory again. `Esc` spends itself on whatever is live —
- * a running read, then a set filter — before the global `back` leaves the surface.
+ * the window moves, and `r` reads the slow inventory again. `Esc` spends itself on a running read, then
+ * on the filter, before it leaves the surface.
  */
-const listTable: KeyTable = [
-  {
-    keys: ['escape'],
-    label: t.tui.keys.stopWaiting,
-    when: (host) => host.list.busy,
-    run: (host) => host.list.stopWaiting(),
-  },
-  {
-    keys: ['escape'],
-    label: t.tui.keys.filterClear,
-    when: (host) => host.filterText !== '',
-    run: (host) => host.clearFilter(),
-  },
-  { keys: ['up'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.move(-1) },
-  { keys: ['down'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.move(1) },
-  { keys: ['pageup'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.pageBy(-host.list.page) },
-  { keys: ['pagedown'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.pageBy(host.list.page) },
-  { keys: ['g'], label: t.tui.keys.first, hidden: true, run: (host) => host.list.edge('first') },
-  { keys: ['G'], label: t.tui.keys.last, hidden: true, run: (host) => host.list.edge('last') },
-  {
-    keys: ['/'],
-    label: t.tui.keys.filter,
-    when: (host) => host.filterText === '',
-    run: (host) => host.startFilter(),
-  },
-  {
-    keys: ['/'],
-    label: t.tui.keys.edit,
-    when: (host) => host.filterText !== '',
-    run: (host) => host.startFilter(),
-  },
-  {
-    keys: ['f'],
-    label: t.tui.keys.carriers,
-    // Nothing chosen on `install` carries nothing: the refusal says which surface to choose on.
-    refuses: (host) => (host.install.harnessIds.length === 0 ? t.tui.listNoCarriers : undefined),
-    run: (host) => {
-      host.say(undefined);
-      host.list.toggleCarriers();
+export function listKeys(host: ListHost): KeyTable {
+  return [
+    stopWaitingKey(host),
+    clearFilterKey(host, host.filter, () => host.carriers),
+    ...rowsNavigation(host),
+    { keys: ['/'], label: host.filter.text === '' ? t.tui.keys.filter : t.tui.keys.edit, run: () => host.filter.start() },
+    {
+      keys: ['f'],
+      label: t.tui.keys.carriers,
+      // Nothing chosen on `install` carries nothing: the refusal says which surface to choose on.
+      refuses: () => (host.harnessIds.length === 0 ? t.tui.listNoCarriers : undefined),
+      run: () => {
+        host.say(undefined);
+        host.toggleCarriers();
+      },
     },
-  },
-  {
-    keys: ['r'],
-    label: t.tui.keys.refresh,
-    run: (host) => {
-      host.say(undefined);
-      host.list.reload();
-    },
-  },
-];
-
-/**
- * The filter's mode: the only single-line text mode besides the remove name. A letter is text here, so
- * the table binds just the two keys that end it — `Esc` clears and leaves, `Enter` keeps and leaves.
- */
-export const filterKeys: KeyTable = [
-  { keys: ['escape'], label: t.tui.keys.filterClear, run: (host) => host.clearFilter() },
-  { keys: ['return'], label: t.tui.keys.filterKeep, run: (host) => host.keepFilter() },
-];
+    reloadKey(host),
+  ];
+}
 
 /**
  * The stale surface, read-only: the verdicts the provider's own check produced, one row each. `f`
  * cycles the state filter, `/` narrows by name, `u` opens the update plan for these skills, and `r`
  * runs the check again. `Esc` spends itself on the wait, then on the filter, then on the surface.
  */
-const staleTable: KeyTable = [
-  {
-    keys: ['escape'],
-    label: t.tui.keys.stopWaiting,
-    when: (host) => host.stale.busy,
-    run: (host) => host.stale.stopWaiting(),
-  },
-  {
-    keys: ['escape'],
-    label: t.tui.keys.filterClear,
-    when: (host) => host.filterText !== '',
-    run: (host) => host.clearFilter(),
-  },
-  {
-    keys: ['escape'],
-    label: t.tui.keys.filterClear,
-    when: (host) => host.stale.state !== undefined,
-    run: (host) => host.stale.clearState(),
-  },
-  { keys: ['up'], label: t.tui.keys.move, hidden: true, run: (host) => host.stale.move(-1) },
-  { keys: ['down'], label: t.tui.keys.move, hidden: true, run: (host) => host.stale.move(1) },
-  { keys: ['pageup'], label: t.tui.keys.move, hidden: true, run: (host) => host.stale.pageBy(-host.stale.page) },
-  { keys: ['pagedown'], label: t.tui.keys.move, hidden: true, run: (host) => host.stale.pageBy(host.stale.page) },
-  { keys: ['g'], label: t.tui.keys.first, hidden: true, run: (host) => host.stale.edge('first') },
-  { keys: ['G'], label: t.tui.keys.last, hidden: true, run: (host) => host.stale.edge('last') },
-  {
-    keys: ['/'],
-    label: t.tui.keys.search,
-    when: (host) => host.filterText === '',
-    run: (host) => host.startFilter(),
-  },
-  {
-    keys: ['/'],
-    label: t.tui.keys.edit,
-    when: (host) => host.filterText !== '',
-    run: (host) => host.startFilter(),
-  },
-  {
-    keys: ['f'],
-    label: t.tui.keys.filter,
-    run: (host) => {
-      host.say(undefined);
-      host.stale.cycleState();
+export function staleKeys(host: StaleHost): KeyTable {
+  return [
+    stopWaitingKey(host),
+    clearFilterKey(host, host.filter, () => host.state !== undefined),
+    ...rowsNavigation(host),
+    { keys: ['/'], label: host.filter.text === '' ? t.tui.keys.search : t.tui.keys.edit, run: () => host.filter.start() },
+    {
+      keys: ['f'],
+      label: t.tui.keys.filter,
+      run: () => {
+        host.say(undefined);
+        host.cycleState();
+      },
     },
-  },
-  {
-    keys: ['u'],
-    label: t.tui.keys.update,
-    refuses: refusesDuringWrite,
-    run: (host) => host.go('update'),
-  },
-  {
-    keys: ['r'],
-    label: t.tui.keys.refresh,
-    run: (host) => {
-      host.say(undefined);
-      host.stale.reload();
-    },
-  },
-];
-
-/** One table per surface; its keys are dispatched before the global ones and listed in its keybar. */
-export const surfaceKeys: Record<SurfaceId, KeyTable> = {
-  install: installTable,
-  plan: planTable,
-  apply: applyTable,
-  status: statusTable,
-  list: listTable,
-  stale: staleTable,
-  update: [],
-  remove: [],
-};
-
-/** The apply surface's keys follow its state: confirming, then the result once the write resolved. */
-export function surfaceKeyTable(surface: SurfaceId, host: KeyHost): KeyTable {
-  if (surface === 'apply' && host.result) return resultTable;
-  return surfaceKeys[surface];
+    { keys: ['u'], label: t.tui.keys.update, refuses: refusesDuringWrite(host), run: () => host.go('update') },
+    reloadKey(host),
+  ];
 }
 
-/** The overlay is a mode: only closing it and quitting stay live while it is open. */
-export const helpKeys: KeyTable = [
-  closeBinding,
-  { keys: ['?'], label: t.tui.keys.close, hidden: true, run: (host) => host.closeHelp() },
-  quitBinding,
-];
+/** The filter's mode: a letter is text here, so the table binds just the two keys that end it. */
+export function filterModeKeys(host: FilterKeys): KeyTable {
+  return [
+    { keys: ['escape'], label: t.tui.keys.filterClear, run: () => host.clear() },
+    { keys: ['return'], label: t.tui.keys.filterKeep, run: () => host.keep() },
+  ];
+}
+
+/** One table per surface: the table decides, and the shell only names the surface. */
+const TABLES: Record<SurfaceId, (hosts: SurfaceHosts) => KeyTable> = {
+  install: (hosts) => installKeys(hosts.install),
+  plan: (hosts) => planKeys(hosts.plan),
+  apply: (hosts) => (hosts.apply.result ? resultKeys(hosts.apply) : applyKeys(hosts.apply)),
+  status: (hosts) => statusKeys(hosts.status),
+  list: (hosts) => listKeys(hosts.list),
+  stale: (hosts) => staleKeys(hosts.stale),
+  update: () => [],
+  remove: () => [],
+};
+
+/** The current surface's own keys, and nothing of any other surface's state. */
+export function surfaceKeys(surface: SurfaceId, hosts: SurfaceHosts): KeyTable {
+  return TABLES[surface](hosts);
+}
+
+/** The typed filter, when the current surface has one: `/` edits that one, never another's. */
+const FILTERS: Partial<Record<SurfaceId, (hosts: SurfaceHosts) => FilterKeys>> = {
+  list: (hosts) => hosts.list.filter,
+  stale: (hosts) => hosts.stale.filter,
+};
+
+export function filterOf(surface: SurfaceId, hosts: SurfaceHosts): FilterKeys | undefined {
+  return FILTERS[surface]?.(hosts);
+}
 
 /** A keypress as one token, so a table never has to know how Ink spells a key. */
 export function tokenOf(input: string, key: Key): string {
@@ -550,25 +481,28 @@ export function tokenOf(input: string, key: Key): string {
   return input;
 }
 
-/** The table the current mode dispatches: the filter's, else the surface's own, then the global ones. */
-export function activeKeys(surface: SurfaceId, help: boolean, host: KeyHost): KeyTable {
-  if (help) return helpKeys;
-  if (host.filter) return filterKeys;
-  return [...surfaceKeyTable(surface, host), ...globalKeys];
+/** The table the current mode dispatches: the overlay's, the filter's, else the surface's, then the global ones. */
+export function activeKeys(hosts: SurfaceHosts, chrome: ChromeHost, help: boolean): KeyTable {
+  // The overlay is a mode of its own: only closing it and quitting dispatch while it is open.
+  if (help) return helpKeys(chrome);
+  const typed = filterOf(chrome.surface, hosts);
+  if (typed?.typing) return filterModeKeys(typed);
+  return [...surfaceKeys(chrome.surface, hosts), ...globalKeys(chrome)];
 }
 
 /**
  * One key set per frame, and one entry per key: the overlay prints all of it and the keybar prints the
  * entries that are not `hidden`. The surface's own binding comes first, so a surface names a shared key
- * (`u`, `Esc`) in its own words and the entry shown is the one that dispatches.
+ * (`u`, `Esc`) in its own words and the entry shown is the one that dispatches. While the overlay is
+ * open its own keys come first, because closing it and quitting are what really dispatch there.
  */
-export function frameKeys(surface: SurfaceId, help: boolean, host: KeyHost): KeyBinding[] {
+export function frameKeys(hosts: SurfaceHosts, chrome: ChromeHost, help: boolean): KeyBinding[] {
   const table: KeyTable = help
-    ? [...surfaceKeyTable(surface, host), ...navigation, closeBinding, quitBinding]
-    : activeKeys(surface, false, host);
+    ? [...helpKeys(chrome), ...surfaceKeys(chrome.surface, hosts), ...railBindings(chrome)]
+    : activeKeys(hosts, chrome, false);
   const kept: KeyBinding[] = [];
   for (const binding of table) {
-    if (!(binding.when?.(host) ?? true)) continue;
+    if (!(binding.when?.() ?? true)) continue;
     // Two bindings for one key are precedence, not two keys: only the first that acts is listed.
     if (binding.keys.some((token) => kept.some((entry) => entry.keys.includes(token)))) continue;
     kept.push(binding);
@@ -580,12 +514,12 @@ export function frameKeys(surface: SurfaceId, help: boolean, host: KeyHost): Key
  * The keybar's half of the frame's key set: everything the overlay lists except the `hidden` entries
  * and the ones that would refuse this press — a bar never advertises a key that does nothing.
  */
-export function keybarKeys(frame: KeyBinding[], host: KeyHost): KeyBinding[] {
-  return frame.filter((binding) => !binding.hidden && binding.refuses?.(host) === undefined);
+export function keybarKeys(frame: readonly KeyBinding[]): KeyBinding[] {
+  return frame.filter((binding) => !binding.hidden && binding.refuses?.() === undefined);
 }
 
-export function findBinding(table: KeyTable, host: KeyHost, token: string): KeyBinding | undefined {
-  return table.find((binding) => binding.keys.includes(token) && (binding.when?.(host) ?? true));
+export function findBinding(table: KeyTable, token: string): KeyBinding | undefined {
+  return table.find((binding) => binding.keys.includes(token) && (binding.when?.() ?? true));
 }
 
 /** The key's own name on screen, from the first token it dispatches. */
@@ -614,5 +548,7 @@ export function keybarText(bindings: KeyBinding[], width: number): string {
 /** `i install · p plan · …`, or nothing when the header has no room for it. */
 export function railText(width: number, minWidth: number): string | undefined {
   if (width < minWidth) return undefined;
-  return navigation.map(entryText).join(t.tui.keybarSeparator);
+  return RAIL.map(({ key, surface }) => `${keyName({ keys: [key], label: '', run: () => {} })} ${t.tui.surfaces[surface]}`).join(
+    t.tui.keybarSeparator,
+  );
 }

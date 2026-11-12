@@ -8,8 +8,12 @@ import type { Plan } from '../src/core/plan.js';
 import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
 import { allUpdates, markableUpdates, toggleUpdate } from '../src/tui/plan.js';
-import { bodyHeight, statusLines } from '../src/tui/shell.js';
-import { OFFLINE_ROOT, expectFrame, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
+import { OFFLINE_ROOT, expectFrame, fixture, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
+
+/** One string with every run of blanks collapsed: a wrap may move a space, never a word. */
+function flat(text: string): string {
+  return text.replace(/\s+/g, ' ');
+}
 
 /** A second harness no provider lists, so a real outcome carries `not covered` rows beside the rest. */
 const OTHER_HARNESS = [
@@ -513,13 +517,91 @@ test('at 40 columns the result wraps and no line leaves the frame', async () => 
   }
 });
 
-test('a status line wider than the frame takes lines from the body, not from the keybar', () => {
-  const refusal = { text: t.tui.applyRefusal, tone: 'warning' as const };
-  assert.equal(statusLines(refusal, 40).length, 1, 'the refusal fits 40 columns exactly');
-  const narrow = statusLines(refusal, 20);
-  assert.ok(narrow.length > 1, 'a 20-column frame wraps it');
-  assert.ok(narrow.every((line) => line.length <= 20), narrow.join(' | '));
-  assert.equal(bodyHeight(30, refusal, 20), 30 - 3 - narrow.length, 'the wrapped status line came out of the body');
+test('a status line wider than the frame takes lines from the body, not from the keybar', async () => {
+  // Nothing chosen on `install`, so `f` on `list` refuses: the refusal is wider than 20 columns.
+  const tui = await startTui({ ...fixture(), width: 20 });
+  try {
+    await tui.press('l');
+    await settle(tui, () => tui.frame().includes(t.skillsTitle));
+    await tui.press('f');
+    const lines = tui.lines();
+    expectFrame(lines, { width: 20, rows: 30 });
+    // The refusal arrives whole, above the keybar, and the keybar is still the frame's last line.
+    assert.ok(flat(tui.frame()).includes(flat(t.tui.listNoCarriers)), tui.frame());
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true);
+    assert.ok((lines[lines.length - 1] ?? '').length > 0, 'the keybar left the frame');
+    assert.equal(lines[lines.length - 1]?.includes(t.tui.listNoCarriers), false, 'the refusal took the keybar');
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('a second apply starts from nothing: the previous result is not the new confirm', async () => {
+  const shared = setup();
+  const tui = await startTui({ ...shared, width: 120 });
+  try {
+    await openWithNodeFocused(tui);
+    await tui.press(' ', '\r');
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
+    await tui.press('y');
+    await result(tui);
+    assert.equal(tui.lines().includes(t.tui.resultTitle), true, 'the write never reported a result');
+
+    // Back to the plan, then the confirm again: this plan's answer is the confirm, not the old result.
+    await tui.press('n');
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`), true, tui.lines()[0] ?? '');
+    await settle(tui, () => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
+    await tui.press('\r');
+    const lines = tui.lines();
+    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, lines[0] ?? '');
+    assert.equal(lines.includes(t.tui.resultTitle), false, 'the previous result was shown as this confirm');
+    expectFrame(lines, { width: 120, rows: 30 });
+    const keybar = lines[lines.length - 1] ?? '';
+    assert.ok(keybar.includes('y apply'), keybar);
+    assert.ok(keybar.includes('n decline'), keybar);
+    assert.equal(lines[lines.length - 2], t.actions(0, 0, 1), 'the count line left the key');
+
+    // And the key works: a second write runs, it is not refused by a stale write state.
+    const before = shared.runner.calls.length;
+    await tui.press('y');
+    await settle(tui, () => shared.runner.calls.length > before);
+    assert.ok(shared.runner.calls.length > before, 'the second apply ran nothing');
+    assert.match(tui.frame(), /applying… \d+s/, tui.frame());
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('a plan with an update to mark offers the mark keys, and one without offers none', async () => {
+  const shared = setup();
+  const tui = await startTui({ ...shared, width: 120 });
+  try {
+    await openPlan(tui);
+    const keybar = tui.lines()[tui.lines().length - 1] ?? '';
+    assert.ok(keybar.includes('space mark'), keybar);
+    assert.ok(keybar.includes('a mark all'), keybar);
+  } finally {
+    await tui.stop();
+  }
+
+  // The fixture's two requirements are satisfied, so there is nothing to mark and no key to press.
+  const satisfied = await startTui({ ...fixture(), width: 120 });
+  try {
+    await satisfied.press('p');
+    await settle(satisfied, () => satisfied.frame() !== '' && !satisfied.frame().includes(t.planBuilding));
+    const keybar = satisfied.lines()[satisfied.lines().length - 1] ?? '';
+    assert.equal(keybar.includes('space mark'), false, keybar);
+    assert.equal(keybar.includes('a mark all'), false, keybar);
+
+    await satisfied.press('?');
+    const lines = satisfied.lines();
+    const heading = lines.indexOf(t.tui.helpTitle(t.tui.surfaces.plan));
+    const rows = lines.slice(heading + 1, lines.length - 1).filter((line) => line !== '');
+    assert.equal(rows.includes('space mark'), false, rows.join('|'));
+    assert.equal(rows.includes('a mark all'), false, rows.join('|'));
+  } finally {
+    await satisfied.stop();
+  }
 });
 
 test('a mark survives the narrow layout: it is the box and the words, never a colour', async () => {

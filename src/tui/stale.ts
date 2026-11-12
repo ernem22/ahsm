@@ -2,8 +2,8 @@ import type { StaleReport, StaleRow, StaleValue } from '../core/stale.js';
 import { t } from '../i18n.js';
 import { staleLines, type Line } from '../render.js';
 import { truncate, wrap } from './format.js';
-import { headingLine, padLines, rowsFrame, rowsView, type BodyLine, type RowBlock } from './rows-frame.js';
-import { goTo, type RowWindow } from './window.js';
+import { rowsBody, rowsPage, type BodyLine, type RowBlock, type RowsBodyParts } from './rows-frame.js';
+import type { RowWindow, WindowView } from './window.js';
 
 /** The surface prints its own name, then the heading line `staleLines` owns. */
 export const STALE_HEADING = 2;
@@ -96,8 +96,18 @@ function noteLines(body: StaleBody, width: number): BodyLine[] {
   return wrap(body.note.text, width).map((text): BodyLine => [{ text, tone: body.note?.tone ?? 'dim' }]);
 }
 
+/** The report as a body: the heading with its meta, the one-sentence answer, the rows, then the tail. */
+function parts(body: StaleBody, filter: StaleFilter, width: number): RowsBodyParts {
+  return {
+    heading: { line: body.heading, meta: (view) => metaLines(body, filter, view) },
+    note: noteLines(body, width),
+    blocks: body.blocks,
+    tail: tailLines(body, filter, width),
+  };
+}
+
 /** The window, the filter and the state, shortest last, so a narrow frame drops words rather than rows. */
-function metaLines(body: StaleBody, filter: StaleFilter, view: { start: number; end: number }): string[] {
+function metaLines(body: StaleBody, filter: StaleFilter, view: WindowView): string[] {
   const window = body.total === 0 ? t.tui.windowEmpty : t.tui.windowCount(view.start + 1, view.end, body.total);
   const own = filter.text === '' ? t.tui.filterNone : t.tui.filterText(filter.text);
   const state = filter.state === undefined ? undefined : t.tui.stateFilter(t.staleLabels[filter.state]);
@@ -116,19 +126,10 @@ function metaLines(body: StaleBody, filter: StaleFilter, view: { start: number; 
  * formatter's count line.
  */
 export function staleFrame(body: StaleBody, filter: StaleFilter, width: number, height: number, window: RowWindow): BodyLine[] {
-  const tail = tailLines(body, filter, width);
-  const note = noteLines(body, width);
-  const rows = Math.max(0, Math.max(1, height) - 1 - note.length - tail.length);
-  const at = goTo(window.index, body.blocks.length);
-  const view = rowsView(body.blocks, at, width, rows);
-  const kept = rows > 0 && body.blocks.length > 0 ? rowsFrame(body.blocks, width, rows, at) : padLines([], rows);
-  return [headingLine(body.heading, metaLines(body, filter, view), width), ...note, ...kept, ...tail];
+  return rowsBody(parts(body, filter, width), width, height, window);
 }
 
 /** One page is one window of rows, so `PgDn` never lands past a row the user could have seen. */
 export function stalePage(body: StaleBody, filter: StaleFilter, width: number, height: number, window: RowWindow): number {
-  const room = Math.max(1, height - STALE_HEADING);
-  const used = 1 + noteLines(body, width).length + tailLines(body, filter, width).length;
-  const view = rowsView(body.blocks, goTo(window.index, body.blocks.length), width, Math.max(1, room - used));
-  return Math.max(1, view.end - view.start);
+  return rowsPage(parts(body, filter, width), width, Math.max(1, height - STALE_HEADING), window);
 }

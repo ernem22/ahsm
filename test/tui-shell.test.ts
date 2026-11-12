@@ -88,22 +88,28 @@ test('the rail is gone at 40 columns', async () => {
 test('every letter of the rail reaches its surface, and Esc returns to install', async () => {
   const tui = await startTui({ ...fixture(), width: 120 });
   try {
-    const rail: [string, string][] = [
-      ['p', 'plan'],
-      ['s', 'status'],
-      ['l', 'list'],
-      ['v', 'stale'],
-      ['u', 'update'],
-      ['x', 'remove'],
+    // The keys each surface answers with once its read resolved: Esc has nothing to stop by then.
+    const rail: [string, string, string][] = [
+      ['p', 'plan', t.actions(0, 0, 0)],
+      ['s', 'status', t.harnesses],
+      ['l', 'list', t.skillsTitle],
+      ['v', 'stale', t.staleEmpty],
+      ['u', 'update', t.tui.surfaces.update],
+      ['x', 'remove', t.tui.surfaces.remove],
     ];
-    for (const [key, name] of rail) {
+    for (const [key, name, marker] of rail) {
       await tui.press(key);
       assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${name}`), true, `${key} did not reach ${name}`);
       assert.equal(tui.lines()[2], name, `${name} did not print its own name`);
+
+      // The read answers before the key: a settled surface spends Esc on leaving, not on a wait.
+      const deadline = Date.now() + 1500;
+      while (!tui.frame().includes(marker) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+      assert.ok(tui.frame().includes(marker), `${name} never answered:\n${tui.frame()}`);
+      assert.ok((tui.lines().at(-1) ?? '').includes('Esc back'), `${name} does not offer Esc back:\n${tui.frame()}`);
+
       await tui.press('\u001B');
-      // A surface whose slow read is still running spends the first Esc stopping the wait, not leaving.
-      if (!tui.lines()[0]?.startsWith('agentenv  install')) await tui.press('\u001B');
-      assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, `Esc did not leave ${name}`);
+      assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, `Esc did not leave ${name}: ${tui.lines()[0] ?? ''}`);
     }
     await tui.press('i');
     assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true);
@@ -137,7 +143,7 @@ test('? opens one key set: the keybar and the overlay agree on every key they bo
     assert.equal(tui.lines().includes(t.tui.helpTitle('plan')), false, 'Esc did not close the overlay');
     assert.equal(tui.lines()[0]?.startsWith('agentenv  plan'), true, 'Esc closed the surface too');
     assert.equal(tui.lines()[2], 'plan');
-    assert.equal(tui.lines()[tui.lines().length - 1], 'space mark · a mark all · Enter apply · r rebuild · ? keys · Esc back · q quit');
+    assert.equal(tui.lines()[tui.lines().length - 1], 'Enter apply · r rebuild · ? keys · Esc back · q quit');
   } finally {
     await tui.stop();
   }
@@ -148,19 +154,21 @@ test('the overlay lists the surface keys once, and Esc is called close while it 
   try {
     await tui.press('p');
     const keybar = tui.lines()[tui.lines().length - 1] as string;
-    assert.equal(keybar, 'space mark · a mark all · Enter apply · r rebuild · ? keys · Esc back · q quit');
+    assert.equal(keybar, 'Enter apply · r rebuild · ? keys · Esc back · q quit');
 
     await tui.press('?');
     const rows = overlayRows(tui.lines(), 'plan');
+    // The overlay's own keys come first, because they are the ones that dispatch while it is open.
     assert.deepEqual(rows, [
+      'Esc close',
+      '? close',
+      'q quit',
       'Up move',
       'Down move',
       'PgUp move',
       'PgDn move',
       'g first',
       'G last',
-      'space mark',
-      'a mark all',
       'Enter apply',
       'r rebuild',
       'i install',
@@ -170,8 +178,6 @@ test('the overlay lists the surface keys once, and Esc is called close while it 
       'v stale',
       'u update',
       'x remove',
-      'Esc close',
-      'q quit',
     ]);
   } finally {
     await tui.stop();

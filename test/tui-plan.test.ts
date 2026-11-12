@@ -47,6 +47,20 @@ async function openPlan(tui: TuiHarness): Promise<void> {
   await settle(tui, () => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
 }
 
+/** A root whose only item has an id longer than a narrow frame: its entry row has to wrap. */
+const LONG_ID = `skill-${'a'.repeat(80)}`;
+function longIdRoot(): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-plan-'));
+  fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
+  fs.writeFileSync(
+    path.join(root, 'catalog', `${LONG_ID}.yaml`),
+    `id: ${LONG_ID}\nkind: mcp\nurl: https://example.invalid/long\ntargets: "*"\n`,
+    'utf8',
+  );
+  fs.writeFileSync(path.join(root, 'packages', 'base.yaml'), `id: base\ndefault: true\nitems: [${LONG_ID}]\n`, 'utf8');
+  return root;
+}
+
 /** A copy of the offline root with `items` in the default package, so a plan can outgrow the window. */
 function longRoot(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-plan-'));
@@ -82,7 +96,8 @@ test('the plan body prints the formatter lines, and the count line sits above th
     await openPlan(tui);
     const lines = tui.lines();
     assert.equal(lines[0]?.startsWith('agentenv  plan'), true);
-    assert.equal(lines[lines.length - 1], 'space mark · a mark all · Enter apply · r rebuild · ? keys · Esc back · q quit');
+    // Both requirements are satisfied, so there is nothing to mark and no mark key is offered.
+    assert.equal(lines[lines.length - 1], 'Enter apply · r rebuild · ? keys · Esc back · q quit');
     assert.equal(lines[lines.length - 2], t.actions(3, 0, 0), 'the count line is not directly above the keybar');
 
     const frame = tui.frame();
@@ -90,6 +105,22 @@ test('the plan body prints the formatter lines, and the count line sits above th
     for (const row of rows) assert.ok(frame.includes(row), `the frame lost ${row}`);
     assert.ok(frame.includes('ready  requirement node 22.0.0 · min 20'), frame);
     assert.ok(frame.includes('ready  requirement Fake Harness 22.0.0 · min 20'), frame);
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('at 80 columns the focused entry wraps under itself, so its whole row arrives', async () => {
+  const tui = await startTui({ ...withRunner(ready(), longIdRoot()), width: 80 });
+  try {
+    await openPlan(tui);
+    const lines = tui.lines();
+    expectFrame(lines, { width: 80, rows: 30 });
+    assert.ok(lines.some((line) => line.trimStart().startsWith('> +')), lines.join('\n'));
+    // One column: the focused entry wraps under itself with a 4-space indent, and nothing is dropped.
+    const row = `${LONG_ID} → fake [mcp/fake-mcp]`;
+    const squash = (text: string): string => text.replace(/\s+/g, '');
+    assert.ok(squash(tui.frame()).includes(squash(row)), `the focused entry was cut:\n${tui.frame()}`);
   } finally {
     await tui.stop();
   }
@@ -237,7 +268,7 @@ test('p opens the plan read-only, and Esc returns with the selection intact', as
     assert.equal(tui.lines()[0]?.startsWith('agentenv  plan'), true);
 
     // No write key is bound here: the keys that would approve or decline are not in this table.
-    assert.equal(tui.lines()[tui.lines().length - 1], 'space mark · a mark all · Enter apply · r rebuild · ? keys · Esc back · q quit');
+    assert.equal(tui.lines()[tui.lines().length - 1], 'Enter apply · r rebuild · ? keys · Esc back · q quit');
     await tui.press('y', 'n');
     assert.equal(tui.frame(), before, 'a key wrote to or re-read the plan surface');
 

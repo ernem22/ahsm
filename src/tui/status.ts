@@ -1,19 +1,15 @@
 import type { StatusReport } from '../core/status.js';
-import { t } from '../i18n.js';
 import { statusLines, type Line } from '../render.js';
-import { padLines, rowsFrame, rowsView, wrapped, type BodyLine, type RowBlock } from './rows-frame.js';
+import { padLines, rowsBody, rowsFrame, rowsView, rowsRoom, wrapped, type BodyLine, type RowBlock } from './rows-frame.js';
 import { goTo } from './window.js';
 
 /** The surface prints one heading line above the body it hands to `statusFrame`. */
 export const STATUS_HEADING = 1;
 
-/** The formatter indents a row's continuation lines by four columns; nothing else it writes does. */
-const CONTINUATION = '    ';
-
 /**
  * The report as the formatter wrote it, in print order: the warnings, the two section headings and one
- * block per row. Nothing here builds a status sentence — `statusLines` owns every word, and this splits
- * its output into what a window can move over.
+ * block per row. Nothing here builds a status sentence — `statusLines` owns every word and tags what
+ * each line is, and this splits that output into what a window can move over.
  */
 export interface StatusBody {
   /** The report's warnings: pinned above the keybar, so a damaged record is never scrolled away. */
@@ -34,14 +30,14 @@ export function statusBody(report: StatusReport | undefined): StatusBody {
 
   for (const line of lines.slice(warnings.length)) {
     const last = blocks[blocks.length - 1];
-    // A `update:` line belongs to the row above it: it is that row's detail, not a row of its own.
-    if (last?.focusable && line.text.startsWith(CONTINUATION)) {
+    // A detail line belongs to the row above it: it is that row's continuation, not a row of its own.
+    if (last?.focusable && line.kind === 'continuation') {
       last.lines.push(line);
       continue;
     }
-    const isHeading = line.text === t.harnesses || line.text === t.itemsTitle || line.text === t.statusEmpty;
-    blocks.push({ lines: [line], focusable: !isHeading });
-    if (!isHeading) focusable.push(blocks.length - 1);
+    const isRow = line.kind === 'row';
+    blocks.push({ lines: [line], focusable: isRow });
+    if (isRow) focusable.push(blocks.length - 1);
   }
 
   return { warnings, blocks, focusable };
@@ -62,20 +58,20 @@ function tailLines(body: StatusBody, width: number, height: number): BodyLine[] 
 
 /** The whole body as lines of cells, exactly `height` lines: the rows in their window, then the warnings. */
 export function statusFrame(body: StatusBody, width: number, height: number, focus: number): BodyLine[] {
-  const room = Math.max(1, height);
-  const tail = tailLines(body, width, room);
-  const rows =
-    body.blocks.length === 0
-      ? padLines([], Math.max(0, room - tail.length))
-      : rowsFrame(body.blocks, width, Math.max(1, room - tail.length), { index: focusBlock(body, focus) });
-  return [...rows, ...tail];
+  const tail = tailLines(body, width, Math.max(1, height));
+  return rowsBody({ blocks: body.blocks, tail }, width, Math.max(1, height), { index: focusBlock(body, focus) }, 1);
 }
 
 /** One page is one window of focusable rows, so `PgDn` never skips a row the user could see. */
 export function statusPage(body: StatusBody, width: number, height: number, focus: number): number {
   const bodyHeight = Math.max(1, height - STATUS_HEADING);
   const tail = tailLines(body, width, bodyHeight);
-  const view = rowsView(body.blocks, { index: focusBlock(body, focus) }, width, Math.max(1, bodyHeight - tail.length));
+  const view = rowsView(
+    body.blocks,
+    { index: focusBlock(body, focus) },
+    width,
+    Math.max(1, rowsRoom({ blocks: body.blocks, tail }, bodyHeight, 1)),
+  );
   let seen = 0;
   for (let at = view.start; at < view.end; at += 1) if (body.blocks[at]?.focusable) seen += 1;
   return Math.max(1, seen);

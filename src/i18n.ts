@@ -213,8 +213,6 @@ export const t = {
       stopWaiting: 'stop waiting',
     },
     helpTitle: (surface: string) => `keys — ${surface}`,
-    /** A read that has not answered yet: the surface says what it is waiting for instead of going blank. */
-    statusReading: 'reading status…',
     /** The slow read named and timed; the count joins it once a previous read knew it. */
     reading: (what: string, seconds: number, count?: number) =>
       count === undefined ? `reading the ${what}… ${seconds}s` : `reading the ${what}… ${seconds}s, ${count} skills`,

@@ -1,21 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
-import { buildPlan } from '../core/plan.js';
-import { applyPlan } from '../core/apply.js';
-import { readSkillInventory } from '../core/list.js';
-import { readStaleSkills } from '../core/stale.js';
-import { readStatus } from '../core/status.js';
 import type { Ctx } from '../context.js';
 import { t } from '../i18n.js';
 import { toneColor, type Tone } from '../render.js';
 import type { Data } from '../types.js';
-import { applyShape, hasResult, isApplying, type WriteState } from './apply.js';
-import { ApplyBody } from './apply-body.js';
 import { wrap } from './format.js';
 import { HelpOverlay } from './help.js';
-import { initialForm } from './install.js';
 import {
   activeKeys,
+  filterOf,
   findBinding,
   frameKeys,
   helpKeys,
@@ -23,17 +16,18 @@ import {
   keybarText,
   railText,
   tokenOf,
-  type KeyHost,
+  type ChromeHost,
+  type SurfaceHosts,
   type SurfaceId,
 } from './keys.js';
-import { planPage } from './plan-body.js';
-import { listBody, listPage, type ListFilter } from './list.js';
-import { allUpdates, focusedRequirement, markableUpdates, planSelection, toggleUpdate } from './plan.js';
-import { useRead } from './read.js';
-import { nextState, staleBody, stalePage, type StaleFilter } from './stale.js';
-import { statusBody, statusPage } from './status.js';
-import { SurfaceBody } from './surfaces.js';
-import { emptyWindow, goTo, moveBy } from './window.js';
+import { planSelection } from './plan.js';
+import { SurfaceBody, type SurfaceStates } from './surfaces.js';
+import { useApplySurface } from './use-apply.js';
+import { useInstallSurface } from './use-install.js';
+import { useListSurface } from './use-list.js';
+import { usePlanSurface } from './use-plan.js';
+import { useStaleSurface } from './use-stale.js';
+import { useStatusSurface } from './use-status.js';
 
 /** The rail needs 100 columns; below it the letters still work, so width never changes what is reachable. */
 export const RAIL_MIN_WIDTH = 100;
@@ -59,234 +53,113 @@ export interface ShellProps {
   ctx: Ctx;
 }
 
-/** The window: a header naming the surface and the target, a body, a status line, the keybar last. */
+/**
+ * The window: a header naming the surface and the target, a body, a status line, the keybar last. The
+ * shell owns the chrome and which surface is current; every surface's state, cursors, filters and reads
+ * live in that surface's own hook, and its key table is handed only its own host.
+ */
 export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const { exit } = useApp();
   const { columns, rows } = useWindowSize();
   const [surface, setSurface] = useState<SurfaceId>('install');
   const [help, setHelp] = useState(false);
   const [status, setStatus] = useState<StatusLine | undefined>();
-  // The form lives here, not in the install component: leaving the surface keeps every choice.
-  const [install, setInstall] = useState(() => initialForm(data, ctx));
-  const [planWindow, setPlanWindow] = useState(emptyWindow);
-  const [statusWindow, setStatusWindow] = useState(emptyWindow);
-  const [listWindow, setListWindow] = useState(emptyWindow);
-  const [staleWindow, setStaleWindow] = useState(emptyWindow);
-  // The filter is the only text mode here besides the remove name: `/` opens it, `Esc` empties it.
-  const [filtering, setFiltering] = useState(false);
-  const [listFilter, setListFilter] = useState<Omit<ListFilter, 'harnessIds'>>({ text: '', carriers: false });
-  const [staleFilter, setStaleFilter] = useState<StaleFilter>({ text: '' });
-  // `Down` past the last entry walks the requirement rows; `space` marks the one under that focus.
-  const [requirementFocus, setRequirementFocus] = useState<number | undefined>();
-  // The requirement ids the user marked; a rebuild keeps them until they no longer exist.
-  const [updates, setUpdates] = useState<string[]>([]);
-  const [write, setWrite] = useState<WriteState>({ status: 'idle' });
-  // The plan asks the core the same question `agentenv plan` does, for the selection on screen.
-  const plan = useRead(() => buildPlan(data, ctx, planSelection(install)));
-  // `status` asks the core the same question `agentenv status` does, and writes nothing to answer it.
-  const statusRead = useRead(() => readStatus(data, ctx));
-  // `list` reads the provider's own inventory: the slow read, exactly as `agentenv list` does.
-  const listRead = useRead(() => readSkillInventory(data, ctx));
-  // `stale` runs the provider's own update check: slow like the inventory, and just as read-only.
-  const staleRead = useRead(() => readStaleSkills(data, ctx));
-
-  const applying = isApplying(write);
-  const result = hasResult(write);
-  const entryCount = plan.state.value?.entries.length ?? 0;
-  const reportBody = statusBody(statusRead.state.value);
-  const statusRows = reportBody.focusable.length;
-  // One inventory, filtered once: the shell needs the row count to clamp the window it hands the keys.
-  const inventory = listBody(listRead.state.value, { ...listFilter, harnessIds: install.harnessIds });
-  const listFilterNow: ListFilter = { ...listFilter, harnessIds: install.harnessIds };
-  // One report, filtered once, for the same reason: the keys move a window over rows that exist.
-  const freshness = staleBody(staleRead.state.value, staleFilter);
-  const requirementCount = plan.state.value?.requirements.length ?? 0;
-  const focus = requirementFocus !== undefined && requirementFocus < requirementCount ? requirementFocus : undefined;
 
   const say = (message: string | undefined, tone: Tone = 'dim'): void => {
     setStatus(message === undefined ? undefined : { text: message, tone });
   };
 
-  /** The focused requirement, when the focus is on one that offers a markable update. */
-  const toggleMark = (): void => {
-    const value = plan.state.value;
-    if (!value) return;
-    const id = focusedRequirement(value, focus);
-    if (id) setUpdates((marked) => toggleUpdate(marked, id));
+  const height = bodyHeight(rows, status, columns);
+  const install = useInstallSurface(data, ctx);
+  const plan = usePlanSurface({
+    data,
+    ctx,
+    selection: planSelection(install.form),
+    width: columns,
+    height,
+    active: surface === 'plan',
+  });
+  const apply = useApplySurface({ data, ctx, plan: plan.value, updates: plan.updates, say });
+  const statusSurface = useStatusSurface({ data, ctx, width: columns, height, active: surface === 'status' });
+  const list = useListSurface({ data, ctx, harnessIds: install.form.harnessIds, width: columns, height, active: surface === 'list' });
+  const stale = useStaleSurface({ data, ctx, width: columns, height, active: surface === 'stale' });
+
+  /**
+   * Entering the confirm starts its write state from nothing: a result belongs to the plan it came
+   * from, and showing it as the next plan's answer would make the second apply impossible.
+   */
+  const go = (next: SurfaceId): void => {
+    if (next === 'apply') apply.reset();
+    setSurface(next);
   };
 
-  /** `Down`/`Up` cross from the last entry into the requirement rows and back. */
-  const movePlan = (delta: number): void => {
-    let window = planWindow;
-    let at = focus;
-    if (delta > 0) {
-      if (at === undefined) {
-        if (window.index < entryCount - 1) window = moveBy(window, entryCount, 1);
-        else if (requirementCount > 0) at = 0;
-      } else if (at < requirementCount - 1) at += 1;
-    } else if (at === undefined) {
-      if (entryCount > 0) window = moveBy(window, entryCount, -1);
-    } else if (at > 0) {
-      at -= 1;
-    } else {
-      at = undefined;
-      window = goTo(entryCount - 1, entryCount);
-    }
-    setPlanWindow(window);
-    setRequirementFocus(at);
-  };
-
-  /** A page moves the entry window and leaves the requirement rows to `Down`. */
-  const pagePlan = (delta: number): void => {
-    setRequirementFocus(undefined);
-    setPlanWindow(moveBy(planWindow, entryCount, delta));
-  };
-
-  const resetPlan = (at: 'first' | 'last'): void => {
-    setRequirementFocus(undefined);
-    setPlanWindow(goTo(at === 'first' ? 0 : entryCount - 1, entryCount));
-  };
-
-  const markAll = (): void => {
-    const value = plan.state.value;
-    if (!value) return;
-    setUpdates((marked) => allUpdates(value, marked));
-  };
-
-  /** `y`: the core gets exactly the marks, and no options at all when nothing is marked. */
-  const runApply = (): void => {
-    const value = plan.state.value;
-    if (!value || write.status === 'applying') return;
-    const marked = updates.filter((id) => markableUpdates(value).includes(id));
-    setWrite({ status: 'applying', startedAt: Date.now(), shape: applyShape(value) });
-    // Writes cannot be cancelled, so the refusal is on screen for as long as it is true.
-    say(t.tui.applyRefusal, 'warning');
-    void applyPlan(data, ctx, value, marked.length > 0 ? { updates: marked } : undefined).then(
-      (outcome) => {
-        setWrite({ status: 'done', outcome });
-        setStatus(undefined);
-      },
-      (error: unknown) => {
-        setWrite({ status: 'error', message: error instanceof Error ? error.message : String(error) });
-        setStatus(undefined);
-      },
-    );
-  };
-
-  // Entering a surface reads it; `r` is the same call, so a second look costs one key.
-  useEffect(() => {
-    if (surface === 'plan') plan.load();
-  }, [surface, plan.load]);
-  useEffect(() => {
-    if (surface === 'status') statusRead.load();
-  }, [surface, statusRead.load]);
-  useEffect(() => {
-    if (surface === 'list') listRead.load();
-  }, [surface, listRead.load]);
-  useEffect(() => {
-    if (surface === 'stale') staleRead.load();
-  }, [surface, staleRead.load]);
-
-  /** The typed filter belongs to the surface in front of the user; `/` edits that one, never another. */
-  const editFilter = (change: (text: string) => string): void => {
-    if (surface === 'stale') setStaleFilter((filter) => ({ ...filter, text: change(filter.text) }));
-    else setListFilter((filter) => ({ ...filter, text: change(filter.text) }));
-  };
-
-  const host: KeyHost = {
+  const chrome: ChromeHost = {
     surface,
-    help,
-    install,
-    plan: planWindow,
-    planCount: entryCount,
-    page: planPage(plan.state.value, columns, bodyHeight(rows, status, columns), planWindow),
-    requirementFocus: focus,
-    requirementCount,
-    go: setSurface,
+    applying: apply.applying,
+    result: apply.result,
+    go,
     openHelp: () => setHelp(true),
     closeHelp: () => setHelp(false),
     quit: () => exit(),
     say,
-    setInstall,
-    movePlan,
-    pagePlan,
-    resetPlan,
-    rebuildPlan: plan.load,
-    status: {
-      page: statusPage(reportBody, columns, bodyHeight(rows, status, columns), statusWindow.index),
-      move: (delta) => setStatusWindow((window) => moveBy(window, statusRows, delta)),
-      pageBy: (delta) => setStatusWindow((window) => moveBy(window, statusRows, delta)),
-      edge: (at) => setStatusWindow(goTo(at === 'first' ? 0 : statusRows - 1, statusRows)),
-      reload: statusRead.load,
-    },
-    filter: (surface === 'list' || surface === 'stale') && filtering,
-    filterText: surface === 'stale' ? staleFilter.text : listFilter.text,
-    startFilter: () => setFiltering(true),
-    clearFilter: () => {
-      setFiltering(false);
-      editFilter(() => '');
-    },
-    keepFilter: () => setFiltering(false),
-    list: {
-      page: listPage(inventory, listFilterNow, columns, bodyHeight(rows, status, columns), listWindow),
-      carriers: listFilter.carriers,
-      busy: listRead.state.status === 'busy',
-      move: (delta) => setListWindow((window) => moveBy(window, inventory.blocks.length, delta)),
-      pageBy: (delta) => setListWindow((window) => moveBy(window, inventory.blocks.length, delta)),
-      edge: (at) => setListWindow(goTo(at === 'first' ? 0 : inventory.blocks.length - 1, inventory.blocks.length)),
-      reload: listRead.load,
-      toggleCarriers: () => setListFilter((filter) => ({ ...filter, carriers: !filter.carriers })),
-      stopWaiting: listRead.stop,
-    },
-    stale: {
-      page: stalePage(freshness, staleFilter, columns, bodyHeight(rows, status, columns), staleWindow),
-      state: staleFilter.state,
-      busy: staleRead.state.status === 'busy',
-      move: (delta) => setStaleWindow((window) => moveBy(window, freshness.blocks.length, delta)),
-      pageBy: (delta) => setStaleWindow((window) => moveBy(window, freshness.blocks.length, delta)),
-      edge: (at) => setStaleWindow(goTo(at === 'first' ? 0 : freshness.blocks.length - 1, freshness.blocks.length)),
-      reload: staleRead.load,
-      stopWaiting: staleRead.stop,
-      cycleState: () => setStaleFilter((filter) => ({ ...filter, state: nextState(filter.state) })),
-      clearState: () => setStaleFilter((filter) => ({ ...filter, state: undefined })),
-    },
-    updates,
-    applying,
-    result,
-    toggleUpdate: toggleMark,
-    markAllUpdates: markAll,
-    runApply,
+  };
+
+  /** A rebuilt plan has no result behind it, so the write state starts over with it. */
+  const rebuild = (): void => {
+    plan.keys.rebuild();
+    apply.reset();
+  };
+
+  const hosts: SurfaceHosts = {
+    install: { ...chrome, ...install.keys },
+    plan: { ...chrome, ...plan.keys, rebuild },
+    apply: { ...chrome, ...plan.keys, rebuild, runApply: apply.runApply },
+    status: { ...chrome, ...statusSurface.keys },
+    list: { ...chrome, ...list.keys },
+    stale: { ...chrome, ...stale.keys },
+    update: chrome,
+    remove: chrome,
+  };
+
+  const states: SurfaceStates = {
+    install,
+    plan,
+    apply,
+    status: statusSurface,
+    list,
+    stale,
   };
 
   useInput((input, key) => {
     const token = tokenOf(input, key);
-    const binding = findBinding(activeKeys(surface, help, host), host, token);
+    const binding = findBinding(activeKeys(hosts, chrome, help), token);
     if (!binding) {
       // The filter is a text mode: anything the table did not claim is a character it collects.
-      if (!host.filter) return;
-      if (token === 'backspace') editFilter((text) => text.slice(0, -1));
-      else if (input.length === 1 && !key.ctrl && !key.meta) editFilter((text) => text + input);
+      const filter = filterOf(surface, hosts);
+      if (!filter?.typing) return;
+      if (token === 'backspace') filter.edit((text) => text.slice(0, -1));
+      else if (input.length === 1 && !key.ctrl && !key.meta) filter.edit((text) => text + input);
       return;
     }
-    const refusal = binding.refuses?.(host);
+    const refusal = binding.refuses?.();
     if (refusal !== undefined) {
       say(refusal, 'warning');
       return;
     }
-    binding.run(host);
+    binding.run();
   });
 
   // The target is what the user chose, not what detection found: a not detected harness is a choice.
-  const labels = install.harnesses.filter((row) => install.harnessIds.includes(row.id)).map((row) => row.label);
+  const labels = install.form.harnesses.filter((row) => install.form.harnessIds.includes(row.id)).map((row) => row.label);
   const target = labels.length > 0 ? labels.join(', ') : t.noHarness;
 
   const surfaceLabel = t.tui.surfaces[surface];
   const rail = railText(columns, RAIL_MIN_WIDTH);
   // One key set for the frame: the overlay prints all of it, the keybar the entries it does not hide.
   // While the overlay is open the live keys are the overlay's own, so the keybar never lists a dead key.
-  const live = frameKeys(surface, false, host);
-  const keys = help ? frameKeys(surface, true, host) : live;
-  const listed = keybarKeys(help ? [...helpKeys] : live, host);
+  const live = frameKeys(hosts, chrome, false);
+  const keys = help ? frameKeys(hosts, chrome, true) : live;
+  const listed = keybarKeys(help ? helpKeys(chrome) : live);
 
   return (
     <Box flexDirection="column" height={rows}>
@@ -298,31 +171,8 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
       <Box flexDirection="column" flexGrow={1}>
         {help ? (
           <HelpOverlay title={t.tui.helpTitle(surfaceLabel)} keys={keys} />
-        ) : surface === 'apply' && write.status !== 'idle' ? (
-          <ApplyBody write={write} width={columns} height={bodyHeight(rows, status, columns)} />
         ) : (
-          <SurfaceBody
-            surface={surface}
-            data={data}
-            install={install}
-            width={columns}
-            height={bodyHeight(rows, status, columns)}
-            plan={plan.state}
-            planWindow={planWindow}
-            status={statusRead.state}
-            statusWindow={statusWindow}
-            list={listRead.state}
-            listBody={inventory}
-            listFilter={listFilterNow}
-            listWindow={listWindow}
-            stale={staleRead.state}
-            staleBody={freshness}
-            staleFilter={staleFilter}
-            staleWindow={staleWindow}
-            marked={updates}
-            requirementFocus={focus}
-            write={write}
-          />
+          <SurfaceBody surface={surface} data={data} states={states} width={columns} height={height} />
         )}
       </Box>
       {status

@@ -202,6 +202,65 @@ test('f with nothing chosen refuses and says why', async () => {
   }
 });
 
+test('Esc clears the carrier filter too, in the same step as the name filter', async () => {
+  const shared = setup([
+    { name: 'alpha', source: 'owner/repo', agents: ['fake'] },
+    { name: 'beta', source: 'owner/repo', agents: [] },
+    { name: 'gamma', source: 'owner/repo', agents: ['some-other-agent'] },
+  ]);
+  const tui = await startTui({ ...shared, width: 120 });
+  try {
+    await openList(tui);
+    await tui.press('f');
+    assert.ok((tui.lines()[3] ?? '').includes('carriers: fake'), at(tui.lines(), 3));
+    await tui.press('/');
+    await tui.press('a');
+    assert.ok((tui.lines()[3] ?? '').includes('filter: a'), at(tui.lines(), 3));
+
+    // One step takes the typed filter and the carrier toggle: `f` and `/` are both cleared.
+    await tui.press('\u001B');
+    const lines = tui.lines();
+    assert.ok((lines[3] ?? '').includes('filter: none'), at(lines, 3));
+    assert.equal((lines[3] ?? '').includes('carriers:'), false, 'Esc left the carrier filter on');
+    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'Esc left the surface');
+    assert.ok(tui.frame().includes('beta'), 'the cleared carrier filter did not restore the rows');
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('with the overlay open the surface owns no Esc: the overlay closes, the filter stays', async () => {
+  const shared = setup(many());
+  const tui = await startTui({ ...shared, width: 120 });
+  try {
+    await openList(tui);
+    // Type the filter, keep it with Enter, and only then open the overlay.
+    await tui.press('/', 's', '\r');
+    const filtered = (tui.lines()[3] ?? '');
+    assert.ok(filtered.includes('filter: s'), filtered);
+    assert.ok((tui.lines().at(-1) ?? '').startsWith('Esc clear filter'), tui.lines().at(-1) ?? '');
+
+    await tui.press('?');
+    const lines = tui.lines();
+    const heading = lines.indexOf(t.tui.helpTitle(t.tui.surfaces.list));
+    assert.notEqual(heading, -1, 'the overlay did not open');
+    const rows = lines.slice(heading + 1, lines.length - 1).filter((line) => line !== '');
+    // The overlay's own Esc comes first and the surface's does not appear: one key, one dispatch.
+    assert.equal(rows[0], 'Esc close', rows.join('|'));
+    assert.equal(rows.includes('Esc clear filter'), false, rows.join('|'));
+    assert.equal(rows.includes('Esc stop waiting'), false, rows.join('|'));
+    assert.equal(lines.at(-1), 'Esc close · q quit');
+
+    await tui.press('\u001B');
+    assert.equal(tui.lines().includes(t.tui.helpTitle(t.tui.surfaces.list)), false, 'Esc did not close the overlay');
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'Esc left the surface');
+    assert.equal(tui.lines()[3], filtered, 'closing the overlay changed the filter');
+    assert.ok((tui.lines().at(-1) ?? '').startsWith('Esc clear filter'), tui.lines().at(-1) ?? '');
+  } finally {
+    await tui.stop();
+  }
+});
+
 test('a 177-column row truncates in the row column and appears whole in the detail column', async () => {
   // `user  ask-sonner [source] → fake` is exactly 177 columns at this source length.
   const row = `user  ask-sonner [owner/${'s'.repeat(145)}] → fake`;
@@ -218,6 +277,26 @@ test('a 177-column row truncates in the row column and appears whole in the deta
     // The detail column wraps, and a wrap may add or move a space — never drop a character.
     const flat = (text: string): string => text.replace(/\s+/g, '');
     assert.ok(flat(detail(lines)).includes(flat(row)), `the detail column lost the row:\n${detail(lines)}`);
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('at 80 columns the focused row wraps under itself: the long source arrives whole', async () => {
+  const source = `owner/${'s'.repeat(145)}`;
+  const row = `user  ask-sonner [${source}] → fake`;
+  assert.ok(row.length > 80, String(row.length));
+  const shared = setup([{ name: 'ask-sonner', source, agents: ['fake'] }]);
+  const tui = await startTui({ ...shared, width: 80 });
+  try {
+    await openList(tui);
+    const lines = tui.lines();
+    expectFrame(lines, { width: 80, rows: 30 });
+    assert.ok(at(lines, ROWS_AT).startsWith(`${t.tui.marks.focused}user  ask-sonner`), at(lines, ROWS_AT));
+    // One column: the focused row wraps under itself, and nothing of it is dropped.
+    const squash = (text: string): string => text.replace(/\s+/g, '');
+    assert.ok(squash(tui.frame()).includes(squash(row)), `the focused row was cut:\n${tui.frame()}`);
+    assert.equal(tui.frame().includes(t.tui.ellipsis), false, 'a focused row was truncated at 80 columns');
   } finally {
     await tui.stop();
   }

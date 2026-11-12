@@ -2,10 +2,10 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { Plan } from '../core/plan.js';
 import { t } from '../i18n.js';
-import { toneColor } from '../render.js';
-import { Line, rowsFrame, rowsView, wrapped, type BodyLine, type RowBlock } from './rows-frame.js';
 import { planBlocks, planTail } from './plan.js';
-import type { ReadState } from './read.js';
+import { ReadBody } from './read-body.js';
+import { rowsBody, rowsView, wrapped, type BodyLine, type RowBlock } from './rows-frame.js';
+import type { PlanState } from './use-plan.js';
 import { goTo, type RowWindow } from './window.js';
 
 /** The surface prints one heading line above the body it hands to `planFrame`. */
@@ -26,13 +26,8 @@ export function planFrame(
   requirementFocus: number | undefined,
 ): BodyLine[] {
   const blocks: RowBlock[] = planBlocks(plan).map((block) => ({ lines: block.lines, indent: true }));
-  const rows = rowsFrame(
-    blocks,
-    width,
-    rowHeight(plan, width, height, marked, requirementFocus),
-    goTo(window.index, blocks.length),
-  );
-  return [...rows, ...tailLines(plan, width, height, marked, requirementFocus)];
+  const tail = tailLines(plan, width, height, marked, requirementFocus);
+  return rowsBody({ blocks, tail }, width, height, goTo(window.index, blocks.length), 1);
 }
 
 /** The lines the body pins above the keybar: requirements, warnings, the mark statement and the count. */
@@ -70,57 +65,32 @@ export function planPage(plan: Plan | undefined, width: number, height: number, 
   const body = Math.max(1, height - PLAN_HEADING);
   if (!plan) return body;
   const blocks = planBlocks(plan);
-  const view = rowsView(
-    blocks,
-    goTo(window.index, blocks.length),
-    width,
-    rowHeight(plan, width, body, [], undefined),
-  );
+  const view = rowsView(blocks, goTo(window.index, blocks.length), width, rowHeight(plan, width, body, [], undefined));
   return Math.max(1, view.end - view.start);
 }
 
 export interface PlanSurfaceProps {
-  read: ReadState<Plan>;
+  state: PlanState;
   width: number;
   height: number;
-  window: RowWindow;
-  /** The requirement ids the user marked: their update runs with the apply. */
-  marked: readonly string[];
-  /** The requirement row the focus is on, when it is on one. */
-  requirementFocus: number | undefined;
 }
 
 /**
  * The plan, read-only: the rows that would run in the order they happen, the requirements they need,
  * and the count of both. `building plan…` while the read runs, the failure's own message if it throws.
  */
-export function PlanSurface({
-  read,
-  width,
-  height,
-  window,
-  marked,
-  requirementFocus,
-}: PlanSurfaceProps): React.ReactElement {
+export function PlanSurface({ state, width, height }: PlanSurfaceProps): React.ReactElement {
+  const room = Math.max(1, height - PLAN_HEADING);
   return (
     <Box flexDirection="column">
       <Text dimColor>{t.tui.surfaces.plan}</Text>
-      {read.status === 'done' && read.value ? (
-        planFrame(
-          read.value,
-          width,
-          Math.max(1, height - PLAN_HEADING),
-          window,
-          marked,
-          requirementFocus,
-        ).map((cells, at) => (
-          <Line key={at} cells={cells} />
-        ))
-      ) : read.status === 'error' ? (
-        <Text color={toneColor('error')}>{read.message}</Text>
-      ) : (
-        <Text dimColor>{t.planBuilding}</Text>
-      )}
+      <ReadBody
+        read={state.read}
+        width={width}
+        height={room}
+        busy={<Text dimColor>{t.planBuilding}</Text>}
+        frame={() => (state.value ? planFrame(state.value, width, room, state.window, state.updates, state.requirementFocus) : [])}
+      />
     </Box>
   );
 }

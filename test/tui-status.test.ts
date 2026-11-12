@@ -163,6 +163,24 @@ test('every row the report has is printed in full once the focus reaches it', as
   }
 });
 
+test('at 80 columns the focused row wraps under itself: the whole item row arrives', async () => {
+  const id = `skill-${'b'.repeat(80)}`;
+  const shared = setup([version('v20.0.0\n')], [entry(id, 'skill')]);
+  const tui = await startTui({ ...shared, width: 80 });
+  try {
+    await openStatus(tui);
+    // Down past the harness row: the item row is the long one, and it is now the focus.
+    await tui.press('\u001B[B');
+    expectFrame(tui.lines(), { width: 80, rows: 30 });
+    const row = `${t.statusLabels.unknown}  ${id} → fake [skill]`;
+    const squash = (text: string): string => text.replace(/\s+/g, '');
+    assert.ok(squash(tui.frame()).includes(squash(row)), `the focused row was cut:\n${tui.frame()}`);
+    assert.ok(tui.lines().some((line) => line.startsWith(`${t.tui.marks.focused}${t.statusLabels.unknown}`)), tui.frame());
+  } finally {
+    await tui.stop();
+  }
+});
+
 test('r re-reads the report without leaving the surface', async () => {
   const shared = setup([version('v1.2.0\n'), version('v20.0.0\n')], [entry('skill-a', 'skill')]);
   const tui = await startTui({ ...shared, width: 120 });
@@ -212,6 +230,29 @@ test('no key on the status surface writes: the record and the tree are untouched
       assert.deepEqual(argv, ['node', '--version'], `status ran ${argv.join(' ')}`);
     }
     assert.ok(tui.lines().at(-1)?.includes('Esc back'), 'Esc left the status surface');
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('the slow read is named and timed, and Esc stops waiting without leaving', async () => {
+  const dir = home([entry('skill-a', 'skill')], { '.fake/.skill-lock.json': '{"skills":{}}' });
+  const pending = createContext({ home: dir, root: OFFLINE_ROOT, runner: { run: () => new Promise(() => {}) }, platform: 'linux' });
+  const tui = await startTui({ data: loadData(OFFLINE_ROOT), ctx: pending, width: 120 });
+  try {
+    await tui.press('s');
+    await settle(tui, () => tui.frame().includes('reading the status…'));
+    assert.match(tui.frame(), /reading the status… \d+s/, tui.frame());
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`), true);
+    assert.ok((tui.lines().at(-1) ?? '').startsWith('Esc stop waiting'), tui.lines().at(-1) ?? '');
+
+    await tui.press('\u001B');
+    assert.ok(tui.frame().includes(t.tui.stoppedWaiting), `no cancelled copy in:\n${tui.frame()}`);
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`), true, 'Esc left the surface instead of stopping');
+
+    await tui.press('\u001B');
+    assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'the previous surface is not reachable');
+    expectFrame(tui.lines(), { width: 120, rows: 30 });
   } finally {
     await tui.stop();
   }

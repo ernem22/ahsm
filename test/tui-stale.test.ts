@@ -310,7 +310,10 @@ test('the stale surface is read-only: r reads again, and no visit writes anythin
   const tui = await startTui({ ...shared, width: 120 });
   try {
     await openStale(tui);
-    for (const key of ['\u001B[B', '\u001B[6~', 'G', 'f', 'f', '/', 'a', '\u001B', '\u001B']) await tui.press(key);
+    // One key for each thing that is live: the window, the state filter, the name filter, the clear.
+    for (const key of ['\u001B[B', '\u001B[6~', 'G', 'f', '/', 'a', '\u001B']) await tui.press(key);
+    assert.equal((tui.lines()[3] ?? '').includes('filter: none'), true, at(tui.lines(), 3));
+    assert.equal((tui.lines()[3] ?? '').includes('state:'), false, 'one Esc did not clear both filters');
     await tui.press('r');
     await settle(tui, () => tui.frame().includes(t.staleCount(4)));
     assert.equal(snapshot(shared.home), before, 'the stale surface wrote to the home');
@@ -335,6 +338,50 @@ test('at 40 columns the state word, the window and the keys still fit the frame'
     assert.ok(rows.some((row) => row.startsWith('up-to-date  fresh')), rows.join('|'));
     await tui.press('f');
     expectFrame(tui.lines(), { width: 40, rows: 30 });
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('at 80 columns the focused row wraps under itself: the provider reason arrives whole', async () => {
+  const shared = threeStates();
+  const tui = await startTui({ ...shared, width: 80 });
+  try {
+    await openStale(tui);
+    const lines = tui.lines();
+    expectFrame(lines, { width: 80, rows: 30 });
+    // One column: the focus is on the first row, and its whole line is on screen, wrapped.
+    assert.ok(at(lines, ROWS_AT).startsWith(`${t.tui.marks.focused}stale  alpha`), at(lines, ROWS_AT));
+    const row = `stale  alpha [owner/repo] — ${t.staleNewer}`;
+    const squash = (text: string): string => text.replace(/\s+/g, '');
+    assert.ok(squash(tui.frame()).includes(squash(row)), `the focused row was cut:\n${tui.frame()}`);
+    // Nothing of the focused row ends in an ellipsis: it wraps, it is not truncated.
+    assert.equal(lines[ROWS_AT]?.includes(t.tui.ellipsis), false, at(lines, ROWS_AT));
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('one Esc clears the name filter and the state filter together', async () => {
+  const shared = threeStates();
+  const tui = await startTui({ ...shared, width: 120 });
+  try {
+    await openStale(tui);
+    await tui.press('f');
+    await tui.press('/');
+    for (const key of ['b', 'e', 't']) await tui.press(key);
+    let lines = tui.lines();
+    assert.ok(at(lines, 3).includes('filter: bet'), at(lines, 3));
+    assert.ok(at(lines, 3).includes('state: stale'), at(lines, 3));
+    assert.equal(stateRows(lines).length, 1, lines.join('\n'));
+
+    // One step takes both filters: the spec's `Esc` clears the text and the state, not one of them.
+    await tui.press('\u001B');
+    lines = tui.lines();
+    assert.ok(at(lines, 3).includes('filter: none'), at(lines, 3));
+    assert.equal(at(lines, 3).includes('state:'), false, 'Esc left the state filter on');
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, 'Esc left the surface');
+    assert.equal(stateRows(lines).length, 4, lines.join('\n'));
   } finally {
     await tui.stop();
   }
