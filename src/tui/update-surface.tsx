@@ -38,7 +38,7 @@ export function UpdateSurface({ state, width, height }: UpdateSurfaceProps): Rea
       {state.write.status === 'applying' ? (
         <Box flexDirection="column">
           {update ? wrapped(noteLines(update), width).map((line, at) => <LineText key={at} line={line} />) : null}
-          <Busy startedAt={state.write.startedAt} shape={state.write.shape} />
+          <Busy startedAt={state.write.startedAt} shape={state.write.shape} width={width} />
         </Box>
       ) : state.write.status === 'done' ? (
         <Result
@@ -53,7 +53,7 @@ export function UpdateSurface({ state, width, height }: UpdateSurfaceProps): Rea
           read={state.read}
           width={width}
           height={room}
-          busy={<Reading what={t.tui.updateCheck} startedAt={state.read.startedAt} count={state.value?.stale.length} />}
+          busy={<Reading what={t.tui.updateCheck} startedAt={state.read.startedAt} count={state.value?.stale.length} width={width} />}
           frame={() => (update ? updateFrame(update, width, room, state.window) : [])}
         />
       )}

@@ -28,7 +28,7 @@ export function RemoveSurface({ state, width, height }: RemoveSurfaceProps): Rea
     <Box flexDirection="column">
       <Text dimColor>{t.tui.surfaces.remove}</Text>
       {state.write.status === 'applying' ? (
-        <Busy startedAt={state.write.startedAt} shape={state.write.shape} />
+        <Busy startedAt={state.write.startedAt} shape={state.write.shape} width={width} />
       ) : state.write.status === 'done' ? (
         <Result rows={removeOutcomeLines(state.write.outcome)} width={width} height={room} />
       ) : state.write.status === 'error' ? (
@@ -38,7 +38,7 @@ export function RemoveSurface({ state, width, height }: RemoveSurfaceProps): Rea
           read={state.read}
           width={width}
           height={room}
-          busy={<Reading what={t.tui.removeReading} startedAt={state.read.startedAt} />}
+          busy={<Reading what={t.tui.removeReading} startedAt={state.read.startedAt} width={width} />}
           frame={() => (plan ? removeFrame(plan, state.name, width, room, state.window) : [])}
         />
       )}

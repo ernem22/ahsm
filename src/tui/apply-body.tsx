@@ -1,14 +1,14 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { t } from '../i18n.js';
-import { outcomeLines, toneColor, type Line } from '../render.js';
+import { outcomeLines, toneColor, toneDim, type Line } from '../render.js';
 import type { WriteState } from './apply.js';
 import { useElapsed } from './elapsed.js';
 import { wrap } from './format.js';
 
 export function LineText({ line }: { line: Line }): React.ReactElement {
   return (
-    <Text color={toneColor(line.tone)} dimColor={line.tone === 'dim'}>
+    <Text color={toneColor(line.tone)} dimColor={toneDim(line.tone)}>
       {line.text}
     </Text>
   );
@@ -26,14 +26,22 @@ export function wrapped(lines: Line[], width: number): Line[] {
 }
 
 /** In flight: the work named, the surface's own count line, and the one thing that is true beside it. */
-export function Busy({ startedAt, shape }: { startedAt: number; shape: string }): React.ReactElement {
+export function Busy({ startedAt, shape, width }: { startedAt: number; shape: string; width: number }): React.ReactElement {
   const seconds = useElapsed(startedAt);
   return (
     <Box flexDirection="column">
       <Text dimColor>{t.tui.applying(seconds)}</Text>
-      <Text dimColor>{shape}</Text>
+      {wrap(shape, width).map((line, at) => (
+        <Text key={at} dimColor>
+          {line}
+        </Text>
+      ))}
       <Text> </Text>
-      <Text dimColor>{t.tui.applyNothingElse}</Text>
+      {wrap(t.tui.applyNothingElse, width).map((line, at) => (
+        <Text key={at} dimColor>
+          {line}
+        </Text>
+      ))}
     </Box>
   );
 }
@@ -71,7 +79,7 @@ export interface ApplyBodyProps {
 
 /** The two halves before and after the write; the confirm half stays the plan body. */
 export function ApplyBody({ write, width, height }: ApplyBodyProps): React.ReactElement | null {
-  if (write.status === 'applying') return <Busy startedAt={write.startedAt} shape={write.shape} />;
+  if (write.status === 'applying') return <Busy startedAt={write.startedAt} shape={write.shape} width={width} />;
   if (write.status === 'done') return <Result rows={outcomeLines(write.outcome)} width={width} height={height} />;
   if (write.status === 'error') return <Failed message={write.message} width={width} />;
   return null;

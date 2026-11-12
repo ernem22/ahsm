@@ -1,12 +1,14 @@
 import React from 'react';
 import { Text } from 'ink';
 import { t } from '../i18n.js';
-import { toneColor, type Line, type Tone } from '../render.js';
+import { toneColor, toneDim, type Line, type Tone } from '../render.js';
 import { truncate, wrap } from './format.js';
 import { goTo, rowsInView, type RowWindow, type WindowView } from './window.js';
 
 /** Two columns need 100 columns: a 50-column list, a 2-column gutter, and the rest for the detail. */
 export const WIDE_WIDTH = 100;
+/** Below 60 columns there is no room to wrap the focus: each continuation is cut to one `…` line. */
+export const NARROW_WIDTH = 60;
 export const ROW_COLUMN = 50;
 export const DETAIL_COLUMN = 62;
 export const GUTTER = 2;
@@ -55,18 +57,23 @@ export function wrapped(text: string, tone: Tone, width: number): BodyLine[] {
 }
 
 /**
- * The focused row in one column: its own line wraps under itself behind the focus mark, and its
- * continuation lines follow. Nothing of the row is cut — a truncated focus would hide the one thing the
- * user is reading.
+ * The focused row in one column. Between 60 and 99 columns its own line wraps under itself behind the
+ * focus mark, and its continuation lines follow. At 59 and below wrapping would spend the window on one
+ * row, so the focus and each continuation are suppressed to one line and cut with `…`.
  */
 function focusedRow(block: RowBlock, width: number): BodyLine[] {
   const [first, ...rest] = block.lines;
   const lines: BodyLine[] = [];
+  const narrow = width < NARROW_WIDTH;
   if (first) {
     const marked = `${t.tui.marks.focused}${first.text}`;
-    for (const piece of wrap(marked, width)) lines.push([{ text: piece, tone: first.tone, inverse: true }]);
+    if (narrow) lines.push([{ text: truncate(marked, width), tone: first.tone, inverse: true }]);
+    else for (const piece of wrap(marked, width)) lines.push([{ text: piece, tone: first.tone, inverse: true }]);
   }
-  for (const line of rest) lines.push(...wrapped(line.text, line.tone, width));
+  for (const line of rest) {
+    if (narrow) lines.push([{ text: truncate(line.text, width), tone: line.tone }]);
+    else lines.push(...wrapped(line.text, line.tone, width));
+  }
   return lines;
 }
 
@@ -209,7 +216,7 @@ export function Line({ cells }: { cells: BodyLine }): React.ReactElement {
   return (
     <Text>
       {cells.map((cell, at) => (
-        <Text key={at} color={toneColor(cell.tone)} dimColor={cell.tone === 'dim'} inverse={cell.inverse}>
+        <Text key={at} color={toneColor(cell.tone)} dimColor={toneDim(cell.tone)} inverse={cell.inverse}>
           {cell.text}
         </Text>
       ))}

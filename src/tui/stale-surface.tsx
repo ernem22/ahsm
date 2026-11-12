@@ -26,7 +26,7 @@ export function StaleSurface({ state, width, height }: StaleSurfaceProps): React
         read={state.read}
         width={width}
         height={room}
-        busy={<Reading what={t.tui.updateCheck} startedAt={state.read.startedAt} count={state.read.value?.rows.length} />}
+        busy={<Reading what={t.tui.updateCheck} startedAt={state.read.startedAt} count={state.read.value?.rows.length} width={width} />}
         frame={() => staleFrame(state.body, state.filter, width, room, state.window)}
       />
     </Box>

@@ -26,7 +26,7 @@ export function StatusSurface({ state, width, height }: StatusSurfaceProps): Rea
         read={state.read}
         width={width}
         height={room}
-        busy={<Reading what={t.tui.surfaces.status} startedAt={state.read.startedAt} />}
+        busy={<Reading what={t.tui.surfaces.status} startedAt={state.read.startedAt} width={width} />}
         frame={() => statusFrame(state.body, width, room, state.window.index)}
       />
     </Box>

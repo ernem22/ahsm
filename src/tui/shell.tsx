@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import type { Ctx } from '../context.js';
 import { t } from '../i18n.js';
-import { toneColor, type Tone } from '../render.js';
+import { toneColor, toneDim, type Tone } from '../render.js';
 import type { Data } from '../types.js';
-import { wrap } from './format.js';
+import { truncate, wrap } from './format.js';
 import { HelpOverlay } from './help.js';
 import {
   activeKeys,
@@ -177,20 +177,20 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   return (
     <Box flexDirection="column" height={rows}>
       <Box justifyContent="space-between">
-        <Text bold>{`${t.title}  ${surfaceLabel}`}</Text>
+        <Text bold>{truncate(`${t.title}  ${surfaceLabel}`, columns)}</Text>
         {rail ? <Text dimColor>{rail}</Text> : null}
       </Box>
-      <Text dimColor>{`${t.target}: ${target}`}</Text>
+      <Text dimColor>{truncate(`${t.target}: ${target}`, columns)}</Text>
       <Box flexDirection="column" flexGrow={1}>
         {help ? (
-          <HelpOverlay title={t.tui.helpTitle(surfaceLabel)} keys={keys} />
+          <HelpOverlay title={t.tui.helpTitle(surfaceLabel)} keys={keys} width={columns} />
         ) : (
           <SurfaceBody surface={surface} data={data} states={states} width={columns} height={height} />
         )}
       </Box>
       {status
         ? statusLines(status, columns).map((line, at) => (
-            <Text key={at} color={toneColor(status.tone)} dimColor={status.tone === 'dim'}>
+            <Text key={at} color={toneColor(status.tone)} dimColor={toneDim(status.tone)}>
               {line}
             </Text>
           ))

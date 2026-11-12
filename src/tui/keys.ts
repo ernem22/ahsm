@@ -3,6 +3,7 @@ import type { StaleValue } from '../core/stale.js';
 import { t } from '../i18n.js';
 import type { Tone } from '../render.js';
 import { advance, moveCursor, stepBack, toggleFocused, toggleSection, type InstallForm } from './install.js';
+import { truncate } from './format.js';
 import type { RowWindow } from './window.js';
 
 /** The eight surfaces of the window; the seven commands of the rail plus the home surface. */
@@ -672,7 +673,7 @@ export function entryText(binding: KeyBinding): string {
   return `${keyName(binding)} ${binding.label}`;
 }
 
-/** Entries joined by the separator, dropped from the end until they fit the width. */
+/** Entries joined by the separator, dropped from the end until they fit the width, cut if even one does not. */
 export function keybarText(bindings: KeyBinding[], width: number): string {
   const kept: string[] = [];
   for (const binding of bindings) {
@@ -681,7 +682,7 @@ export function keybarText(bindings: KeyBinding[], width: number): string {
     if (kept.length > 0 && next.length > width) break;
     kept.push(entry);
   }
-  return kept.join(t.tui.keybarSeparator);
+  return truncate(kept.join(t.tui.keybarSeparator), width);
 }
 
 /** `i install · p plan · …`, or nothing when the header has no room for it. */

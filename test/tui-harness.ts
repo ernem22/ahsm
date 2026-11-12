@@ -90,6 +90,8 @@ export interface TuiOptions {
 export interface TuiHarness {
   /** The last rendered frame, ANSI stripped. */
   frame(): string;
+  /** The last rendered frame with its escape sequences intact, for the colour tests. */
+  raw(): string;
   /** The last frame as lines with trailing blanks trimmed. */
   lines(): string[];
   press(...keys: string[]): Promise<void>;
@@ -118,6 +120,7 @@ export async function startTui(options: TuiOptions): Promise<TuiHarness> {
    */
   const frames = (): string[] => stdout.chunks.filter((chunk) => chunk !== '').map(stripAnsi);
   const frame = (): string => frames()[frames().length - 1] ?? '';
+  const raw = (): string => [...stdout.chunks].reverse().find((chunk) => chunk !== '') ?? '';
 
   /** Waits for what a timer or a render will make true; the deadline bounds a key that does nothing. */
   const until = async (done: () => boolean): Promise<void> => {
@@ -127,6 +130,7 @@ export async function startTui(options: TuiOptions): Promise<TuiHarness> {
 
   return {
     frame,
+    raw,
     lines: () => frame().split('\n').map((line) => line.replace(/\s+$/, '')),
     async press(...keys) {
       for (const key of keys) {

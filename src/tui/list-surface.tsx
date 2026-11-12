@@ -25,7 +25,7 @@ export function ListSurface({ state, width, height }: ListSurfaceProps): React.R
         read={state.read}
         width={width}
         height={room}
-        busy={<Reading what={t.tui.inventory} startedAt={state.read.startedAt} count={state.read.value?.rows.length} />}
+        busy={<Reading what={t.tui.inventory} startedAt={state.read.startedAt} count={state.read.value?.rows.length} width={width} />}
         frame={() => listFrame(state.body, state.filter, width, room, state.window)}
       />
     </Box>

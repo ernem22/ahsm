@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text } from 'ink';
 import { t } from '../i18n.js';
-import { toneColor } from '../render.js';
+import { toneColor, toneDim } from '../render.js';
 import { useElapsed } from './elapsed.js';
 import { wrap } from './format.js';
 import type { ReadState } from './read.js';
@@ -12,13 +12,23 @@ export function Reading({
   what,
   startedAt,
   count,
+  width,
 }: {
   what: string;
   startedAt: number | undefined;
   count?: number;
+  width: number;
 }): React.ReactElement {
   const seconds = useElapsed(startedAt);
-  return <Text dimColor>{t.tui.reading(what, seconds, count)}</Text>;
+  return (
+    <>
+      {wrap(t.tui.reading(what, seconds, count), width).map((line, at) => (
+        <Text key={at} dimColor>
+          {line}
+        </Text>
+      ))}
+    </>
+  );
 }
 
 export interface ReadBodyProps {
@@ -42,14 +52,24 @@ export function ReadBody({ read, width, height, busy, frame }: ReadBodyProps): R
     return (
       <>
         {wrap(read.message ?? '', width).map((line, at) => (
-          <Text key={at} color={toneColor('error')}>
+          <Text key={at} color={toneColor('error')} dimColor={toneDim('error')}>
             {line}
           </Text>
         ))}
       </>
     );
   }
-  if (read.status === 'stopped') return <Text color={toneColor('warning')}>{t.tui.stoppedWaiting}</Text>;
+  if (read.status === 'stopped') {
+    return (
+      <>
+        {wrap(t.tui.stoppedWaiting, width).map((line, at) => (
+          <Text key={at} color={toneColor('warning')} dimColor={toneDim('warning')}>
+            {line}
+          </Text>
+        ))}
+      </>
+    );
+  }
   if (read.status === 'done' && read.value !== undefined) {
     return (
       <>

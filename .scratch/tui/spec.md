@@ -225,9 +225,10 @@ of `min(62, width − 52)` with a 2-column gutter: 62 columns from 114 columns u
 the two panes and the gutter never claim more than the frame has; the focused row's text is the detail
 column's first line, and its continuation lines follow. Between 60 and 99 the body is one column and the
 focused row wraps under itself with a 4-space indent. At 59 and below it is one column with a 1-column
-gutter and the rail is dropped. Rows truncate with `…`; only the focused row is ever wrapped. The command
-rail occupies the right end of the header's first line when it fits, and is omitted when it does not.
-Assert in tests: no rendered line
+gutter and the rail is dropped: the focused row and each of its continuation lines are suppressed to one
+line and cut with `…`, because wrapping would spend the window on a single row. Rows truncate with `…`;
+between 60 and 99 only the focused row is ever wrapped. The command rail occupies the right end of the
+header's first line when it fits, and is omitted when it does not. Assert in tests: no rendered line
 exceeds the frame width.
 
 **Tone and marks.** Four tones: normal, dim, warning, error. Colour comes from the existing `toneColor`

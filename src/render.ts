@@ -109,12 +109,37 @@ export function outcomeLines(outcome: ApplyOutcome): Line[] {
   return lines;
 }
 
-/** Ink colour for a line; the CLI ignores it. */
+/** One tone's terminal attributes: the colour it uses, and whether it is dimmed instead. */
+export interface ToneStyle {
+  color?: string;
+  dim: boolean;
+}
+
+/**
+ * The one tone table: four tones, one mapping. Everything that renders a `Line` asks this table, so a
+ * warning is the same yellow and a dim line the same dim everywhere, and no surface invents a colour.
+ */
+export const TONES: Record<Tone, ToneStyle> = {
+  normal: { dim: false },
+  dim: { dim: true },
+  warning: { color: 'yellow', dim: false },
+  error: { color: 'red', dim: false },
+};
+
+/** `NO_COLOR` (set to anything but empty) and a dumb terminal drop colour, never a word or a mark. */
+function colorDropped(): boolean {
+  const noColor = process.env.NO_COLOR;
+  return (noColor !== undefined && noColor !== '') || process.env.TERM === 'dumb';
+}
+
+/** Ink colour for a line; the CLI ignores it, and a no-colour terminal never receives one. */
 export function toneColor(tone: Tone): string | undefined {
-  if (tone === 'error') return 'red';
-  if (tone === 'warning') return 'yellow';
-  if (tone === 'dim') return undefined;
-  return undefined;
+  return colorDropped() ? undefined : TONES[tone].color;
+}
+
+/** Whether the tone is dim rather than coloured: dim survives `NO_COLOR`, because it is not a colour. */
+export function toneDim(tone: Tone): boolean {
+  return TONES[tone].dim;
 }
 
 export function removePlanLines(plan: RemovePlan): Line[] {
