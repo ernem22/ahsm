@@ -34,6 +34,23 @@ export function removeCount(plan: RemovePlan): number {
   return plan.entries.filter((entry) => entry.action === 'remove').length;
 }
 
+/** How many of the entries `y` acts on came out of the record: only those have a record to clear. */
+function recordedCount(plan: RemovePlan): number {
+  return plan.entries.filter((entry) => entry.action === 'remove' && !entry.named).length;
+}
+
+/** The three record consequences a plan can have, in the words both the confirm and the busy line use. */
+type RecordConsequence = 'none' | 'all' | 'some';
+
+/**
+ * Which record claim the plan may make: a plan of names alone clears nothing, a plan of recorded items
+ * clears all of them, and a mixed plan clears the recorded entries only — never the typed names.
+ */
+function recordConsequence(count: number, recorded: number): RecordConsequence {
+  if (recorded === 0) return 'none';
+  return recorded === count ? 'all' : 'some';
+}
+
 /**
  * The confirm line: how many entries the key acts on, and the one record consequence it has. A plan of
  * names alone has no record to clear, so it says exactly that instead of claiming one.
@@ -41,8 +58,30 @@ export function removeCount(plan: RemovePlan): number {
 export function removeConfirm(plan: RemovePlan): Line | undefined {
   const count = removeCount(plan);
   if (count === 0) return undefined;
-  const recorded = plan.entries.some((entry) => entry.action === 'remove' && !entry.named);
-  return { text: recorded ? t.tui.removeConfirm(count) : t.tui.removeNamedConfirm(count), tone: 'normal' };
+  const recorded = recordedCount(plan);
+  const consequence = recordConsequence(count, recorded);
+  const text =
+    consequence === 'none'
+      ? t.tui.removeNamedConfirm(count)
+      : consequence === 'all'
+        ? t.tui.removeConfirm(count)
+        : t.tui.removeMixedConfirm(count, recorded);
+  return { text, tone: 'normal' };
+}
+
+/**
+ * The in-flight line's record claim: the same three cases as the confirm line, chosen the same way, so a
+ * names-only removal never says a record was cleared while it runs.
+ */
+export function removeBusyShape(plan: RemovePlan): string {
+  const count = removeCount(plan);
+  const recorded = recordedCount(plan);
+  const consequence = recordConsequence(count, recorded);
+  return consequence === 'none'
+    ? t.tui.removeNamedShape(count)
+    : consequence === 'all'
+      ? t.tui.removeShape(count)
+      : t.tui.removeMixedShape(count, recorded);
 }
 
 /** What the plan owes the user when the key would do nothing: the empty record, or rows that say why. */

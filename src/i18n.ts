@@ -248,13 +248,25 @@ export const t = {
       `${installs} install${installs === 1 ? '' : 's'} · ${hooks} hook write${hooks === 1 ? '' : 's'} · ${blocked} blocked`,
     applyNothingElse: 'nothing else runs until this finishes',
     applyRefusal: 'q and Esc are disabled until it finishes',
-    /** The removal's own count: how much the key attempts, and what it leaves alone. */
+    /**
+     * The removal's own count: how much the key attempts, and what it leaves alone. A plan of names
+     * alone has no record to clear, and a mixed plan clears only the entries that came from the record.
+     */
     removeShape: (count: number) => `${count} removal${count === 1 ? '' : 's'} · the record is cleared for the items that go`,
+    /** A plan of names alone: nothing was recorded, so the busy line claims no record to clear. */
+    removeNamedShape: (count: number) =>
+      `${count} removal${count === 1 ? '' : 's'} · no record was made for ${count === 1 ? 'it' : 'them'}`,
+    /** A plan that mixes both: only the entries the record holds are cleared. */
+    removeMixedShape: (count: number, recorded: number) =>
+      `${count} removal${count === 1 ? '' : 's'} · the record is cleared for the ${recorded} recorded item${recorded === 1 ? '' : 's'}`,
     /** The removal plan's confirm line: the one thing the destructive key does, beside how many entries. */
     removeConfirm: (count: number) => `y remove ${count} item${count === 1 ? '' : 's'} · the record is cleared for them`,
     /** A plan of names alone: there is no record to clear, and the surface does not claim one. */
     removeNamedConfirm: (count: number) =>
       `y remove ${count} item${count === 1 ? '' : 's'} · no record was made for ${count === 1 ? 'it' : 'them'}`,
+    /** A plan that mixes both: the key clears the recorded entries only, and says so. */
+    removeMixedConfirm: (count: number, recorded: number) =>
+      `y remove ${count} item${count === 1 ? '' : 's'} · the record is cleared for the ${recorded} recorded item${recorded === 1 ? '' : 's'}`,
     /** A record with nothing in it: the one other way to remove a skill is named. */
     removeEmpty: 'nothing recorded — a name removes a skill agentenv never installed',
     /** A record the key cannot act on: the rows themselves say why, so this claims nothing else. */

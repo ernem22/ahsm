@@ -7,7 +7,7 @@ import type { Data } from '../types.js';
 import type { WriteState } from './apply.js';
 import type { FilterKeys, RemoveKeys } from './keys.js';
 import { useRead, type ReadState } from './read.js';
-import { removeCount, removePage } from './remove.js';
+import { removeBusyShape, removeCount, removePage } from './remove.js';
 import { useWrite } from './use-write.js';
 import { emptyWindow, goTo, moveBy, type RowWindow } from './window.js';
 
@@ -81,7 +81,8 @@ export function useRemoveSurface({ data, ctx, width, height, active, say }: Remo
   const write = useWrite<RemoveOutcome>({
     say,
     run: plan ? () => applyRemovePlan(data, ctx, plan) : undefined,
-    shape: t.tui.removeShape(entries),
+    // The busy line makes the same record claim the confirm line makes, from the same plan.
+    shape: plan ? removeBusyShape(plan) : '',
   });
 
   return {

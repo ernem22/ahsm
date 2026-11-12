@@ -489,3 +489,89 @@ test('at 40 columns the plan wraps, the confirm still fits above the keybar and 
     await tui.stop();
   }
 });
+
+test('r reads the removal plan again, so the rows show what the record says now', async () => {
+  const shared = setup({
+    records: [{ itemId: 'skill-a', kind: 'skill' }],
+    installed: [{ name: 'alpha', source: 'fixture/skills', agents: ['fake'] }],
+  });
+  const tui = await startTui({ ...shared, width: 120 });
+  try {
+    await openRemove(tui);
+    assert.ok(tui.frame().includes('- skill-a [skill]'), tui.frame());
+    assert.ok((tui.lines().at(-1) ?? '').includes(`r ${t.tui.keys.refresh}`), tui.lines().at(-1) ?? '');
+
+    // The record changes under the surface: `r` is the key that reads it again.
+    writeState(shared.ctx, { version: 1, entries: [] });
+    await tui.press('r');
+    await settle(tui, () => tui.frame().includes(t.tui.removeEmpty));
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.remove}`), true, tui.lines()[0] ?? '');
+    assert.equal(planRows(tui.lines()).length, 0, tui.frame());
+  } finally {
+    await tui.stop();
+  }
+});
+
+interface BusyPlan {
+  /** The plan's own confirm line, right before the key is pressed. */
+  plan: string;
+  /** The frame while the removal is in flight. */
+  busy: string;
+}
+
+/** Opens `x`, optionally names skills, then holds the removal open long enough to read its frame. */
+async function busyRemoval(
+  options: Parameters<typeof setup>[0],
+  names: { typed: string; row: string }[] = [],
+): Promise<BusyPlan> {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const shared = setup({ ...options, gate });
+  const tui = await startTui({ ...shared, width: 120 });
+  try {
+    await openRemove(tui);
+    for (const name of names) {
+      await tui.press('a');
+      for (const char of name.typed) await tui.press(char);
+      await tui.press('\r');
+      // A named skill is its own row; a name the record covers keeps the recorded item's row.
+      await settle(tui, () => tui.frame().includes(name.row));
+    }
+    const plan = tui.frame();
+    await tui.press('y');
+    await settle(tui, () => /applying… \d+s/.test(tui.frame()));
+    const busy = tui.frame();
+    release();
+    await settle(tui, () => tui.frame().includes(t.tui.resultTitle), 2500);
+    return { plan, busy };
+  } finally {
+    await tui.stop();
+  }
+}
+
+test('a recorded removal says the record is cleared; a names-only one never claims a record', async () => {
+  const installed = [{ name: 'alpha', source: 'fixture/skills', agents: ['fake'] }];
+
+  // Every entry came out of the record: the record is cleared for it, in flight as well as before the key.
+  const recorded = await busyRemoval({ records: [{ itemId: 'skill-a', kind: 'skill' }], installed });
+  assert.ok(recorded.plan.includes(t.tui.removeConfirm(1)), recorded.plan);
+  assert.ok(recorded.busy.includes(t.tui.removeShape(1)), recorded.busy);
+  assert.equal(recorded.busy.includes(t.tui.removeNamedShape(1)), false, recorded.busy);
+
+  // A name alone: nothing was recorded, so the no-record sentence is the honest one. The provider
+  // holds the removal open, so the busy frame is the one under test rather than a finished write.
+  const named = await busyRemoval({ installed: [{ name: 'ghost', source: 'fixture/skills', agents: ['fake'] }] }, [{ typed: 'ghost', row: '- ghost [skill]' }]);
+  assert.ok(named.plan.includes(t.tui.removeNamedConfirm(1)), named.plan);
+  assert.ok(named.busy.includes(t.tui.removeNamedShape(1)), named.busy);
+  assert.equal(named.busy.includes(t.tui.removeShape(1)), false, `a names-only plan claimed the record:\n${named.busy}`);
+
+  // Both kinds in one plan: `alpha` is the recorded skill, `ghost` is only a name, and only the recorded
+  // entry is cleared — the copy counts the one it clears.
+  const mixed = await busyRemoval({ records: [{ itemId: 'skill-a', kind: 'skill' }], installed }, [
+    { typed: 'alpha', row: '- skill-a [skill]' },
+    { typed: 'ghost', row: '- ghost [skill]' },
+  ]);
+  assert.ok(mixed.plan.includes(t.tui.removeMixedConfirm(2, 1)), mixed.plan);
+  assert.ok(mixed.busy.includes(t.tui.removeMixedShape(2, 1)), mixed.busy);
+  assert.equal(mixed.busy.includes(t.tui.removeShape(2)), false, `a mixed plan claimed the whole record:\n${mixed.busy}`);
+});
