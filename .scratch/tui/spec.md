@@ -129,8 +129,8 @@ with real elapsed seconds, and cancellable. Writes are not cancellable, and the 
     rather than 200 wrapped lines.
 40. As a user, I want `/` to filter the inventory by substring, so that finding one skill does not mean
     scanning 103 rows.
-41. As a user, I want `f` to narrow the inventory to the skills a chosen harness does not report, so that
-    the question `what is missing here?` has a key.
+41. As a user, I want `f` to filter the inventory to the skills this selection carries, so that the
+    question `what does this selection report?` has a key.
 42. As a user, I want the filter to say how many skills matched (`3 of 103 skill(s) match the filter`), so
     that a filter never looks like a smaller inventory.
 43. As a user, I want the shell to start on `install` and reach every other surface by letter, so that the
@@ -200,6 +200,12 @@ returns the message that goes on the status line, which is how `q` during a writ
 chosen explain themselves instead of being ignored. Global keys live in one table merged under the surface
 table. Three single-line modes exist and `Esc` closes each: help, filter, and a skill name for `remove`.
 
+**`Esc` on a rows surface, stated once.** Every rows surface spends `Esc` in one order, and this is the
+only place that order is decided: **stop a running read → clear the text/filter (and any state filter) →
+leave the surface**. The keybar always names the step it would take — `Esc stop waiting`, `Esc clear
+filter`, `Esc back` — so one key never does two things without saying which. In a text mode `Esc` ends
+the mode instead, and `Enter` keeps the text and ends it.
+
 **Reads and cancellation.** Each surface's data call goes through one read hook holding
 `idle | busy | done | stopped | error`, the start time and the resulting lines. A read carries a token;
 `Esc` flips the surface to `stopped`, which discards the result when it resolves and shows the cancelled
@@ -242,7 +248,8 @@ capturing output stream, push keys, and assert on the frame's text with ANSI seq
 words and order, never internal component state or props. Existing seams are enough: a fixture data root
 plus `createContext({ home, runner, skills })` already make `plan`, `status`, `stale`, `update` and `remove`
 deterministic without a network, which is how the unit and e2e suites work today. The TUI adds no seam of
-its own.
+its own. `test/tui-harness.ts#fixture` answers every out-of-process read from memory, so a new surface adds
+a stub rather than hitting the real profile.
 
 Surfaces and modules to test:
 
