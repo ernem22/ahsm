@@ -149,7 +149,7 @@ function overlayRows(lines: string[], surface: SurfaceId): string[] {
 /** The keys that belong to the mode, not to the surface: the overlay replaces all three while it is open. */
 const MODE = new Set(['Esc', '?', 'q']);
 
-test('the rail is the seven commands, in the CLI letters and the surfaces own names', () => {
+test('the rail holds the seven commands with their CLI letters and surface names', () => {
   // The literal list is the contract: a table that drifted from it would still pass a self-comparison.
   assert.deepEqual(
     RAIL_ROWS.map((row) => ({ key: row.key, surface: row.surface })),
