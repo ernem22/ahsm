@@ -1,10 +1,82 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
+import { createContext, type Ctx, type RunResult, type Runner } from '../src/context.js';
+import { recordEntry, readState } from '../src/core/state.js';
+import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
-import { expectFrame, expectFrameText, fixture, startTui, type TuiHarness } from './tui-harness.js';
+import type { Data } from '../src/types.js';
+import { expectFrame, expectFrameText, fixture, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
 
 /** The widths the design names: the two layouts, their boundaries, and what sits either side. */
 const WIDTHS = [20, 30, 40, 59, 60, 80, 99, 100, 120];
+
+/** The provider's own check, as the in-memory runner prints it: one installed copy is out of date. */
+const CHECK_OUTPUT = [
+  'Checking for skill updates…',
+  '',
+  'Checking skills from source: fixture/skills',
+  '↑ alpha has an update',
+  '',
+  '1 skill(s) can be updated; run npx skills update to install',
+].join('\n');
+
+/** Answers the provider's check, the version probes and the install; a read, so it writes nothing. */
+class SeededRunner implements Runner {
+  async run(argv: string[]): Promise<RunResult> {
+    const line = argv.join(' ');
+    if (line.includes('check-skills.mjs')) return { code: 0, stdout: `${CHECK_OUTPUT}\n`, stderr: '' };
+    if (line === 'node --version') return { code: 0, stdout: 'v22.1.0', stderr: '' };
+    if (line.includes('--version')) return { code: 0, stdout: '1.0.0', stderr: '' };
+    return { code: 0, stdout: '', stderr: '' };
+  }
+}
+
+/**
+ * A home with one recorded skill whose provider's own check calls it stale: the sweep's `stale`,
+ * `update` and `remove` frames carry a real row instead of an empty state, so the width rule is
+ * measured against rows and not against an answer that has none.
+ */
+function seeded(): { data: Data; ctx: Ctx } {
+  const home = fixtureHome();
+  const data = loadData(OFFLINE_ROOT);
+  const ctx = createContext({
+    home,
+    root: OFFLINE_ROOT,
+    runner: new SeededRunner(),
+    platform: 'linux',
+    // The inventory is the one read that leaves the machine: tests answer it from memory.
+    skills: {
+      install: async () => ({ installed: [], failed: [] }),
+      remove: async () => ({ removed: [], notFound: [], failed: [] }),
+      list: async () => [{ name: 'alpha', source: 'fixture/skills', agents: ['fake'] }],
+    },
+  });
+  // The lockfile the provider compares against, plus the record that says which item owns the skill.
+  fs.mkdirSync(path.join(home, '.fake'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.fake', '.skill-lock.json'),
+    JSON.stringify({
+      version: 3,
+      skills: {
+        alpha: {
+          source: 'fixture/skills',
+          sourceType: 'github',
+          skillPath: 'skills/x/SKILL.md',
+          skillFolderHash: '0123456789abcdef0123456789abcdef01234567',
+        },
+      },
+    }),
+    'utf8',
+  );
+  recordEntry(ctx, readState(ctx).state, {
+    ref: { itemId: 'skill-a', harness: 'fake', providerId: 'fake-skills' },
+    kind: 'skill',
+    command: ['node', 'install-skill.mjs', 'fixture/skills', 'alpha'],
+  });
+  return { data, ctx };
+}
 
 /** The frame as one string with every blank removed: a wrapped word is still the same word. */
 function flat(text: string): string {
@@ -41,7 +113,7 @@ async function back(tui: TuiHarness): Promise<void> {
  * so a width is never measured against a busy frame.
  */
 async function sweep(width: number): Promise<void> {
-  const tui = await startTui({ ...fixture(), width });
+  const tui = await startTui({ ...seeded(), width });
   try {
     expectFrame(tui.lines(), { width, rows: 30 });
 
@@ -58,17 +130,21 @@ async function sweep(width: number): Promise<void> {
     expectFrame(tui.lines(), { width, rows: 30 });
     await back(tui);
 
-    const rows: [string, string][] = [
-      ['s', t.tui.surfaces.status],
-      ['l', t.tui.surfaces.list],
-      ['v', t.tui.surfaces.stale],
-      ['u', t.tui.surfaces.update],
-      ['x', t.tui.surfaces.remove],
+    // Each rows surface is measured against a row the seeded home really produces: `stale` and
+    // `update` compare one installed copy, `list` holds it, `remove` has the record that owns it, and
+    // `status` names the harness that carries it. An empty answer would pass the width rule silently.
+    const rows: { key: string; surface: string; row: string }[] = [
+      { key: 's', surface: t.tui.surfaces.status, row: t.harnesses },
+      { key: 'l', surface: t.tui.surfaces.list, row: 'alpha' },
+      { key: 'v', surface: t.tui.surfaces.stale, row: 'alpha' },
+      { key: 'u', surface: t.tui.surfaces.update, row: 'skill-a' },
+      { key: 'x', surface: t.tui.surfaces.remove, row: 'skill-a' },
     ];
-    for (const [key, surface] of rows) {
+    for (const { key, surface, row } of rows) {
       await tui.press(key);
-      await settle(tui, () => ready(tui, surface));
+      await settle(tui, () => ready(tui, surface) && says(tui, row));
       expectFrame(tui.lines(), { width, rows: 30 });
+      expectFrameText(tui.lines(), row);
       await back(tui);
     }
 
