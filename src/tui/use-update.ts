@@ -54,6 +54,7 @@ export function useUpdateSurface({ data, ctx, width, height, active, say }: Upda
     shape: t.tui.applyShape(shape.installs, shape.hooks, shape.blocked),
   });
 
+  // The rows `y` would act on: the plan's own entries, so an empty plan offers no key that runs nothing.
   const rows = update?.plan.entries.length ?? 0;
 
   return {
@@ -72,6 +73,8 @@ export function useUpdateSurface({ data, ctx, width, height, active, say }: Upda
       stopWaiting: read.stop,
       applying: write.applying,
       result: write.result,
+      planReady: update !== undefined,
+      entries: rows,
       runApply: write.write,
     },
   };

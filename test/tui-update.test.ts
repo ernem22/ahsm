@@ -414,14 +414,58 @@ test('the in-flight screen is the apply surface\'s: named, shaped, timed and ref
   }
 });
 
-test('the plan and its confirm name their keys: y apply, n decline, Esc back', async () => {
+test('the plan and its confirm name their keys: y apply, n decline, Esc back, r refresh', async () => {
   const shared = mixed();
   const tui = await startTui({ ...shared, width: 120 });
   try {
     await openUpdate(tui);
     const keybar = tui.lines().at(-1) ?? '';
-    for (const entry of ['y apply', 'n decline', 'Esc back', '? keys']) assert.ok(keybar.includes(entry), keybar);
-    assert.equal(keybar.includes('r rebuild'), false, 'the update plan offers a rebuild that would re-read the check');
+    for (const entry of ['y apply', 'n decline', 'Esc back', '? keys', 'r refresh']) {
+      assert.ok(keybar.includes(entry), keybar);
+    }
+  } finally {
+    await tui.stop();
+  }
+});
+
+/** How many times the provider's own check was spawned: the update surface's one slow read. */
+function checkCalls(shared: Setup): number {
+  return shared.runner.calls.filter((argv) => (argv[1] ?? '').endsWith('check-skills.mjs')).length;
+}
+
+test('r runs the provider check again and keeps the plan', async () => {
+  const shared = mixed();
+  const tui = await startTui({ ...shared, width: 120 });
+  try {
+    await openUpdate(tui);
+    const before = checkCalls(shared);
+    assert.ok(before >= 1, 'the surface never ran the check');
+
+    await tui.press('r');
+    await settle(tui, () => checkCalls(shared) > before && tui.frame().includes(t.updateTitle));
+    assert.equal(checkCalls(shared), before + 1, 'r did not re-run the check exactly once');
+    assert.deepEqual(planRows(tui.lines()), ['+ skill-a → fake [skill/fake-skills]', '+ skill-b → fake [skill/fake-skills]']);
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.update}`), true, tui.lines()[0] ?? '');
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('y is not offered when the plan has no entries, and pressing it says why', async () => {
+  const shared = setup({ lock: { fresh: locked('fixture/skills') } });
+  const tui = await startTui({ ...shared, width: 120 });
+  try {
+    await openUpdate(tui);
+    assert.ok(tui.frame().includes(t.updateNone), tui.frame());
+    // A bar never advertises a key that would run nothing.
+    assert.equal((tui.lines().at(-1) ?? '').includes('y apply'), false, tui.lines().at(-1) ?? '');
+
+    await tui.press('y');
+    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.update}`), true, tui.lines()[0] ?? '');
+    // The refusal is the status line's, right above the keybar.
+    assert.equal(tui.lines().at(-2), t.updateNone, tui.frame());
+    assert.equal(tui.frame().includes(t.tui.resultTitle), false, `an empty plan produced a result: ${tui.frame()}`);
+    assert.deepEqual(shared.runner.installs, [], 'an empty plan installed something');
   } finally {
     await tui.stop();
   }

@@ -116,6 +116,10 @@ export interface UpdateKeys extends SlowRowsKeys {
   readonly applying: boolean;
   /** The write finished, so the surface shows the result rather than the plan. */
   readonly result: boolean;
+  /** The plan has been read: until then `y` has nothing to run. */
+  readonly planReady: boolean;
+  /** How many entries the plan holds; with none, `y` has nothing to update. */
+  readonly entries: number;
   /** `y`: run the plan through `applyPlan`, exactly as `agentenv update --yes` does. */
   runApply(): void;
 }
@@ -498,15 +502,24 @@ export function staleKeys(host: StaleHost): KeyTable {
 
 /**
  * The update plan, read-only until `y`: the rows the update would install move like any other window,
- * and `y` is the only key here that writes. `n` and `Esc` decline back to where `u` was opened, so
- * declining costs nothing and nothing is installed beside it. `Esc` spends itself on a running check
- * first, exactly as on the other slow rows surfaces.
+ * `r` runs the provider's check again, and `y` is the only key here that writes. `n` and `Esc` decline
+ * back to where `u` was opened, so declining costs nothing and nothing is installed beside it. `Esc`
+ * spends itself on a running check first, exactly as on the other slow rows surfaces. A plan with no
+ * rows offers no `y` either: the key would run nothing and show an empty result.
  */
 export function updateKeys(host: UpdateHost): KeyTable {
   return [
     stopWaitingKey(host),
-    { keys: ['y'], label: t.tui.keys.apply, refuses: refusesDuringWrite(host), run: () => host.runApply() },
+    {
+      keys: ['y'],
+      label: t.tui.keys.apply,
+      when: () => host.planReady,
+      refuses: () =>
+        host.applying ? t.tui.applyRefusal : host.entries === 0 ? t.updateNone : undefined,
+      run: () => host.runApply(),
+    },
     ...rowsNavigation(host),
+    reloadKey(host),
     { keys: ['n'], label: t.tui.keys.decline, refuses: refusesDuringWrite(host), run: () => host.decline() },
     { keys: ['escape'], label: t.tui.keys.back, refuses: refusesDuringWrite(host), run: () => host.decline() },
   ];
@@ -526,7 +539,7 @@ export function updateResultKeys(host: UpdateHost): KeyTable {
 /**
  * The removal plan, read-only until `y`: the rows carry their harnesses, paths and command before the
  * key acts, and `a` opens the skill-name mode. `y` is the only key here that removes anything; `n` and
- * `Esc` decline to the home surface. `Esc` spends itself on a running read first.
+ * `Esc` decline to the home surface. `r` reads the plan again. `Esc` spends itself on a running read first.
  */
 export function removeKeys(host: RemoveHost): KeyTable {
   return [
@@ -553,6 +566,7 @@ export function removeKeys(host: RemoveHost): KeyTable {
       run: () => host.name.start(),
     },
     ...rowsNavigation(host),
+    reloadKey(host),
     { keys: ['n'], label: t.tui.keys.decline, refuses: refusesDuringWrite(host), run: () => host.decline() },
     { keys: ['escape'], label: t.tui.keys.back, refuses: refusesDuringWrite(host), run: () => host.decline() },
   ];

@@ -24,8 +24,22 @@ interface SurfaceCase {
 }
 
 const MOVES = ['Up move', 'Down move', 'PgUp move', 'PgDn move', 'g first', 'G last'];
-/** The rail's entries, from the one table the rail itself is built from. */
-const RAIL = RAIL_ROWS.map((row) => entryText({ keys: [row.key], label: t.tui.surfaces[row.surface], run: () => {} }));
+/**
+ * The seven commands the CLI has, written out by hand: the rail is the contract, so the table the rail
+ * is built from must equal this list rather than be compared with itself.
+ */
+const RAIL_COMMANDS: { key: string; surface: SurfaceId }[] = [
+  { key: 'i', surface: 'install' },
+  { key: 'p', surface: 'plan' },
+  { key: 's', surface: 'status' },
+  { key: 'l', surface: 'list' },
+  { key: 'v', surface: 'stale' },
+  { key: 'u', surface: 'update' },
+  { key: 'x', surface: 'remove' },
+];
+
+/** Those commands as the frame prints them, from the same i18n names the rail and the overlay use. */
+const RAIL = RAIL_COMMANDS.map((row) => `${row.key} ${t.tui.surfaces[row.surface]}`);
 
 /** The frame the surface answers with: its read is not in flight and its body is not the placeholder. */
 function settled(ready: () => boolean): Promise<void> {
@@ -98,8 +112,9 @@ const CASES: Record<SurfaceId, Omit<SurfaceCase, 'id'>> = {
   },
   update: {
     open: async (tui) => opens(tui, 'u', 'update', () => tui.frame().includes(t.updateNone)),
-    own: ['y apply', 'n decline'],
-    hidden: MOVES,
+    own: ['r refresh', 'n decline', 'Esc back'],
+    // An empty plan offers no `y`: the key is real, but a bar never advertises a key that refuses.
+    hidden: [...MOVES, 'y apply'],
     back: 'install',
   },
   remove: {
@@ -133,6 +148,21 @@ function overlayRows(lines: string[], surface: SurfaceId): string[] {
 
 /** The keys that belong to the mode, not to the surface: the overlay replaces all three while it is open. */
 const MODE = new Set(['Esc', '?', 'q']);
+
+test('the rail is the seven commands, in the CLI letters and the surfaces own names', () => {
+  // The literal list is the contract: a table that drifted from it would still pass a self-comparison.
+  assert.deepEqual(
+    RAIL_ROWS.map((row) => ({ key: row.key, surface: row.surface })),
+    RAIL_COMMANDS,
+  );
+  assert.deepEqual([...SURFACE_IDS].sort(), ['apply', 'install', 'list', 'plan', 'remove', 'stale', 'status', 'update']);
+  // The rail holds the surfaces that have a letter, and `apply` reaches the user by `Enter` instead.
+  assert.equal(RAIL_ROWS.some((row) => row.surface === 'apply'), false);
+  assert.deepEqual(
+    RAIL_ROWS.map((row) => entryText({ keys: [row.key], label: t.tui.surfaces[row.surface], run: () => {} })),
+    RAIL,
+  );
+});
 
 test('every surface lists its key once, in the overlay, and dispatches the entry it lists', async () => {
   for (const surface of SURFACES) {
