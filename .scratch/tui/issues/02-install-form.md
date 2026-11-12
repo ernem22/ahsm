@@ -1,8 +1,9 @@
 # 02: The install form
 
 **What to build:** the home surface becomes one screen with three sections, one focused at a time:
-`harnesses`, `package`, `items`. `space` toggles the focused row, `a` toggles all rows in the section,
-`Enter` moves focus one section forward, `Esc` moves it one section back without losing a choice. Sections
+`harnesses`, `package`, `items`. `space` toggles the focused row, `a` toggles all rows in the section — not
+on `package`, which is a single choice, where the key is not in the frame at all — `Enter` moves focus one
+section forward, `Esc` moves it one section back without losing a choice. Sections
 that are not focused fold to a one-line summary that states what was chosen (`2 of 4 chosen`,
 `base · 3 items`), so the screen always answers where the user is. The header's target line names the chosen
 harnesses, or `no installed harness found`. A harness that is not detected stays listed and chooseable and
@@ -18,7 +19,7 @@ the folded summaries and `3 of 3 chosen` all follow the choices, and `Esc` walks
 **Status:** done
 
 - [x] The three sections render with exactly one focused, and unfocused sections fold to a summary
-- [x] `space`, `a`, `Enter` and `Esc` behave as above in all three sections
+- [x] `space`, `a`, `Enter` and `Esc` behave as above in each section, and `a` is not offered on `package`
 - [x] A harness that is not detected is listed, chooseable, and marked `not detected`
 - [x] `Enter` with nothing chosen advances nothing and states why on the status line
 - [x] The focused item row carries its kind and its source, url or hook event
@@ -36,7 +37,15 @@ the folded summaries and `3 of 3 chosen` all follow the choices, and `Esc` walks
 - `Enter` on the items section opens the plan surface. That is the flow's next stage, and the plan's body
   is ticket 03; the key does not dead-end meanwhile.
 - The package section is a single choice, so `space` selects the focused package (and re-derives its items,
-  which come pre-chosen as the CLI's selection does) and `a` is inactive there rather than meaning nothing.
+  which come pre-chosen as the CLI's selection does) and `a` is not in that section's frame at all: the
+  binding's `when` hides it, so neither the keybar nor the overlay advertises a key that would do nothing.
+- Every cursor is clamped against its own section by `clampCursors` in the reducers that can shrink a
+  section (choosing a package, moving to another stage), using the shared `goTo`. A package with fewer
+  items than the old cursor's index would otherwise render with no `>` row and leave `space` acting on
+  nothing.
+- The focused section is windowed with `rowsInView` over the row line heights, in the height the shell
+  already computes minus `INSTALL_CHROME` (the three heading lines, the blank line above each, and the two
+  folded summaries). A package taller than the window scrolls instead of clipping the header away.
 - `Up`/`Down` move the cursor inside the focused section. They are `hidden` in the keybar (the copy deck's
   keybar has no room for them) and listed in the `?` overlay, so no key exists that the overlay cannot name.
 - `Esc` on the harnesses section is not listed: there is nothing behind it. On the other two it walks back

@@ -1,13 +1,14 @@
 # 03: The plan body
 
 **What to build:** one body component that renders `planLines(plan)` with the layout rule: at 100 columns
-and above a 50-column row column and a 62-column detail column; the focused row's text opens the detail
-column and its continuation lines follow in full; every other row truncates with `…`. Entries are ordered by
-what happens to them (will install, already installed, not covered, error, blocked) by sorting a copy of
-`plan.entries` before formatting. Requirement rows and the count line break out to full width below the row
-column, so the count that `render.ts` emits last lands directly above the keybar. The surface reads through
-the shared read hook, so `building the plan…`, a thrown message and `r` to rebuild all work. `p` opens the
-surface read-only from the rail; `Enter` on the install form opens it from the selection. `Esc` returns with
+and above a 50-column row column and a detail column of `min(62, width − 52)`; the focused row's text opens
+the detail column and its continuation lines follow in full; every other row truncates with `…`. Entries
+are ordered by what happens to them (will install, already installed, not covered, error, blocked) by
+sorting a copy of `plan.entries` before formatting. Requirement rows and the count line break out to full
+width below the row column, so the count that `render.ts` emits last lands directly above the keybar. The
+surface reads through the shared read hook, so `building the plan…`, a thrown message and `r` to rebuild all
+work. `p` opens the surface read-only from the rail; `Enter` on the install form opens it from the selection.
+`Esc` returns with
 the selection intact.
 
 **Blocked by:** 02
@@ -43,13 +44,14 @@ write key bound.
   plan no longer pushes it out of reach. A body shorter than the rows below it gives up row lines, never
   the count line. Padded lines hold one space, because an empty `Text` measures zero rows.
 - The window is derived from the cursor (`index` only, no remembered offset), with a 2-row scrolloff and
-  a full page at the end of the list; `PgUp`/`PgDn` page by the frame's own height (`rows - 6`), `g`/`G`
+  a full page at the end of the list; `PgUp`/`PgDn` page by the rows the current window shows — the body
+  height minus the heading and the pinned tail, measured in rows — so a page never skips one; `g`/`G`
   jump to the ends. Rows are measured in lines, so the focused row's wrapped continuations consume the
   window in one column and are free in two.
-- At 100 columns the detail column is 62 wide and the list is 50; below that the list keeps the width the
-  frame can spare and the pane the rest, so no line leaves the frame at 120 or at 80. `wrap()` carries the
-  formatter's text over as written — the CLI's double spaces survive — and only the focused row is ever
-  wrapped; every other row truncates with `…`.
+- At 100 columns the list is 50 and the detail column is 48, not 62: the pane is `min(62, width − 52)`, so
+  it is 62 from 114 columns up and shrinks with the frame below that. No line leaves the frame at 120, at
+  100 or at 80. `wrap()` carries the formatter's text over as written — the CLI's double spaces survive —
+  and only the focused row is ever wrapped; every other row truncates with `…`.
 - `Up`/`Down`/`PgUp`/`PgDn`/`g`/`G` are `hidden` in the keybar (the copy deck's keybar has no room for
   them) and listed in the `?` overlay, so the keybar is `r rebuild · ? keys · Esc back · q quit` and no key
   exists that the overlay cannot name. `Esc` and `q` stay the global bindings, so the selection behind the

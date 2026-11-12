@@ -39,10 +39,10 @@ letters, a keybar sits pinned at the bottom, and a status line appears only when
 say.
 
 Every surface is one focus, one row per line, one window, and one rule for length: the focused row shows
-its full text, everything else truncates with `…`. A rows surface wider than 100 columns splits into a
-50-column list and a 62-column detail column, so the exact `write:` path and `adds hook:` JSON of the row
-you are looking at are always fully visible. Copy comes from `render.ts` unchanged, so the TUI and the CLI
-never drift; the TUI adds chrome only.
+its full text, everything else truncates with `…`. A rows surface 100 columns wide or wider splits into a
+50-column list and a detail column of `min(62, width − 52)`, so the exact `write:` path and `adds hook:`
+JSON of the row you are looking at are always fully visible. Copy comes from `render.ts` unchanged, so the
+TUI and the CLI never drift; the TUI adds chrome only.
 
 The TUI starts on `install` and reaches the other six by letter, not by argument, so the CLI keeps its
 behaviour and its flags exactly as they are. Slow reads are named, counted when the count is known, timed
@@ -210,12 +210,14 @@ completion, and the key table returns the refusal for every key that would leave
 check. `plan`, `apply`, `status` and `remove`'s recorded path stay sub-second; `list` and `stale` are the
 only surfaces that read the inventory or run the check, exactly as `architecture.md` requires for the CLI.
 
-**Width.** Three layouts. At 100 columns and above the body is a 50-column row column and a 62-column
-detail column with a 2-column gutter; the focused row's text is the detail column's first line, and its
-continuation lines follow. Between 60 and 99 the body is one column and the focused row wraps under itself
-with a 4-space indent. At 59 and below it is one column with a 1-column gutter and the rail is dropped. Rows
-truncate with `…`; only the focused row is ever wrapped. The command rail occupies the right end of the
-header's first line when it fits, and is omitted when it does not. Assert in tests: no rendered line
+**Width.** Three layouts. At 100 columns and above the body is a 50-column row column and a detail column
+of `min(62, width − 52)` with a 2-column gutter: 62 columns from 114 columns up, and 48 at exactly 100, so
+the two panes and the gutter never claim more than the frame has; the focused row's text is the detail
+column's first line, and its continuation lines follow. Between 60 and 99 the body is one column and the
+focused row wraps under itself with a 4-space indent. At 59 and below it is one column with a 1-column
+gutter and the rail is dropped. Rows truncate with `…`; only the focused row is ever wrapped. The command
+rail occupies the right end of the header's first line when it fits, and is omitted when it does not.
+Assert in tests: no rendered line
 exceeds the frame width.
 
 **Tone and marks.** Four tones: normal, dim, warning, error. Colour comes from the existing `toneColor`
