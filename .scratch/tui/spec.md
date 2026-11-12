@@ -32,8 +32,9 @@ So the second surface has five problems to solve, none of which is a new feature
 
 ## Solution
 
-One window with eight surfaces: `install` (the home surface and the only writer of the package flow),
-`plan`, `status`, `list`, `stale`, `update`, `remove`, and a help overlay generated from the keymaps.
+One window with nine surfaces: `install` (the home surface), `plan` (read-only), `apply` (the confirm
+step reached with `Enter` from the plan — `y` is the only key there that writes), `status`, `list`,
+`stale`, `update`, `remove`, and a help overlay generated from the keymaps.
 A persistent header names the surface and the target, a command rail lists the seven commands with their
 letters, a keybar sits pinned at the bottom, and a status line appears only when there is something true to
 say.
@@ -44,8 +45,9 @@ its full text, everything else truncates with `…`. A rows surface 100 columns 
 JSON of the row you are looking at are always fully visible. Copy comes from `render.ts` unchanged, so the
 TUI and the CLI never drift; the TUI adds chrome only.
 
-The TUI starts on `install` and reaches the other six by letter, not by argument, so the CLI keeps its
-behaviour and its flags exactly as they are. Slow reads are named, counted when the count is known, timed
+The TUI starts on `install` and reaches the commands by letter, not by argument; `apply` is reached by
+`Enter` from `plan` rather than by a rail letter, so the rail stays the seven commands the CLI has. The
+CLI keeps its behaviour and its flags exactly as they are. Slow reads are named, counted when the count is known, timed
 with real elapsed seconds, and cancellable. Writes are not cancellable, and the refusal says so.
 
 ## User Stories
