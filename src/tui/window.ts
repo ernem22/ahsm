@@ -61,9 +61,3 @@ export function rowsInView(window: RowWindow, heights: number[], height: number)
   }
   return { start, end };
 }
-
-/** `PgDn`/`PgUp`: one window at a time, never past the ends. */
-export function pageBy(window: RowWindow, heights: number[], height: number, direction: 1 | -1): RowWindow {
-  const view = rowsInView(window, heights, height);
-  return moveBy(window, heights.length, direction * Math.max(1, view.end - view.start));
-}
