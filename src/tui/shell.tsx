@@ -26,6 +26,7 @@ import { useApplySurface } from './use-apply.js';
 import { useInstallSurface } from './use-install.js';
 import { useListSurface } from './use-list.js';
 import { usePlanSurface } from './use-plan.js';
+import { useRemoveSurface } from './use-remove.js';
 import { useStaleSurface } from './use-stale.js';
 import { useStatusSurface } from './use-status.js';
 import { useUpdateSurface } from './use-update.js';
@@ -85,6 +86,7 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const list = useListSurface({ data, ctx, harnessIds: install.form.harnessIds, width: columns, height, active: surface === 'list' });
   const stale = useStaleSurface({ data, ctx, width: columns, height, active: surface === 'stale' });
   const update = useUpdateSurface({ data, ctx, width: columns, height, active: surface === 'update', say });
+  const remove = useRemoveSurface({ data, ctx, width: columns, height, active: surface === 'remove', say });
   // The update plan declines back to the surface it was opened from; the shell is the only place that knows.
   const [updateOrigin, setUpdateOrigin] = useState<SurfaceId>('install');
 
@@ -98,12 +100,13 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
       update.reset();
       setUpdateOrigin(surface);
     }
+    if (next === 'remove' && surface !== 'remove') remove.reset();
     setSurface(next);
   };
 
   const chrome: ChromeHost = {
     surface,
-    applying: apply.applying || update.keys.applying,
+    applying: apply.applying || update.keys.applying || remove.keys.applying,
     result: apply.result,
     go,
     openHelp: () => setHelp(true),
@@ -126,7 +129,7 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     list: { ...chrome, ...list.keys },
     stale: { ...chrome, ...stale.keys },
     update: { ...chrome, ...update.keys, decline: () => go(updateOrigin), staleAgain: () => go('stale') },
-    remove: chrome,
+    remove: { ...chrome, ...remove.keys, decline: () => go('install') },
   };
 
   const states: SurfaceStates = {
@@ -137,6 +140,7 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     list,
     stale,
     update,
+    remove,
   };
 
   useInput((input, key) => {

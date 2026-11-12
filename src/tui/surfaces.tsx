@@ -1,18 +1,18 @@
 import React from 'react';
-import { Text } from 'ink';
 import type { Data } from '../types.js';
-import { t } from '../i18n.js';
 import { ApplyBody } from './apply-body.js';
 import { InstallSurface } from './install-surface.js';
 import type { SurfaceId } from './keys.js';
 import { ListSurface } from './list-surface.js';
 import { PlanSurface } from './plan-body.js';
+import { RemoveSurface } from './remove-surface.js';
 import { StaleSurface } from './stale-surface.js';
 import { StatusSurface } from './status-surface.js';
 import type { ApplyState } from './use-apply.js';
 import type { InstallState } from './use-install.js';
 import type { ListState } from './use-list.js';
 import type { PlanState } from './use-plan.js';
+import type { RemoveState } from './use-remove.js';
 import type { StaleState } from './use-stale.js';
 import type { StatusState } from './use-status.js';
 import type { UpdateState } from './use-update.js';
@@ -27,6 +27,7 @@ export interface SurfaceStates {
   list: ListState;
   stale: StaleState;
   update: UpdateState;
+  remove: RemoveState;
 }
 
 export interface SurfaceBodyProps {
@@ -36,11 +37,6 @@ export interface SurfaceBodyProps {
   width: number;
   /** The lines the body may use, so a body can pin its last line above the keybar. */
   height: number;
-}
-
-/** A surface whose body is not built yet prints its own name; it is an entry like any other. */
-function Pending({ surface }: SurfaceBodyProps): React.ReactElement {
-  return <Text>{t.tui.surfaces[surface]}</Text>;
 }
 
 /** One entry per surface: the next surface is a row here, never another branch. */
@@ -58,7 +54,7 @@ const BODIES: Record<SurfaceId, (props: SurfaceBodyProps) => React.ReactElement>
   list: ({ states, width, height }) => <ListSurface state={states.list} width={width} height={height} />,
   stale: ({ states, width, height }) => <StaleSurface state={states.stale} width={width} height={height} />,
   update: ({ states, width, height }) => <UpdateSurface state={states.update} width={width} height={height} />,
-  remove: Pending,
+  remove: ({ states, width, height }) => <RemoveSurface state={states.remove} width={width} height={height} />,
 };
 
 /** The body of the current surface: the table decides, and the shell only names the surface. */

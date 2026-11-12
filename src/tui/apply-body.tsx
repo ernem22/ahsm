@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import { t } from '../i18n.js';
 import { outcomeLines, toneColor, type Line } from '../render.js';
-import type { ApplyShape, WriteState } from './apply.js';
+import type { WriteState } from './apply.js';
 import { useElapsed } from './elapsed.js';
 import { wrap } from './format.js';
 
@@ -25,13 +25,13 @@ export function wrapped(lines: Line[], width: number): Line[] {
   return lines.flatMap((line) => wrap(line.text, width).map((text) => ({ text, tone: line.tone })));
 }
 
-/** In flight: the work named, the shape counted from the plan, and the one thing that is true beside it. */
-export function Busy({ startedAt, shape }: { startedAt: number; shape: ApplyShape }): React.ReactElement {
+/** In flight: the work named, the surface's own count line, and the one thing that is true beside it. */
+export function Busy({ startedAt, shape }: { startedAt: number; shape: string }): React.ReactElement {
   const seconds = useElapsed(startedAt);
   return (
     <Box flexDirection="column">
       <Text dimColor>{t.tui.applying(seconds)}</Text>
-      <Text dimColor>{t.tui.applyShape(shape.installs, shape.hooks, shape.blocked)}</Text>
+      <Text dimColor>{shape}</Text>
       <Text> </Text>
       <Text dimColor>{t.tui.applyNothingElse}</Text>
     </Box>

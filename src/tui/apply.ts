@@ -21,21 +21,22 @@ export function applyShape(plan: Plan): ApplyShape {
 }
 
 /**
- * The write, as the surface shows it: nothing yet, in flight with the second it started and the shape
- * of the work, or finished with the outcome the core reported. Writes are not cancellable, so there is
- * no `stopped` state here — only the result.
+ * The write, as the surface shows it: nothing yet, in flight with the second it started and the line
+ * counting the work, or finished with the outcome the core reported. Writes are not cancellable, so
+ * there is no `stopped` state here — only the result. The shape is the surface's own i18n sentence, so
+ * the install confirm and the removal plan count different work with the same state.
  */
-export type WriteState =
+export type WriteState<Outcome = ApplyOutcome> =
   | { status: 'idle' }
-  | { status: 'applying'; startedAt: number; shape: ApplyShape }
-  | { status: 'done'; outcome: ApplyOutcome }
+  | { status: 'applying'; startedAt: number; shape: string }
+  | { status: 'done'; outcome: Outcome }
   | { status: 'error'; message: string };
 
-export function isApplying(write: WriteState): boolean {
+export function isApplying<Outcome>(write: WriteState<Outcome>): boolean {
   return write.status === 'applying';
 }
 
 /** A finished write has something to answer for; the keys that leave differ there, so this is its own name. */
-export function hasResult(write: WriteState): boolean {
+export function hasResult<Outcome>(write: WriteState<Outcome>): boolean {
   return write.status === 'done' || write.status === 'error';
 }

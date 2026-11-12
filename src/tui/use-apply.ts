@@ -1,9 +1,10 @@
 import { applyPlan } from '../core/apply.js';
 import type { Plan } from '../core/plan.js';
 import type { Ctx } from '../context.js';
+import { t } from '../i18n.js';
 import type { Tone } from '../render.js';
 import type { Data } from '../types.js';
-import { applyShape, type WriteState } from './apply.js';
+import { applyShape, type ApplyShape, type WriteState } from './apply.js';
 import { markableUpdates } from './plan.js';
 import { useWrite } from './use-write.js';
 
@@ -37,6 +38,7 @@ export interface ApplyOptions {
  * one's answer.
  */
 export function useApplySurface({ data, ctx, plan, updates, say }: ApplyOptions): ApplyState {
+  const shape: ApplyShape = plan ? applyShape(plan) : { installs: 0, hooks: 0, blocked: 0 };
   const write = useWrite({
     say,
     run: plan
@@ -45,7 +47,7 @@ export function useApplySurface({ data, ctx, plan, updates, say }: ApplyOptions)
           return applyPlan(data, ctx, plan, marked.length > 0 ? { updates: marked } : undefined);
         }
       : undefined,
-    shape: plan ? applyShape(plan) : { installs: 0, hooks: 0, blocked: 0 },
+    shape: t.tui.applyShape(shape.installs, shape.hooks, shape.blocked),
   });
 
   return { state: write.state, applying: write.applying, result: write.result, runApply: write.write, reset: write.reset };

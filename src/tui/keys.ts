@@ -48,6 +48,11 @@ export interface FilterKeys {
   readonly text: string;
   /** The text mode is open: a letter is text here, not a key. */
   readonly typing: boolean;
+  /**
+   * The two keys that end the mode, in this mode's own words. The list filter clears and keeps its text;
+   * the removal name cancels and removes. Absent means the filter's own two labels.
+   */
+  readonly labels?: { readonly clear: string; readonly keep: string };
   start(): void;
   /** A character or a backspace while the mode is open: the text is what the user is typing. */
   edit(change: (text: string) => string): void;
@@ -114,6 +119,27 @@ export interface UpdateKeys extends SlowRowsKeys {
   runApply(): void;
 }
 
+/**
+ * The removal plan's state beyond the window: the plan the core read, the one write it can approve, and
+ * the skill-name text mode — the only text input outside the filter.
+ */
+export interface RemoveKeys extends SlowRowsKeys {
+  /** The plan has been read: until then `y` has nothing to run. */
+  readonly planReady: boolean;
+  /** How many entries the key would act on; with none, `y` has nothing to remove. */
+  readonly entries: number;
+  /** The approved removal is in flight: every key that would leave is off until it finishes. */
+  readonly applying: boolean;
+  /** The write finished, so the surface shows the result rather than the plan. */
+  readonly result: boolean;
+  /** `y`: run the plan through `applyRemovePlan`, exactly as `agentenv remove --yes` does. */
+  runApply(): void;
+  /** `a`: the skill-name text mode, bound to the same slot as the filter. */
+  readonly name: FilterKeys;
+  /** Every entry the plan holds, including the ones no provider can remove: the empty plan says so. */
+  readonly planned: number;
+}
+
 /** Each surface's host is its own keys plus the chrome every table may use. */
 export type InstallHost = ChromeHost & InstallKeys;
 export type PlanHost = ChromeHost & PlanKeys;
@@ -131,6 +157,11 @@ export type UpdateHost = ChromeHost & UpdateKeys & {
   staleAgain(): void;
 };
 
+/** The removal host also owns where the plan declines to: `Esc` and `n` leave without writing. */
+export type RemoveHost = ChromeHost & RemoveKeys & {
+  decline(): void;
+};
+
 /** Every surface's host, named once so a table is handed only the host it owns. */
 export interface SurfaceHosts {
   install: InstallHost;
@@ -140,7 +171,7 @@ export interface SurfaceHosts {
   list: ListHost;
   stale: StaleHost;
   update: UpdateHost;
-  remove: ChromeHost;
+  remove: RemoveHost;
 }
 
 export interface KeyBinding {
@@ -491,11 +522,57 @@ export function updateResultKeys(host: UpdateHost): KeyTable {
   ];
 }
 
+/**
+ * The removal plan, read-only until `y`: the rows carry their harnesses, paths and command before the
+ * key acts, and `a` opens the skill-name mode. `y` is the only key here that removes anything; `n` and
+ * `Esc` decline to the home surface. `Esc` spends itself on a running read first.
+ */
+export function removeKeys(host: RemoveHost): KeyTable {
+  return [
+    stopWaitingKey(host),
+    {
+      keys: ['y'],
+      label: t.tui.keys.remove,
+      when: () => host.planReady,
+      refuses: () =>
+        host.applying
+          ? t.tui.applyRefusal
+          : host.entries === 0
+            ? host.planned === 0
+              ? t.tui.removeEmpty
+              : t.tui.removeUnremovable
+            : undefined,
+      run: () => host.runApply(),
+    },
+    {
+      keys: ['a'],
+      label: t.tui.keys.name,
+      // A write in flight owns the frame: the name mode is not opened over it.
+      when: () => !host.applying,
+      run: () => host.name.start(),
+    },
+    ...rowsNavigation(host),
+    { keys: ['n'], label: t.tui.keys.decline, refuses: refusesDuringWrite(host), run: () => host.decline() },
+    { keys: ['escape'], label: t.tui.keys.back, refuses: refusesDuringWrite(host), run: () => host.decline() },
+  ];
+}
+
+/**
+ * The result of an approved removal: every key leaves, and `s` opens the follow-up question. The record
+ * and the tree are already changed, so there is no plan left to decline to.
+ */
+export function removeResultKeys(host: RemoveHost): KeyTable {
+  return [
+    { keys: ['return'], label: t.tui.keys.exit, run: () => host.quit() },
+    { keys: ['s'], label: t.tui.surfaces.status, run: () => host.go('status') },
+  ];
+}
+
 /** The filter's mode: a letter is text here, so the table binds just the two keys that end it. */
 export function filterModeKeys(host: FilterKeys): KeyTable {
   return [
-    { keys: ['escape'], label: t.tui.keys.filterClear, run: () => host.clear() },
-    { keys: ['return'], label: t.tui.keys.filterKeep, run: () => host.keep() },
+    { keys: ['escape'], label: host.labels?.clear ?? t.tui.keys.filterClear, run: () => host.clear() },
+    { keys: ['return'], label: host.labels?.keep ?? t.tui.keys.filterKeep, run: () => host.keep() },
   ];
 }
 
@@ -508,7 +585,7 @@ const TABLES: Record<SurfaceId, (hosts: SurfaceHosts) => KeyTable> = {
   list: (hosts) => listKeys(hosts.list),
   stale: (hosts) => staleKeys(hosts.stale),
   update: (hosts) => (hosts.update.result ? updateResultKeys(hosts.update) : updateKeys(hosts.update)),
-  remove: () => [],
+  remove: (hosts) => (hosts.remove.result ? removeResultKeys(hosts.remove) : removeKeys(hosts.remove)),
 };
 
 /** The current surface's own keys, and nothing of any other surface's state. */
@@ -516,10 +593,11 @@ export function surfaceKeys(surface: SurfaceId, hosts: SurfaceHosts): KeyTable {
   return TABLES[surface](hosts);
 }
 
-/** The typed filter, when the current surface has one: `/` edits that one, never another's. */
+/** The typed text mode, when the current surface has one: `/` edits that one, the name mode its own. */
 const FILTERS: Partial<Record<SurfaceId, (hosts: SurfaceHosts) => FilterKeys>> = {
   list: (hosts) => hosts.list.filter,
   stale: (hosts) => hosts.stale.filter,
+  remove: (hosts) => hosts.remove.name,
 };
 
 export function filterOf(surface: SurfaceId, hosts: SurfaceHosts): FilterKeys | undefined {

@@ -103,9 +103,10 @@ const CASES: Record<SurfaceId, Omit<SurfaceCase, 'id'>> = {
     back: 'install',
   },
   remove: {
-    open: async (tui) => opens(tui, 'x', 'remove', () => true),
-    own: [],
-    hidden: [],
+    open: async (tui) => opens(tui, 'x', 'remove', () => tui.frame().includes(t.tui.removeEmpty)),
+    own: ['a name a skill', 'n decline', 'Esc back'],
+    // An empty record offers no `y`: the key is real, but a bar never advertises a key that refuses.
+    hidden: [...MOVES, 'y remove'],
     back: 'install',
   },
 };

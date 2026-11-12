@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { applyPlan } from '../core/apply.js';
 import { buildUpdatePlan, type UpdatePlan } from '../core/update.js';
 import type { Ctx } from '../context.js';
+import { t } from '../i18n.js';
 import type { Tone } from '../render.js';
 import type { Data } from '../types.js';
-import { applyShape, type WriteState } from './apply.js';
+import { applyShape, type ApplyShape, type WriteState } from './apply.js';
 import type { UpdateKeys } from './keys.js';
 import { useRead, type ReadState } from './read.js';
 import { updatePage } from './update.js';
@@ -46,10 +47,11 @@ export function useUpdateSurface({ data, ctx, width, height, active, say }: Upda
     if (active) read.load();
   }, [active, read.load]);
 
+  const shape: ApplyShape = update ? applyShape(update.plan) : { installs: 0, hooks: 0, blocked: 0 };
   const write = useWrite({
     say,
     run: update ? () => applyPlan(data, ctx, update.plan) : undefined,
-    shape: update ? applyShape(update.plan) : { installs: 0, hooks: 0, blocked: 0 },
+    shape: t.tui.applyShape(shape.installs, shape.hooks, shape.blocked),
   });
 
   const rows = update?.plan.entries.length ?? 0;

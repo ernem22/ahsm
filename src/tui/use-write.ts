@@ -2,21 +2,21 @@ import { useCallback, useRef, useState } from 'react';
 import type { ApplyOutcome } from '../core/apply.js';
 import { t } from '../i18n.js';
 import type { Tone } from '../render.js';
-import { hasResult, isApplying, type ApplyShape, type WriteState } from './apply.js';
+import { hasResult, isApplying, type WriteState } from './apply.js';
 
-/** What the approved key runs, and the shape of the work it is about to attempt. */
-export interface WriteOptions {
+/** What the approved key runs, and the line counting the work it is about to attempt. */
+export interface WriteOptions<Outcome> {
   /** The in-flight refusal is the one line the shell owns, so the write states it there. */
   say(message: string | undefined, tone?: Tone): void;
   /** The core call `y` makes; `undefined` until the surface has something to run. */
-  run?: () => Promise<ApplyOutcome>;
-  /** How many installs, hook writes and blocked entries the plan holds, counted from the plan. */
-  shape: ApplyShape;
+  run?: () => Promise<Outcome>;
+  /** The surface's own i18n sentence for how much the plan attempts, counted from that plan. */
+  shape: string;
 }
 
 /** The write as a surface shows it: nothing yet, in flight, or the result the core reported. */
-export interface Write {
-  state: WriteState;
+export interface Write<Outcome> {
+  state: WriteState<Outcome>;
   /** A write is in flight: its keys are off until it finishes. */
   applying: boolean;
   /** The write finished, so this surface shows the result rather than the plan. */
@@ -28,12 +28,12 @@ export interface Write {
 }
 
 /**
- * The write half every approving surface shares. The apply confirm and the update plan differ only in
- * the core call they hand this hook and the shape they count from their plan; the in-flight refusal,
- * the result and the reset are worded and sequenced here once.
+ * The write half every approving surface shares. The apply confirm, the update plan and the removal
+ * plan differ only in the core call they hand this hook and the line they count from their own plan;
+ * the in-flight refusal, the result and the reset are worded and sequenced here once.
  */
-export function useWrite({ say, run, shape }: WriteOptions): Write {
-  const [state, setState] = useState<WriteState>({ status: 'idle' });
+export function useWrite<Outcome = ApplyOutcome>({ say, run, shape }: WriteOptions<Outcome>): Write<Outcome> {
+  const [state, setState] = useState<WriteState<Outcome>>({ status: 'idle' });
   // The key handler runs one render behind: the latest answers are read at press time, never captured stale.
   const latest = useRef({ run, shape });
   latest.current = { run, shape };

@@ -213,6 +213,13 @@ export const t = {
       carriers: 'carriers',
       /** `Esc` while the slow inventory read is in flight. */
       stopWaiting: 'stop waiting',
+      /** `y` on the removal plan: the one destructive key in the window. */
+      remove: 'remove',
+      /** `a` on the removal plan: the skill name text mode, the one input outside the filter. */
+      name: 'name a skill',
+      /** The name mode's two keys, in the mode's own words. */
+      nameCancel: 'cancel',
+      nameRemove: 'remove it',
     },
     helpTitle: (surface: string) => `keys — ${surface}`,
     /** The slow read named and timed; the count joins it once a previous read knew it. */
@@ -241,6 +248,23 @@ export const t = {
       `${installs} install${installs === 1 ? '' : 's'} · ${hooks} hook write${hooks === 1 ? '' : 's'} · ${blocked} blocked`,
     applyNothingElse: 'nothing else runs until this finishes',
     applyRefusal: 'q and Esc are disabled until it finishes',
+    /** The removal's own count: how much the key attempts, and what it leaves alone. */
+    removeShape: (count: number) => `${count} removal${count === 1 ? '' : 's'} · the record is cleared for the items that go`,
+    /** The removal plan's confirm line: the one thing the destructive key does, beside how many entries. */
+    removeConfirm: (count: number) => `y remove ${count} item${count === 1 ? '' : 's'} · the record is cleared for them`,
+    /** A plan of names alone: there is no record to clear, and the surface does not claim one. */
+    removeNamedConfirm: (count: number) =>
+      `y remove ${count} item${count === 1 ? '' : 's'} · no record was made for ${count === 1 ? 'it' : 'them'}`,
+    /** A record with nothing in it: the one other way to remove a skill is named. */
+    removeEmpty: 'nothing recorded — a name removes a skill agentenv never installed',
+    /** A record the key cannot act on: the rows themselves say why, so this claims nothing else. */
+    removeUnremovable: 'nothing here can be removed — the rows say why',
+    /** What the removal plan's read is called while it runs (it reads the inventory only for a new name). */
+    removeReading: 'removal plan',
+    /** The skill-name mode: the one text input outside the filter. */
+    removeNameTitle: 'remove a skill by name',
+    removeNamePrompt: 'skill:',
+    removeNameHint: 'the provider inventory answers where it landed; a record is not needed',
     resultTitle: 'result',
     /** A result taller than the window: the rows that do not fit are counted, never silently dropped. */
     moreRows: (count: number) => `… ${count} more row${count === 1 ? '' : 's'}`,
