@@ -198,7 +198,9 @@ keeps its exported entry point and its `render(...)` call so `cli.ts` does not c
 keybar and the help overlay all read that table, so a key cannot be listed without working. `refuses`
 returns the message that goes on the status line, which is how `q` during a write and `Enter` with nothing
 chosen explain themselves instead of being ignored. Global keys live in one table merged under the surface
-table. Three single-line modes exist and `Esc` closes each: help, filter, and a skill name for `remove`.
+table. Three single-line modes exist and `Esc` closes each: help, filter, and a skill name for `remove`. One
+key appears once per frame: several bindings may claim a token as precedence, and the first that is
+active is the one the keybar, the overlay and the dispatch all show.
 
 **`Esc` on a rows surface, stated once.** Every rows surface spends `Esc` in one order, and this is the
 only place that order is decided: **stop a running read → clear the text/filter (and any state filter) →
