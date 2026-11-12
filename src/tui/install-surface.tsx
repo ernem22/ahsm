@@ -4,10 +4,8 @@ import { t } from '../i18n.js';
 import type { Data, ItemDef } from '../types.js';
 import { fitSegments, pad, type Segment } from './format.js';
 import { STAGES, chosenPackage, type InstallForm, type PackageRow, type Stage } from './install.js';
+import { NARROW_WIDTH } from './rows-frame.js';
 import { rowsInView } from './window.js';
-
-/** Below this many columns a row's detail moves to its own indented line instead of its right end. */
-export const NARROW_WIDTH = 60;
 
 /**
  * What the focused section's window may not use: the blank line above each of the three sections,
@@ -48,13 +46,19 @@ function line(segments: Segment[], width: number): Segment[] {
   return fitSegments(segments, width);
 }
 
-/** A row plus its detail: on one line when there is room, under itself with an indent when there is not. */
-function rowLines(lead: Segment[], detail: string[], width: number): Segment[][] {
-  if (detail.length === 0) return [line(lead, width)];
+/**
+ * A row plus its detail, under the shared narrow rule: with room the detail follows on the same line;
+ * below 60 columns only the focused row carries a continuation, cut to one `…` line, and every other
+ * row is exactly one line — a wrapped detail would spend the window on a single row.
+ */
+function rowLines(lead: Segment[], detail: string[], width: number, focused: boolean): Segment[][] {
+  const head = line(lead, width);
+  if (detail.length === 0) return [head];
+  const text = detail.join(SEPARATOR);
   if (width < NARROW_WIDTH) {
-    return [line(lead, width), ...detail.map((part) => line([{ text: SEPARATOR }, { text: part, dim: true }], width))];
+    return focused ? [head, line([{ text: SEPARATOR }, { text, dim: true }], width)] : [head];
   }
-  return [line([...lead, { text: SEPARATOR }, { text: detail.join(SEPARATOR), dim: true }], width)];
+  return [line([...lead, { text: SEPARATOR }, { text, dim: true }], width)];
 }
 
 /** One row of the focused section before it is laid out: its lead segments and the detail after them. */
@@ -146,7 +150,7 @@ function SectionRows({
   width: number;
   height: number;
 }): React.ReactElement {
-  const laid = rows.map((row) => rowLines(row.lead, row.detail, width));
+  const laid = rows.map((row, at) => rowLines(row.lead, row.detail, width, at === index));
   const view = rowsInView({ index }, laid.map((lines) => lines.length), height);
   const mounted: React.ReactElement[] = [];
   for (let at = view.start; at < view.end; at += 1) {

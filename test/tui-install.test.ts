@@ -234,25 +234,40 @@ test('a not detected harness stays listed, is marked and is chooseable', async (
   }
 });
 
-test('at 40 columns the detail moves under its row and nothing overflows', async () => {
-  const tui = await startTui({ ...fixture(true), width: 40 });
-  try {
-    await tui.press('\r', '\r');
-    const lines = tui.lines();
-    for (const line of lines) assert.ok(line.length <= 40, `${line.length} > 40: ${line}`);
-    assert.deepEqual(section(lines, t.tui.sections.items), [
-      '> [x] skill-a  skill',
-      '    source: fixture/skills',
-      '    note: offline skill',
-      '  [x] mcp-a  mcp',
-      '    url: https://mcp.example.invalid/mcp',
-      '    note: offline mcp',
-      '  [x] hook-a  hook',
-      '    PreToolUse · Bash',
-      '    note: offline hook',
-    ]);
-  } finally {
-    await tui.stop();
+test('below 60 columns every non-focused row is one line and the focused row at most two', async () => {
+  for (const width of [20, 40]) {
+    const tui = await startTui({ ...fixture(true), width });
+    try {
+      await tui.press('\r', '\r');
+      const lines = tui.lines();
+      expectFrame(lines, { width, rows: 30 });
+      const rows = section(lines, t.tui.sections.items);
+      const focused = rows.filter((line) => line.startsWith(t.tui.marks.focused));
+      const others = rows.filter(
+        (line) => line.startsWith(t.tui.marks.blank) && !line.startsWith(t.tui.detailSeparator),
+      );
+      const continuations = rows.filter((line) => line.startsWith(t.tui.detailSeparator));
+
+      // Three items: one focused row, two rows the focus is not on, and only the focused one continues.
+      assert.equal(focused.length, 1, rows.join('|'));
+      assert.equal(others.length, 2, `a non-focused row is not one row:\n${rows.join('\n')}`);
+      assert.ok(continuations.length <= 1, `the focused row took ${continuations.length + 1} lines:\n${rows.join('\n')}`);
+      assert.ok(focused.length + continuations.length <= 2, rows.join('|'));
+      // A non-focused row never wraps: nothing sits under it.
+      for (const row of others) {
+        assert.notEqual(
+          rows[rows.indexOf(row) + 1]?.startsWith(t.tui.detailSeparator),
+          true,
+          `a non-focused row wrapped:\n${rows.join('\n')}`,
+        );
+      }
+      // The focused row keeps its detail, cut to one line at 20 columns rather than carried over.
+      assert.equal(continuations.length, 1, `the focused row lost its detail:\n${rows.join('\n')}`);
+      assert.equal(continuations[0]?.includes(`${t.tui.sourcePrefix} fixture/skills`), width > 20, String(continuations[0]));
+      if (width === 20) assert.ok(continuations[0]?.endsWith(t.tui.ellipsis), String(continuations[0]));
+    } finally {
+      await tui.stop();
+    }
   }
 });
 
@@ -261,17 +276,18 @@ test('a package taller than the window scrolls: the header and the focused row s
     [80, 20],
     [40, 24],
   ] as [number, number][]) {
-    const tui = await startTui({ ...fixture(true, itemRoot(12)), width, rows });
+    // Nineteen items: past the window at either width even now that a narrow row is one line.
+    const tui = await startTui({ ...fixture(true, itemRoot(19)), width, rows });
     try {
-      // The items section is where the 12 rows are: the two Enter presses walk to it.
+      // The items section is where those rows are: the two Enter presses walk to it.
       await tui.press('\r', '\r');
       let lines = tui.lines();
       expectFrame(lines, { width, rows });
       assert.equal(lines[0]?.startsWith('agentenv  install'), true, 'the header scrolled away');
       assert.ok(lines.includes(t.tui.sections.items), 'the items heading is not on screen');
-      assert.equal(tui.frame().includes('extra-11'), false, 'the whole package fit: the window is not under test');
+      assert.equal(tui.frame().includes('extra-18'), false, 'the whole package fit: the window is not under test');
 
-      for (let at = 0; at < 11; at += 1) await tui.press('\u001B[B');
+      for (let at = 0; at < 18; at += 1) await tui.press('\u001B[B');
       lines = tui.lines();
       expectFrame(lines, { width, rows });
       assert.equal(lines[0]?.startsWith('agentenv  install'), true, 'the header scrolled away');
@@ -279,7 +295,7 @@ test('a package taller than the window scrolls: the header and the focused row s
 
       const focused = lines.filter((line) => line.startsWith('> '));
       assert.equal(focused.length, 1, `the window shows ${focused.length} focused rows`);
-      assert.ok(focused[0]?.includes('extra-11'), `the focused row is not the one scrolled to: ${focused[0]}`);
+      assert.ok(focused[0]?.includes('extra-18'), `the focused row is not the one scrolled to: ${focused[0]}`);
     } finally {
       await tui.stop();
     }
