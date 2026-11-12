@@ -101,6 +101,8 @@ test('every letter of the rail reaches its surface, and Esc returns to install',
       assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${name}`), true, `${key} did not reach ${name}`);
       assert.equal(tui.lines()[2], name, `${name} did not print its own name`);
       await tui.press('\u001B');
+      // A surface whose slow read is still running spends the first Esc stopping the wait, not leaving.
+      if (!tui.lines()[0]?.startsWith('agentenv  install')) await tui.press('\u001B');
       assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, `Esc did not leave ${name}`);
     }
     await tui.press('i');

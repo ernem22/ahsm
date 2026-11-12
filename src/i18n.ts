@@ -197,10 +197,36 @@ export const t = {
       exit: 'exit',
       /** `r` on a surface whose read only fills rows again: a fresh answer, not a changed one. */
       refresh: 'refresh',
+      /** `/` opens the filter, and while one is set the same key edits it. */
+      filter: 'filter',
+      edit: 'edit',
+      /** A text mode's own two keys: `Esc` empties the filter, `Enter` keeps it. */
+      filterClear: 'clear filter',
+      filterKeep: 'keep',
+      /** `f` narrows the inventory to the skills the chosen harnesses report. */
+      carriers: 'carriers',
+      /** `Esc` while the slow inventory read is in flight. */
+      stopWaiting: 'stop waiting',
     },
     helpTitle: (surface: string) => `keys — ${surface}`,
     /** A read that has not answered yet: the surface says what it is waiting for instead of going blank. */
     statusReading: 'reading status…',
+    /** The slow read named and timed; the count joins it once a previous read knew it. */
+    listReading: (seconds: number, count?: number) =>
+      count === undefined
+        ? `reading the provider inventory… ${seconds}s`
+        : `reading the provider inventory… ${seconds}s, ${count} skills`,
+    /** `Esc` stops the wait, not the provider: the copy says exactly that. */
+    listStopped: 'stopped waiting — the check may still be running; nothing was written',
+    /** The window and the filter, right-aligned on the inventory's heading line, longest first. */
+    listWindow: (first: number, last: number, total: number) => `${first}–${last} of ${total}`,
+    listWindowEmpty: '0 of 0',
+    listFilterNone: 'filter: none',
+    listFilter: (text: string) => `filter: ${text}`,
+    listCarriers: (harnesses: string[]) => `carriers: ${harnesses.join(', ')}`,
+    /** A filter never looks like a smaller inventory: the match is counted against the whole one. */
+    listMatch: (matched: number, total: number) => `${matched} of ${total} skill(s) match the filter`,
+    listNoCarriers: 'nothing chosen on install — f needs a chosen harness',
     keybarSeparator: ' · ',
     /** While a write runs: what it is doing, how much of it, and what is not happening beside it. */
     applying: (seconds: number) => `applying… ${seconds}s`,

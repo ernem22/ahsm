@@ -1,0 +1,122 @@
+import type { SkillInventoryReport } from '../core/list.js';
+import { t } from '../i18n.js';
+import { listLines, type Line } from '../render.js';
+import { truncate, wrap } from './format.js';
+import { padLines, rowsFrame, rowsView, type BodyLine, type RowBlock } from './rows-frame.js';
+import { goTo, type RowWindow } from './window.js';
+
+/** The surface prints its own name, then the heading line `listFrame` owns. */
+export const LIST_HEADING = 2;
+
+/** What narrows the inventory: the typed substring, the carrier toggle, and the harnesses it asks about. */
+export interface ListFilter {
+  text: string;
+  /** `f`: keep only the skills one of the chosen harnesses reports. */
+  carriers: boolean;
+  /** The harness ids chosen on the install surface. */
+  harnessIds: readonly string[];
+}
+
+export interface ListBody {
+  /** The formatter's heading, `skills (provider inventory)`. */
+  heading: Line;
+  blocks: RowBlock[];
+  /** The formatter's empty sentence, when the inventory itself is empty. */
+  note?: Line;
+  /** The formatter's count line, `103 skill(s) — inventory read only, nothing written`. */
+  trailer?: Line;
+  total: number;
+  matched: number;
+}
+
+const HEADING: Line = listLines({ rows: [] })[0] ?? { text: t.skillsTitle, tone: 'dim' };
+const EMPTY: ListBody = { heading: HEADING, blocks: [], total: 0, matched: 0 };
+
+function narrowed(filter: ListFilter): boolean {
+  return filter.text !== '' || filter.carriers;
+}
+
+/**
+ * The inventory as the window can move over: the formatter's heading, one line per skill it keeps, and
+ * the formatter's trailer. The filter is the only thing that decides which rows exist; nothing here
+ * words a skill row.
+ */
+export function listBody(report: SkillInventoryReport | undefined, filter: ListFilter): ListBody {
+  if (!report) return EMPTY;
+  const all = listLines(report);
+  const heading = all[0] ?? EMPTY.heading;
+  if (report.rows.length === 0) return { ...EMPTY, heading, note: all[1] ?? { text: t.listEmpty, tone: 'dim' } };
+
+  const wanted = filter.text.toLowerCase();
+  const blocks: RowBlock[] = [];
+  for (const row of report.rows) {
+    if (filter.carriers && !row.harnesses.some((harness) => filter.harnessIds.includes(harness))) continue;
+    // One row as the formatter writes it: `listLines` owns the words, this only windows them.
+    const line = listLines({ rows: [row] })[1];
+    if (!line) continue;
+    if (wanted !== '' && !line.text.toLowerCase().includes(wanted)) continue;
+    blocks.push({ lines: [line], focusable: true });
+  }
+
+  return { heading, blocks, trailer: all[all.length - 1], total: report.rows.length, matched: blocks.length };
+}
+
+/** How many lines the tail pins below the rows: the empty sentence, the match count, the trailer. */
+function tailLines(body: ListBody, filter: ListFilter, width: number): BodyLine[] {
+  const lines: BodyLine[] = [];
+  if (body.note) lines.push(...wrap(body.note.text, width).map((text): BodyLine => [{ text, tone: body.note?.tone ?? 'dim' }]));
+  if (body.total > 0 && narrowed(filter)) {
+    lines.push([{ text: truncate(t.tui.listMatch(body.matched, body.total), width), tone: 'dim' }]);
+  }
+  if (body.trailer) lines.push([{ text: truncate(body.trailer.text, width), tone: body.trailer.tone }]);
+  return lines;
+}
+
+/** The lines the row window gets: the body it was given, minus what the tail pins. */
+function rowHeight(body: ListBody, filter: ListFilter, width: number, height: number): number {
+  return Math.max(0, Math.max(1, height) - 1 - tailLines(body, filter, width).length);
+}
+
+/** The window and the filter, shortest last, so a narrow frame drops words rather than the count. */
+function metaLines(body: ListBody, filter: ListFilter, view: { start: number; end: number }): string[] {
+  const window = body.total === 0 ? t.tui.listWindowEmpty : t.tui.listWindow(view.start + 1, view.end, body.total);
+  const own = filter.text === '' ? t.tui.listFilterNone : t.tui.listFilter(filter.text);
+  const carriers = filter.carriers ? t.tui.listCarriers([...filter.harnessIds]) : undefined;
+  return [
+    [window, own, ...(carriers ? [carriers] : [])].join(t.tui.keybarSeparator),
+    [window, own].join(t.tui.keybarSeparator),
+    window,
+  ];
+}
+
+/** The formatter's heading on the left and the window right-aligned, or the heading cut when neither fits. */
+function headingLine(heading: Line, meta: string[], width: number): BodyLine {
+  const chosen = meta.find((text) => heading.text.length + 1 + text.length <= width);
+  if (!chosen) return [{ text: truncate(heading.text, width), tone: heading.tone }];
+  return [
+    { text: heading.text, tone: heading.tone },
+    { text: ' '.repeat(width - heading.text.length - chosen.length), tone: 'dim' },
+    { text: chosen, tone: 'dim' },
+  ];
+}
+
+/**
+ * The whole body as cells, exactly `height` lines: the heading with its window and filter, the rows in
+ * their window, then the match count and the formatter's trailer. Nothing here writes a skill row.
+ */
+export function listFrame(body: ListBody, filter: ListFilter, width: number, height: number, window: RowWindow): BodyLine[] {
+  const tail = tailLines(body, filter, width);
+  const rows = rowHeight(body, filter, width, height);
+  const at = goTo(window.index, body.blocks.length);
+  const view = rowsView(body.blocks, at, width, rows);
+  const kept = rows > 0 && body.blocks.length > 0 ? rowsFrame(body.blocks, width, rows, at) : padLines([], rows);
+  return [headingLine(body.heading, metaLines(body, filter, view), width), ...kept, ...tail];
+}
+
+/** One page is one window of rows, so `PgDn` never lands past a row the user could have seen. */
+export function listPage(body: ListBody, filter: ListFilter, width: number, height: number, window: RowWindow): number {
+  const frame = Math.max(1, height - LIST_HEADING);
+  const rows = rowHeight(body, filter, width, frame);
+  const view = rowsView(body.blocks, goTo(window.index, body.blocks.length), width, rows);
+  return Math.max(1, view.end - view.start);
+}

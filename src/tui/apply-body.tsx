@@ -1,23 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Box, Text } from 'ink';
 import type { ApplyOutcome } from '../core/apply.js';
 import { t } from '../i18n.js';
 import { outcomeLines, toneColor, type Line } from '../render.js';
 import type { ApplyShape, WriteState } from './apply.js';
+import { useElapsed } from './elapsed.js';
 import { wrap } from './format.js';
-
-const SECOND_MS = 1000;
-
-/** Real seconds since the write started: one interval, no animation, nothing invented between ticks. */
-function useElapsed(startedAt: number | undefined): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (startedAt === undefined) return undefined;
-    const timer = setInterval(() => setNow(Date.now()), SECOND_MS);
-    return () => clearInterval(timer);
-  }, [startedAt]);
-  return startedAt === undefined ? 0 : Math.max(0, Math.floor((now - startedAt) / SECOND_MS));
-}
 
 function LineText({ line }: { line: Line }): React.ReactElement {
   return (

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import { buildPlan } from '../core/plan.js';
 import { applyPlan } from '../core/apply.js';
+import { readSkillInventory } from '../core/list.js';
 import { readStatus } from '../core/status.js';
 import type { Ctx } from '../context.js';
 import { t } from '../i18n.js';
@@ -25,6 +26,7 @@ import {
   type SurfaceId,
 } from './keys.js';
 import { planPage } from './plan-body.js';
+import { listBody, listPage, type ListFilter } from './list.js';
 import { allUpdates, focusedRequirement, markableUpdates, planSelection, toggleUpdate } from './plan.js';
 import { useRead } from './read.js';
 import { statusBody, statusPage } from './status.js';
@@ -66,6 +68,10 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const [install, setInstall] = useState(() => initialForm(data, ctx));
   const [planWindow, setPlanWindow] = useState(emptyWindow);
   const [statusWindow, setStatusWindow] = useState(emptyWindow);
+  const [listWindow, setListWindow] = useState(emptyWindow);
+  // The filter is the only text mode here besides the remove name: `/` opens it, `Esc` empties it.
+  const [filtering, setFiltering] = useState(false);
+  const [listFilter, setListFilter] = useState<Omit<ListFilter, 'harnessIds'>>({ text: '', carriers: false });
   // `Down` past the last entry walks the requirement rows; `space` marks the one under that focus.
   const [requirementFocus, setRequirementFocus] = useState<number | undefined>();
   // The requirement ids the user marked; a rebuild keeps them until they no longer exist.
@@ -75,12 +81,17 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const plan = useRead(() => buildPlan(data, ctx, planSelection(install)));
   // `status` asks the core the same question `agentenv status` does, and writes nothing to answer it.
   const statusRead = useRead(() => readStatus(data, ctx));
+  // `list` reads the provider's own inventory: the slow read, exactly as `agentenv list` does.
+  const listRead = useRead(() => readSkillInventory(data, ctx));
 
   const applying = isApplying(write);
   const result = hasResult(write);
   const entryCount = plan.state.value?.entries.length ?? 0;
   const reportBody = statusBody(statusRead.state.value);
   const statusRows = reportBody.focusable.length;
+  // One inventory, filtered once: the shell needs the row count to clamp the window it hands the keys.
+  const inventory = listBody(listRead.state.value, { ...listFilter, harnessIds: install.harnessIds });
+  const listFilterNow: ListFilter = { ...listFilter, harnessIds: install.harnessIds };
   const requirementCount = plan.state.value?.requirements.length ?? 0;
   const focus = requirementFocus !== undefined && requirementFocus < requirementCount ? requirementFocus : undefined;
 
@@ -161,6 +172,9 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   useEffect(() => {
     if (surface === 'status') statusRead.load();
   }, [surface, statusRead.load]);
+  useEffect(() => {
+    if (surface === 'list') listRead.load();
+  }, [surface, listRead.load]);
 
   const host: KeyHost = {
     surface,
@@ -188,6 +202,25 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
       edge: (at) => setStatusWindow(goTo(at === 'first' ? 0 : statusRows - 1, statusRows)),
       reload: statusRead.load,
     },
+    filter: surface === 'list' && filtering,
+    list: {
+      page: listPage(inventory, listFilterNow, columns, bodyHeight(rows, status, columns), listWindow),
+      filterText: listFilter.text,
+      carriers: listFilter.carriers,
+      busy: listRead.state.status === 'busy',
+      move: (delta) => setListWindow((window) => moveBy(window, inventory.blocks.length, delta)),
+      pageBy: (delta) => setListWindow((window) => moveBy(window, inventory.blocks.length, delta)),
+      edge: (at) => setListWindow(goTo(at === 'first' ? 0 : inventory.blocks.length - 1, inventory.blocks.length)),
+      reload: listRead.load,
+      startFilter: () => setFiltering(true),
+      clearFilter: () => {
+        setFiltering(false);
+        setListFilter((filter) => ({ ...filter, text: '' }));
+      },
+      keepFilter: () => setFiltering(false),
+      toggleCarriers: () => setListFilter((filter) => ({ ...filter, carriers: !filter.carriers })),
+      stopWaiting: listRead.stop,
+    },
     updates,
     applying,
     result,
@@ -197,8 +230,15 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   };
 
   useInput((input, key) => {
-    const binding = findBinding(activeKeys(surface, help, host), host, tokenOf(input, key));
-    if (!binding) return;
+    const token = tokenOf(input, key);
+    const binding = findBinding(activeKeys(surface, help, host), host, token);
+    if (!binding) {
+      // The filter is a text mode: anything the table did not claim is a character it collects.
+      if (!host.filter) return;
+      if (token === 'backspace') setListFilter((filter) => ({ ...filter, text: filter.text.slice(0, -1) }));
+      else if (input.length === 1 && !key.ctrl && !key.meta) setListFilter((filter) => ({ ...filter, text: filter.text + input }));
+      return;
+    }
     const refusal = binding.refuses?.(host);
     if (refusal !== undefined) {
       say(refusal, 'warning');
@@ -242,6 +282,10 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
             planWindow={planWindow}
             status={statusRead.state}
             statusWindow={statusWindow}
+            list={listRead.state}
+            listBody={inventory}
+            listFilter={listFilterNow}
+            listWindow={listWindow}
             marked={updates}
             requirementFocus={focus}
             write={write}

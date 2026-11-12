@@ -152,6 +152,16 @@ export function fixture(detected = false, root = OFFLINE_ROOT): { data: Data; ct
   const home = fixtureHome(detected);
   return {
     data: loadData(root),
-    ctx: createContext({ home, root, runner: new RecordingRunner() }),
+    ctx: createContext({
+      home,
+      root,
+      runner: new RecordingRunner(),
+      // The inventory is the one read that leaves the machine: tests answer it from memory.
+      skills: {
+        install: async () => ({ installed: [], failed: [] }),
+        remove: async () => ({ removed: [], notFound: [], failed: [] }),
+        list: async () => [],
+      },
+    }),
   };
 }

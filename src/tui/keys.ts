@@ -24,6 +24,8 @@ export interface RowsHost {
 export interface KeyHost {
   readonly surface: SurfaceId;
   readonly help: boolean;
+  /** The filter is being typed: its own mode, where a letter is text and not a key. */
+  readonly filter: boolean;
   readonly install: InstallForm;
   /** The plan's row window and how many rows it can focus; read from the surface's own read. */
   readonly plan: RowWindow;
@@ -41,6 +43,8 @@ export interface KeyHost {
   readonly result: boolean;
   /** The status surface's own rows: its window, its page and its read. */
   readonly status: RowsHost;
+  /** The list surface: the same window, plus its filter, its carrier toggle and its read. */
+  readonly list: ListHost;
   go(surface: SurfaceId): void;
   openHelp(): void;
   closeHelp(): void;
@@ -54,6 +58,29 @@ export interface KeyHost {
   toggleUpdate(): void;
   markAllUpdates(): void;
   runApply(): void;
+}
+
+/**
+ * The list surface's own state beyond the window: the typed filter, the carrier toggle and the slow
+ * read, which is the one read a user can stop waiting for.
+ */
+export interface ListHost {
+  readonly page: number;
+  /** The substring `/` has collected so far; empty means nothing is filtered. */
+  readonly filterText: string;
+  /** `f`: keep only the skills the chosen harnesses carry. */
+  readonly carriers: boolean;
+  /** The slow inventory read is in flight, so `Esc` has a wait to stop. */
+  readonly busy: boolean;
+  move(delta: number): void;
+  pageBy(delta: number): void;
+  edge(at: 'first' | 'last'): void;
+  reload(): void;
+  startFilter(): void;
+  clearFilter(): void;
+  keepFilter(): void;
+  toggleCarriers(): void;
+  stopWaiting(): void;
 }
 
 export interface KeyBinding {
@@ -342,13 +369,78 @@ const statusTable: KeyTable = [
   },
 ];
 
+/**
+ * The list surface, read-only: `/` narrows as you type, `f` keeps only what the chosen harnesses carry,
+ * the window moves, and `r` reads the slow inventory again. `Esc` spends itself on whatever is live —
+ * a running read, then a set filter — before the global `back` leaves the surface.
+ */
+const listTable: KeyTable = [
+  {
+    keys: ['escape'],
+    label: t.tui.keys.stopWaiting,
+    when: (host) => host.list.busy,
+    run: (host) => host.list.stopWaiting(),
+  },
+  {
+    keys: ['escape'],
+    label: t.tui.keys.filterClear,
+    when: (host) => host.list.filterText !== '',
+    run: (host) => host.list.clearFilter(),
+  },
+  { keys: ['up'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.move(-1) },
+  { keys: ['down'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.move(1) },
+  { keys: ['pageup'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.pageBy(-host.list.page) },
+  { keys: ['pagedown'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.pageBy(host.list.page) },
+  { keys: ['g'], label: t.tui.keys.first, hidden: true, run: (host) => host.list.edge('first') },
+  { keys: ['G'], label: t.tui.keys.last, hidden: true, run: (host) => host.list.edge('last') },
+  {
+    keys: ['/'],
+    label: t.tui.keys.filter,
+    when: (host) => host.list.filterText === '',
+    run: (host) => host.list.startFilter(),
+  },
+  {
+    keys: ['/'],
+    label: t.tui.keys.edit,
+    when: (host) => host.list.filterText !== '',
+    run: (host) => host.list.startFilter(),
+  },
+  {
+    keys: ['f'],
+    label: t.tui.keys.carriers,
+    // Nothing chosen on `install` carries nothing: the refusal says which surface to choose on.
+    refuses: (host) => (host.install.harnessIds.length === 0 ? t.tui.listNoCarriers : undefined),
+    run: (host) => {
+      host.say(undefined);
+      host.list.toggleCarriers();
+    },
+  },
+  {
+    keys: ['r'],
+    label: t.tui.keys.refresh,
+    run: (host) => {
+      host.say(undefined);
+      host.list.reload();
+    },
+  },
+];
+
+/**
+ * The filter's mode: the only single-line text mode besides the remove name. A letter is text here, so
+ * the table binds just the two keys that end it — `Esc` clears and leaves, `Enter` keeps and leaves.
+ */
+export const filterKeys: KeyTable = [
+  { keys: ['escape'], label: t.tui.keys.filterClear, run: (host) => host.list.clearFilter() },
+  { keys: ['return'], label: t.tui.keys.filterKeep, run: (host) => host.list.keepFilter() },
+];
+
 /** One table per surface; its keys are dispatched before the global ones and listed in its keybar. */
 export const surfaceKeys: Record<SurfaceId, KeyTable> = {
   install: installTable,
   plan: planTable,
   apply: applyTable,
   status: statusTable,
-  list: [],
+  list: listTable,
   stale: [],
   update: [],
   remove: [],
@@ -383,9 +475,11 @@ export function tokenOf(input: string, key: Key): string {
   return input;
 }
 
-/** The table the current mode dispatches: the surface's own keys, then the global ones. */
+/** The table the current mode dispatches: the filter's, else the surface's own, then the global ones. */
 export function activeKeys(surface: SurfaceId, help: boolean, host: KeyHost): KeyTable {
-  return help ? helpKeys : [...surfaceKeyTable(surface, host), ...globalKeys];
+  if (help) return helpKeys;
+  if (host.filter) return filterKeys;
+  return [...surfaceKeyTable(surface, host), ...globalKeys];
 }
 
 /**

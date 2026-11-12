@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text } from 'ink';
 import type { Plan } from '../core/plan.js';
+import type { SkillInventoryReport } from '../core/list.js';
 import type { StatusReport } from '../core/status.js';
 import type { Data } from '../types.js';
 import { t } from '../i18n.js';
@@ -9,6 +10,8 @@ import type { WriteState } from './apply.js';
 import { InstallSurface } from './install-surface.js';
 import type { InstallForm } from './install.js';
 import type { SurfaceId } from './keys.js';
+import { ListSurface } from './list-surface.js';
+import type { ListBody, ListFilter } from './list.js';
 import { PlanSurface } from './plan-body.js';
 import type { ReadState } from './read.js';
 import { StatusSurface } from './status-surface.js';
@@ -26,6 +29,11 @@ export interface SurfaceBodyProps {
   /** The report `status` read, and the window its rows are shown through. */
   status: ReadState<StatusReport>;
   statusWindow: RowWindow;
+  /** The inventory `list` read, the body its filter built, and the window those rows move through. */
+  list: ReadState<SkillInventoryReport>;
+  listBody: ListBody;
+  listFilter: ListFilter;
+  listWindow: RowWindow;
   /** The requirement ids the user marked: the plan body prints them and the confirm hands them on. */
   marked: readonly string[];
   /** The requirement row the focus is on, when it is below the last entry. */
@@ -56,7 +64,9 @@ const BODIES: Record<SurfaceId, React.ComponentType<SurfaceBodyProps>> = {
   status: ({ status, width, height, statusWindow }) => (
     <StatusSurface read={status} width={width} height={height} window={statusWindow} />
   ),
-  list: Pending,
+  list: ({ list, listBody, listFilter, listWindow, width, height }) => (
+    <ListSurface read={list} body={listBody} filter={listFilter} width={width} height={height} window={listWindow} />
+  ),
   stale: Pending,
   update: Pending,
   remove: Pending,
