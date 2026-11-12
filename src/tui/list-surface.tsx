@@ -24,7 +24,7 @@ export interface ListSurfaceProps {
 /** The slow read named and timed; the count joins it once a previous read knew it. */
 function Reading({ startedAt, count }: { startedAt: number | undefined; count: number | undefined }): React.ReactElement {
   const seconds = useElapsed(startedAt);
-  return <Text dimColor>{t.tui.listReading(seconds, count)}</Text>;
+  return <Text dimColor>{t.tui.reading(t.tui.inventory, seconds, count)}</Text>;
 }
 
 /**
@@ -43,7 +43,7 @@ export function ListSurface({ read, body, filter, width, height, window }: ListS
           </Text>
         ))
       ) : read.status === 'stopped' ? (
-        <Text color={toneColor('warning')}>{t.tui.listStopped}</Text>
+        <Text color={toneColor('warning')}>{t.tui.stoppedWaiting}</Text>
       ) : read.status === 'done' ? (
         listFrame(body, filter, width, Math.max(1, height - LIST_HEADING), window).map((cells, at) => (
           <Line key={at} cells={cells} />

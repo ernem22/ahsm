@@ -2,7 +2,7 @@ import type { SkillInventoryReport } from '../core/list.js';
 import { t } from '../i18n.js';
 import { listLines, type Line } from '../render.js';
 import { truncate, wrap } from './format.js';
-import { padLines, rowsFrame, rowsView, type BodyLine, type RowBlock } from './rows-frame.js';
+import { headingLine, padLines, rowsFrame, rowsView, type BodyLine, type RowBlock } from './rows-frame.js';
 import { goTo, type RowWindow } from './window.js';
 
 /** The surface prints its own name, then the heading line `listFrame` owns. */
@@ -66,7 +66,7 @@ function tailLines(body: ListBody, filter: ListFilter, width: number): BodyLine[
   const lines: BodyLine[] = [];
   if (body.note) lines.push(...wrap(body.note.text, width).map((text): BodyLine => [{ text, tone: body.note?.tone ?? 'dim' }]));
   if (body.total > 0 && narrowed(filter)) {
-    lines.push([{ text: truncate(t.tui.listMatch(body.matched, body.total), width), tone: 'dim' }]);
+    lines.push([{ text: truncate(t.tui.matchCount(body.matched, body.total), width), tone: 'dim' }]);
   }
   if (body.trailer) lines.push([{ text: truncate(body.trailer.text, width), tone: body.trailer.tone }]);
   return lines;
@@ -79,24 +79,13 @@ function rowHeight(body: ListBody, filter: ListFilter, width: number, height: nu
 
 /** The window and the filter, shortest last, so a narrow frame drops words rather than the count. */
 function metaLines(body: ListBody, filter: ListFilter, view: { start: number; end: number }): string[] {
-  const window = body.total === 0 ? t.tui.listWindowEmpty : t.tui.listWindow(view.start + 1, view.end, body.total);
-  const own = filter.text === '' ? t.tui.listFilterNone : t.tui.listFilter(filter.text);
+  const window = body.total === 0 ? t.tui.windowEmpty : t.tui.windowCount(view.start + 1, view.end, body.total);
+  const own = filter.text === '' ? t.tui.filterNone : t.tui.filterText(filter.text);
   const carriers = filter.carriers ? t.tui.listCarriers([...filter.harnessIds]) : undefined;
   return [
     [window, own, ...(carriers ? [carriers] : [])].join(t.tui.keybarSeparator),
     [window, own].join(t.tui.keybarSeparator),
     window,
-  ];
-}
-
-/** The formatter's heading on the left and the window right-aligned, or the heading cut when neither fits. */
-function headingLine(heading: Line, meta: string[], width: number): BodyLine {
-  const chosen = meta.find((text) => heading.text.length + 1 + text.length <= width);
-  if (!chosen) return [{ text: truncate(heading.text, width), tone: heading.tone }];
-  return [
-    { text: heading.text, tone: heading.tone },
-    { text: ' '.repeat(width - heading.text.length - chosen.length), tone: 'dim' },
-    { text: chosen, tone: 'dim' },
   ];
 }
 

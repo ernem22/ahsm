@@ -3,6 +3,7 @@ import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import { buildPlan } from '../core/plan.js';
 import { applyPlan } from '../core/apply.js';
 import { readSkillInventory } from '../core/list.js';
+import { readStaleSkills } from '../core/stale.js';
 import { readStatus } from '../core/status.js';
 import type { Ctx } from '../context.js';
 import { t } from '../i18n.js';
@@ -29,6 +30,7 @@ import { planPage } from './plan-body.js';
 import { listBody, listPage, type ListFilter } from './list.js';
 import { allUpdates, focusedRequirement, markableUpdates, planSelection, toggleUpdate } from './plan.js';
 import { useRead } from './read.js';
+import { nextState, staleBody, stalePage, type StaleFilter } from './stale.js';
 import { statusBody, statusPage } from './status.js';
 import { SurfaceBody } from './surfaces.js';
 import { emptyWindow, goTo, moveBy } from './window.js';
@@ -69,9 +71,11 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const [planWindow, setPlanWindow] = useState(emptyWindow);
   const [statusWindow, setStatusWindow] = useState(emptyWindow);
   const [listWindow, setListWindow] = useState(emptyWindow);
+  const [staleWindow, setStaleWindow] = useState(emptyWindow);
   // The filter is the only text mode here besides the remove name: `/` opens it, `Esc` empties it.
   const [filtering, setFiltering] = useState(false);
   const [listFilter, setListFilter] = useState<Omit<ListFilter, 'harnessIds'>>({ text: '', carriers: false });
+  const [staleFilter, setStaleFilter] = useState<StaleFilter>({ text: '' });
   // `Down` past the last entry walks the requirement rows; `space` marks the one under that focus.
   const [requirementFocus, setRequirementFocus] = useState<number | undefined>();
   // The requirement ids the user marked; a rebuild keeps them until they no longer exist.
@@ -83,6 +87,8 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const statusRead = useRead(() => readStatus(data, ctx));
   // `list` reads the provider's own inventory: the slow read, exactly as `agentenv list` does.
   const listRead = useRead(() => readSkillInventory(data, ctx));
+  // `stale` runs the provider's own update check: slow like the inventory, and just as read-only.
+  const staleRead = useRead(() => readStaleSkills(data, ctx));
 
   const applying = isApplying(write);
   const result = hasResult(write);
@@ -92,6 +98,8 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   // One inventory, filtered once: the shell needs the row count to clamp the window it hands the keys.
   const inventory = listBody(listRead.state.value, { ...listFilter, harnessIds: install.harnessIds });
   const listFilterNow: ListFilter = { ...listFilter, harnessIds: install.harnessIds };
+  // One report, filtered once, for the same reason: the keys move a window over rows that exist.
+  const freshness = staleBody(staleRead.state.value, staleFilter);
   const requirementCount = plan.state.value?.requirements.length ?? 0;
   const focus = requirementFocus !== undefined && requirementFocus < requirementCount ? requirementFocus : undefined;
 
@@ -175,6 +183,15 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   useEffect(() => {
     if (surface === 'list') listRead.load();
   }, [surface, listRead.load]);
+  useEffect(() => {
+    if (surface === 'stale') staleRead.load();
+  }, [surface, staleRead.load]);
+
+  /** The typed filter belongs to the surface in front of the user; `/` edits that one, never another. */
+  const editFilter = (change: (text: string) => string): void => {
+    if (surface === 'stale') setStaleFilter((filter) => ({ ...filter, text: change(filter.text) }));
+    else setListFilter((filter) => ({ ...filter, text: change(filter.text) }));
+  };
 
   const host: KeyHost = {
     surface,
@@ -202,24 +219,36 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
       edge: (at) => setStatusWindow(goTo(at === 'first' ? 0 : statusRows - 1, statusRows)),
       reload: statusRead.load,
     },
-    filter: surface === 'list' && filtering,
+    filter: (surface === 'list' || surface === 'stale') && filtering,
+    filterText: surface === 'stale' ? staleFilter.text : listFilter.text,
+    startFilter: () => setFiltering(true),
+    clearFilter: () => {
+      setFiltering(false);
+      editFilter(() => '');
+    },
+    keepFilter: () => setFiltering(false),
     list: {
       page: listPage(inventory, listFilterNow, columns, bodyHeight(rows, status, columns), listWindow),
-      filterText: listFilter.text,
       carriers: listFilter.carriers,
       busy: listRead.state.status === 'busy',
       move: (delta) => setListWindow((window) => moveBy(window, inventory.blocks.length, delta)),
       pageBy: (delta) => setListWindow((window) => moveBy(window, inventory.blocks.length, delta)),
       edge: (at) => setListWindow(goTo(at === 'first' ? 0 : inventory.blocks.length - 1, inventory.blocks.length)),
       reload: listRead.load,
-      startFilter: () => setFiltering(true),
-      clearFilter: () => {
-        setFiltering(false);
-        setListFilter((filter) => ({ ...filter, text: '' }));
-      },
-      keepFilter: () => setFiltering(false),
       toggleCarriers: () => setListFilter((filter) => ({ ...filter, carriers: !filter.carriers })),
       stopWaiting: listRead.stop,
+    },
+    stale: {
+      page: stalePage(freshness, staleFilter, columns, bodyHeight(rows, status, columns), staleWindow),
+      state: staleFilter.state,
+      busy: staleRead.state.status === 'busy',
+      move: (delta) => setStaleWindow((window) => moveBy(window, freshness.blocks.length, delta)),
+      pageBy: (delta) => setStaleWindow((window) => moveBy(window, freshness.blocks.length, delta)),
+      edge: (at) => setStaleWindow(goTo(at === 'first' ? 0 : freshness.blocks.length - 1, freshness.blocks.length)),
+      reload: staleRead.load,
+      stopWaiting: staleRead.stop,
+      cycleState: () => setStaleFilter((filter) => ({ ...filter, state: nextState(filter.state) })),
+      clearState: () => setStaleFilter((filter) => ({ ...filter, state: undefined })),
     },
     updates,
     applying,
@@ -235,8 +264,8 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     if (!binding) {
       // The filter is a text mode: anything the table did not claim is a character it collects.
       if (!host.filter) return;
-      if (token === 'backspace') setListFilter((filter) => ({ ...filter, text: filter.text.slice(0, -1) }));
-      else if (input.length === 1 && !key.ctrl && !key.meta) setListFilter((filter) => ({ ...filter, text: filter.text + input }));
+      if (token === 'backspace') editFilter((text) => text.slice(0, -1));
+      else if (input.length === 1 && !key.ctrl && !key.meta) editFilter((text) => text + input);
       return;
     }
     const refusal = binding.refuses?.(host);
@@ -286,6 +315,10 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
             listBody={inventory}
             listFilter={listFilterNow}
             listWindow={listWindow}
+            stale={staleRead.state}
+            staleBody={freshness}
+            staleFilter={staleFilter}
+            staleWindow={staleWindow}
             marked={updates}
             requirementFocus={focus}
             write={write}

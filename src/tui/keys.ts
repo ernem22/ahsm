@@ -1,4 +1,5 @@
 import type { Key } from 'ink';
+import type { StaleValue } from '../core/stale.js';
 import { t } from '../i18n.js';
 import type { Tone } from '../render.js';
 import { advance, moveCursor, stepBack, toggleFocused, toggleSection, type InstallForm } from './install.js';
@@ -8,8 +9,8 @@ import type { RowWindow } from './window.js';
 export type SurfaceId = 'install' | 'plan' | 'apply' | 'status' | 'list' | 'stale' | 'update' | 'remove';
 
 /**
- * A rows surface with nothing else on it: one window, a page the size of the frame it shows, and the
- * read that fills it. `status` is the first one; a surface that only lists rows needs nothing more.
+ * A rows surface: one window over rows, a page the size of the frame it shows, and the read that fills
+ * it. `status` is the first one; a surface that only lists rows needs nothing more.
  */
 export interface RowsHost {
   /** How many rows `PgUp`/`PgDn` move: one window of the frame the user is looking at. */
@@ -18,6 +19,28 @@ export interface RowsHost {
   pageBy(delta: number): void;
   edge(at: 'first' | 'last'): void;
   reload(): void;
+}
+
+/** A rows surface whose read is slow enough that `Esc` has a wait to stop. */
+export interface SlowRowsHost extends RowsHost {
+  /** The read is in flight, so `Esc` has a wait to stop. */
+  readonly busy: boolean;
+  stopWaiting(): void;
+}
+
+/** The list surface's own state beyond the window: the carrier toggle and the carriers it asks about. */
+export interface ListHost extends SlowRowsHost {
+  /** `f`: keep only the skills the chosen harnesses carry. */
+  readonly carriers: boolean;
+  toggleCarriers(): void;
+}
+
+/** The stale surface's own state beyond the window: the verdict `f` cycles through. */
+export interface StaleHost extends SlowRowsHost {
+  /** The state filter, or `undefined` when every recorded skill is listed. */
+  readonly state: StaleValue | undefined;
+  cycleState(): void;
+  clearState(): void;
 }
 
 /** What a key is allowed to do: the shell owns every piece of state the tables change. */
@@ -43,8 +66,12 @@ export interface KeyHost {
   readonly result: boolean;
   /** The status surface's own rows: its window, its page and its read. */
   readonly status: RowsHost;
-  /** The list surface: the same window, plus its filter, its carrier toggle and its read. */
+  /** The list surface: the same window, plus its carrier toggle. */
   readonly list: ListHost;
+  /** The stale surface: the same window, plus the state filter `f` cycles. */
+  readonly stale: StaleHost;
+  /** The typed filter of the surface that is current; empty means nothing is filtered. */
+  readonly filterText: string;
   go(surface: SurfaceId): void;
   openHelp(): void;
   closeHelp(): void;
@@ -58,29 +85,11 @@ export interface KeyHost {
   toggleUpdate(): void;
   markAllUpdates(): void;
   runApply(): void;
-}
-
-/**
- * The list surface's own state beyond the window: the typed filter, the carrier toggle and the slow
- * read, which is the one read a user can stop waiting for.
- */
-export interface ListHost {
-  readonly page: number;
-  /** The substring `/` has collected so far; empty means nothing is filtered. */
-  readonly filterText: string;
-  /** `f`: keep only the skills the chosen harnesses carry. */
-  readonly carriers: boolean;
-  /** The slow inventory read is in flight, so `Esc` has a wait to stop. */
-  readonly busy: boolean;
-  move(delta: number): void;
-  pageBy(delta: number): void;
-  edge(at: 'first' | 'last'): void;
-  reload(): void;
   startFilter(): void;
+  /** `Esc` in the filter: empty it and leave the text mode. */
   clearFilter(): void;
+  /** `Enter` in the filter: keep the text and leave the text mode. */
   keepFilter(): void;
-  toggleCarriers(): void;
-  stopWaiting(): void;
 }
 
 export interface KeyBinding {
@@ -384,8 +393,8 @@ const listTable: KeyTable = [
   {
     keys: ['escape'],
     label: t.tui.keys.filterClear,
-    when: (host) => host.list.filterText !== '',
-    run: (host) => host.list.clearFilter(),
+    when: (host) => host.filterText !== '',
+    run: (host) => host.clearFilter(),
   },
   { keys: ['up'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.move(-1) },
   { keys: ['down'], label: t.tui.keys.move, hidden: true, run: (host) => host.list.move(1) },
@@ -396,14 +405,14 @@ const listTable: KeyTable = [
   {
     keys: ['/'],
     label: t.tui.keys.filter,
-    when: (host) => host.list.filterText === '',
-    run: (host) => host.list.startFilter(),
+    when: (host) => host.filterText === '',
+    run: (host) => host.startFilter(),
   },
   {
     keys: ['/'],
     label: t.tui.keys.edit,
-    when: (host) => host.list.filterText !== '',
-    run: (host) => host.list.startFilter(),
+    when: (host) => host.filterText !== '',
+    run: (host) => host.startFilter(),
   },
   {
     keys: ['f'],
@@ -430,8 +439,74 @@ const listTable: KeyTable = [
  * the table binds just the two keys that end it — `Esc` clears and leaves, `Enter` keeps and leaves.
  */
 export const filterKeys: KeyTable = [
-  { keys: ['escape'], label: t.tui.keys.filterClear, run: (host) => host.list.clearFilter() },
-  { keys: ['return'], label: t.tui.keys.filterKeep, run: (host) => host.list.keepFilter() },
+  { keys: ['escape'], label: t.tui.keys.filterClear, run: (host) => host.clearFilter() },
+  { keys: ['return'], label: t.tui.keys.filterKeep, run: (host) => host.keepFilter() },
+];
+
+/**
+ * The stale surface, read-only: the verdicts the provider's own check produced, one row each. `f`
+ * cycles the state filter, `/` narrows by name, `u` opens the update plan for these skills, and `r`
+ * runs the check again. `Esc` spends itself on the wait, then on the filter, then on the surface.
+ */
+const staleTable: KeyTable = [
+  {
+    keys: ['escape'],
+    label: t.tui.keys.stopWaiting,
+    when: (host) => host.stale.busy,
+    run: (host) => host.stale.stopWaiting(),
+  },
+  {
+    keys: ['escape'],
+    label: t.tui.keys.filterClear,
+    when: (host) => host.filterText !== '',
+    run: (host) => host.clearFilter(),
+  },
+  {
+    keys: ['escape'],
+    label: t.tui.keys.filterClear,
+    when: (host) => host.stale.state !== undefined,
+    run: (host) => host.stale.clearState(),
+  },
+  { keys: ['up'], label: t.tui.keys.move, hidden: true, run: (host) => host.stale.move(-1) },
+  { keys: ['down'], label: t.tui.keys.move, hidden: true, run: (host) => host.stale.move(1) },
+  { keys: ['pageup'], label: t.tui.keys.move, hidden: true, run: (host) => host.stale.pageBy(-host.stale.page) },
+  { keys: ['pagedown'], label: t.tui.keys.move, hidden: true, run: (host) => host.stale.pageBy(host.stale.page) },
+  { keys: ['g'], label: t.tui.keys.first, hidden: true, run: (host) => host.stale.edge('first') },
+  { keys: ['G'], label: t.tui.keys.last, hidden: true, run: (host) => host.stale.edge('last') },
+  {
+    keys: ['/'],
+    label: t.tui.keys.search,
+    when: (host) => host.filterText === '',
+    run: (host) => host.startFilter(),
+  },
+  {
+    keys: ['/'],
+    label: t.tui.keys.edit,
+    when: (host) => host.filterText !== '',
+    run: (host) => host.startFilter(),
+  },
+  {
+    keys: ['f'],
+    label: t.tui.keys.filter,
+    run: (host) => {
+      host.say(undefined);
+      host.stale.cycleState();
+    },
+  },
+  {
+    keys: ['u'],
+    label: t.tui.keys.update,
+    refuses: refusesDuringWrite,
+    run: (host) => host.go('update'),
+  },
+  {
+    keys: ['r'],
+    label: t.tui.keys.refresh,
+    run: (host) => {
+      host.say(undefined);
+      host.stale.reload();
+    },
+  },
 ];
 
 /** One table per surface; its keys are dispatched before the global ones and listed in its keybar. */
@@ -441,7 +516,7 @@ export const surfaceKeys: Record<SurfaceId, KeyTable> = {
   apply: applyTable,
   status: statusTable,
   list: listTable,
-  stale: [],
+  stale: staleTable,
   update: [],
   remove: [],
 };
@@ -483,18 +558,22 @@ export function activeKeys(surface: SurfaceId, help: boolean, host: KeyHost): Ke
 }
 
 /**
- * One key set per frame. The overlay prints all of it and the keybar prints the entries that are not
- * `hidden`, so the two can never disagree about what a key is called or whether it is there.
- *
- * While the overlay is open that set is the overlay's own table plus the rail letters: `Esc` really
- * closes and `?` really closes, so neither is called `back` or `keys`, and the surface's letters stay
- * listed even when the window is too narrow for the rail — width hides chrome, never knowledge.
+ * One key set per frame, and one entry per key: the overlay prints all of it and the keybar prints the
+ * entries that are not `hidden`. The surface's own binding comes first, so a surface names a shared key
+ * (`u`, `Esc`) in its own words and the entry shown is the one that dispatches.
  */
 export function frameKeys(surface: SurfaceId, help: boolean, host: KeyHost): KeyBinding[] {
   const table: KeyTable = help
     ? [...surfaceKeyTable(surface, host), ...navigation, closeBinding, quitBinding]
     : activeKeys(surface, false, host);
-  return table.filter((binding) => binding.when?.(host) ?? true);
+  const kept: KeyBinding[] = [];
+  for (const binding of table) {
+    if (!(binding.when?.(host) ?? true)) continue;
+    // Two bindings for one key are precedence, not two keys: only the first that acts is listed.
+    if (binding.keys.some((token) => kept.some((entry) => entry.keys.includes(token)))) continue;
+    kept.push(binding);
+  }
+  return kept;
 }
 
 /**

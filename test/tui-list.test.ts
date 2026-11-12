@@ -145,7 +145,7 @@ test('slash filters as you type, states the matched count, and Esc clears before
 
     const filtered = tui.lines();
     assert.ok(filtered[3]?.includes('filter: sonner'), at(filtered, 3));
-    const match = t.tui.listMatch(2, 103);
+    const match = t.tui.matchCount(2, 103);
     assert.ok(tui.frame().includes(match), `no matched count in:\n${tui.frame()}`);
     assert.equal(tui.frame().includes('z-001'), false, 'the filter did not narrow');
     assert.ok(tui.frame().includes('ask-sonner'), 'a matching row was filtered out');
@@ -175,7 +175,7 @@ test('f keeps only the skills the chosen selection carries, and says so in the h
     await tui.press('f');
     const lines = tui.lines();
     assert.ok(lines[3]?.includes(`carriers: fake`), at(lines, 3));
-    assert.ok(tui.frame().includes(t.tui.listMatch(1, 3)), tui.frame());
+    assert.ok(tui.frame().includes(t.tui.matchCount(1, 3)), tui.frame());
     assert.ok(tui.frame().includes('alpha'), 'the carried skill was filtered out');
     assert.equal(tui.frame().includes('beta'), false, 'an uncarried skill survived the toggle');
     assert.equal(tui.frame().includes(t.listNoHarness), false, 'a skill with no harness survived the toggle');
@@ -233,7 +233,7 @@ test('the slow read is named and timed, and Esc stops waiting without leaving', 
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true);
 
     await tui.press('\u001B');
-    assert.ok(tui.frame().includes(t.tui.listStopped), `no stopped copy in:\n${tui.frame()}`);
+    assert.ok(tui.frame().includes(t.tui.stoppedWaiting), `no stopped copy in:\n${tui.frame()}`);
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'Esc left the surface instead of stopping');
 
     await tui.press('\u001B');

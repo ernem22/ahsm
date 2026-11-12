@@ -2,6 +2,7 @@ import React from 'react';
 import { Text } from 'ink';
 import type { Plan } from '../core/plan.js';
 import type { SkillInventoryReport } from '../core/list.js';
+import type { StaleReport } from '../core/stale.js';
 import type { StatusReport } from '../core/status.js';
 import type { Data } from '../types.js';
 import { t } from '../i18n.js';
@@ -14,6 +15,8 @@ import { ListSurface } from './list-surface.js';
 import type { ListBody, ListFilter } from './list.js';
 import { PlanSurface } from './plan-body.js';
 import type { ReadState } from './read.js';
+import { StaleSurface } from './stale-surface.js';
+import type { StaleBody, StaleFilter } from './stale.js';
 import { StatusSurface } from './status-surface.js';
 import type { RowWindow } from './window.js';
 
@@ -34,6 +37,11 @@ export interface SurfaceBodyProps {
   listBody: ListBody;
   listFilter: ListFilter;
   listWindow: RowWindow;
+  /** The freshness check `stale` read, the body its filters built, and the window those rows move through. */
+  stale: ReadState<StaleReport>;
+  staleBody: StaleBody;
+  staleFilter: StaleFilter;
+  staleWindow: RowWindow;
   /** The requirement ids the user marked: the plan body prints them and the confirm hands them on. */
   marked: readonly string[];
   /** The requirement row the focus is on, when it is below the last entry. */
@@ -67,7 +75,9 @@ const BODIES: Record<SurfaceId, React.ComponentType<SurfaceBodyProps>> = {
   list: ({ list, listBody, listFilter, listWindow, width, height }) => (
     <ListSurface read={list} body={listBody} filter={listFilter} width={width} height={height} window={listWindow} />
   ),
-  stale: Pending,
+  stale: ({ stale, staleBody: body, staleFilter, staleWindow, width, height }) => (
+    <StaleSurface read={stale} body={body} filter={staleFilter} width={width} height={height} window={staleWindow} />
+  ),
   update: Pending,
   remove: Pending,
 };

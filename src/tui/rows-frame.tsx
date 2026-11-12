@@ -132,6 +132,20 @@ export function rowsFrame(blocks: RowBlock[], width: number, height: number, win
   return rowLines(blocks, window, width, height);
 }
 
+/**
+ * A surface's heading on the left and the window/filter that fits right-aligned, longest variant first,
+ * or the heading cut when even the shortest variant would not fit beside it.
+ */
+export function headingLine(heading: Line, meta: string[], width: number): BodyLine {
+  const chosen = meta.find((text) => heading.text.length + 1 + text.length <= width);
+  if (!chosen) return [{ text: truncate(heading.text, width), tone: heading.tone }];
+  return [
+    { text: heading.text, tone: heading.tone },
+    { text: ' '.repeat(width - heading.text.length - chosen.length), tone: 'dim' },
+    { text: chosen, tone: 'dim' },
+  ];
+}
+
 /** One body line: each cell keeps its own tone, and focus is the inverse video the design asks for. */
 export function Line({ cells }: { cells: BodyLine }): React.ReactElement {
   return (

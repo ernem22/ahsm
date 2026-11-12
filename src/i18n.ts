@@ -200,6 +200,10 @@ export const t = {
       /** `/` opens the filter, and while one is set the same key edits it. */
       filter: 'filter',
       edit: 'edit',
+      /** `/` on the stale surface, where `f` is the filter: the mockup's own two words. */
+      search: 'search',
+      /** `u` on the stale surface: the plan for exactly the skills it lists as stale. */
+      update: 'update',
       /** A text mode's own two keys: `Esc` empties the filter, `Enter` keeps it. */
       filterClear: 'clear filter',
       filterKeep: 'keep',
@@ -212,20 +216,23 @@ export const t = {
     /** A read that has not answered yet: the surface says what it is waiting for instead of going blank. */
     statusReading: 'reading status…',
     /** The slow read named and timed; the count joins it once a previous read knew it. */
-    listReading: (seconds: number, count?: number) =>
-      count === undefined
-        ? `reading the provider inventory… ${seconds}s`
-        : `reading the provider inventory… ${seconds}s, ${count} skills`,
+    reading: (what: string, seconds: number, count?: number) =>
+      count === undefined ? `reading the ${what}… ${seconds}s` : `reading the ${what}… ${seconds}s, ${count} skills`,
+    /** What each slow read is called while it runs: the inventory scan, and the provider's own check. */
+    inventory: 'provider inventory',
+    updateCheck: 'provider update check',
     /** `Esc` stops the wait, not the provider: the copy says exactly that. */
-    listStopped: 'stopped waiting — the check may still be running; nothing was written',
-    /** The window and the filter, right-aligned on the inventory's heading line, longest first. */
-    listWindow: (first: number, last: number, total: number) => `${first}–${last} of ${total}`,
-    listWindowEmpty: '0 of 0',
-    listFilterNone: 'filter: none',
-    listFilter: (text: string) => `filter: ${text}`,
+    stoppedWaiting: 'stopped waiting — the check may still be running; nothing was written',
+    /** The window and the filter, right-aligned on a rows surface's heading line, longest first. */
+    windowCount: (first: number, last: number, total: number) => `${first}–${last} of ${total}`,
+    windowEmpty: '0 of 0',
+    filterNone: 'filter: none',
+    filterText: (text: string) => `filter: ${text}`,
+    /** The stale surface's state filter: `stale`, `up-to-date` or `unknown`, in the glossary's words. */
+    stateFilter: (state: string) => `state: ${state}`,
     listCarriers: (harnesses: string[]) => `carriers: ${harnesses.join(', ')}`,
     /** A filter never looks like a smaller inventory: the match is counted against the whole one. */
-    listMatch: (matched: number, total: number) => `${matched} of ${total} skill(s) match the filter`,
+    matchCount: (matched: number, total: number) => `${matched} of ${total} skill(s) match the filter`,
     listNoCarriers: 'nothing chosen on install — f needs a chosen harness',
     keybarSeparator: ' · ',
     /** While a write runs: what it is doing, how much of it, and what is not happening beside it. */
