@@ -82,7 +82,7 @@ test('the plan body prints the formatter lines, and the count line sits above th
     await openPlan(tui);
     const lines = tui.lines();
     assert.equal(lines[0]?.startsWith('agentenv  plan'), true);
-    assert.equal(lines[lines.length - 1], 'r rebuild · ? keys · Esc back · q quit');
+    assert.equal(lines[lines.length - 1], 'space mark · a mark all · Enter apply · r rebuild · ? keys · Esc back · q quit');
     assert.equal(lines[lines.length - 2], t.actions(3, 0, 0), 'the count line is not directly above the keybar');
 
     const frame = tui.frame();
@@ -211,7 +211,7 @@ test('a long plan is reachable: the window moves and the requirements stay above
     assert.equal(lines[3]?.startsWith('> + extra-0'), true, 'the first row is not focused');
     assert.equal(tui.frame().includes('extra-11'), false, 'the whole plan fit: the window is not what is under test');
     assert.equal(lines[lines.length - 2], t.actions(12, 0, 0));
-    assert.ok(lines.includes('ready  requirement node 22.0.0 · min 20'), 'the requirements are not pinned above the keybar');
+    assert.ok(lines.some((line) => line.includes('ready  requirement node 22.0.0 · min 20')), 'the requirements are not pinned above the keybar');
 
     await tui.press('\u001B[6~');
     lines = tui.lines();
@@ -237,7 +237,7 @@ test('p opens the plan read-only, and Esc returns with the selection intact', as
     assert.equal(tui.lines()[0]?.startsWith('agentenv  plan'), true);
 
     // No write key is bound here: the keys that would approve or decline are not in this table.
-    assert.equal(tui.lines()[tui.lines().length - 1], 'r rebuild · ? keys · Esc back · q quit');
+    assert.equal(tui.lines()[tui.lines().length - 1], 'space mark · a mark all · Enter apply · r rebuild · ? keys · Esc back · q quit');
     await tui.press('y', 'n');
     assert.equal(tui.frame(), before, 'a key wrote to or re-read the plan surface');
 

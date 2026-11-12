@@ -1,10 +1,10 @@
 import type { Key } from 'ink';
 import { t } from '../i18n.js';
 import { advance, moveCursor, stepBack, toggleFocused, toggleSection, type InstallForm } from './install.js';
-import { goTo, moveBy, type RowWindow } from './window.js';
+import type { RowWindow } from './window.js';
 
 /** The eight surfaces of the window; the seven commands of the rail plus the home surface. */
-export type SurfaceId = 'install' | 'plan' | 'status' | 'list' | 'stale' | 'update' | 'remove';
+export type SurfaceId = 'install' | 'plan' | 'apply' | 'status' | 'list' | 'stale' | 'update' | 'remove';
 
 /** What a key is allowed to do: the shell owns every piece of state the tables change. */
 export interface KeyHost {
@@ -16,14 +16,26 @@ export interface KeyHost {
   readonly planCount: number;
   /** How many rows `PgUp`/`PgDn` move: one window of the frame the user is looking at. */
   readonly page: number;
+  /** The requirement row the focus is on, when it is below the last entry; `space` marks it. */
+  readonly requirementFocus: number | undefined;
+  readonly requirementCount: number;
+  /** The requirement ids the user marked; the apply passes exactly these to the core. */
+  readonly updates: readonly string[];
+  /** A write is in flight: its own keys are off until it finishes. */
+  readonly applying: boolean;
   go(surface: SurfaceId): void;
   openHelp(): void;
   closeHelp(): void;
   quit(): void;
   say(message: string | undefined): void;
   setInstall(form: InstallForm): void;
-  setPlanWindow(window: RowWindow): void;
+  movePlan(delta: number): void;
+  pagePlan(delta: number): void;
+  resetPlan(at: 'first' | 'last'): void;
   rebuildPlan(): void;
+  toggleUpdate(): void;
+  markAllUpdates(): void;
+  runApply(): void;
 }
 
 export interface KeyBinding {
@@ -75,7 +87,7 @@ export const globalKeys: KeyTable = [
     keys: ['escape'],
     label: t.tui.keys.back,
     when: (host) => host.surface !== 'install',
-    run: (host) => host.go('install'),
+    run: (host) => host.go(host.surface === 'apply' ? 'plan' : 'install'),
   },
   quitBinding,
 ];
@@ -142,47 +154,78 @@ const installTable: KeyTable = [
   },
 ];
 
+/** `space` and `a` act on the focused requirement row, the same on the plan and the confirm. */
+const markBinding: KeyBinding = {
+  keys: ['space'],
+  label: t.tui.keys.mark,
+  run: (host) => host.toggleUpdate(),
+};
+
+const markAllBinding: KeyBinding = {
+  keys: ['a'],
+  label: t.tui.keys.markAll,
+  run: (host) => host.markAllUpdates(),
+};
+
+/** `Enter` opens the confirm: the same body and marks, with the one key that writes. */
+const confirmBinding: KeyBinding = {
+  keys: ['return'],
+  label: t.tui.keys.apply,
+  run: (host) => host.go('apply'),
+};
+
 /**
- * The plan body, read-only: the window moves and `r` reads the plan again. No key here writes, and no
- * key here is missing from the table, so the keybar and the overlay always say what the body offers.
+ * The rows keys, shared by the plan and its confirm: the window moves through the entries, and `Down`
+ * past the last entry walks the requirement rows, where `space` has something to mark.
  */
-const planTable: KeyTable = [
+const planNavigation: KeyTable = [
   {
     keys: ['up'],
     label: t.tui.keys.move,
     hidden: true,
-    run: (host) => host.setPlanWindow(moveBy(host.plan, host.planCount, -1)),
+    run: (host) => host.movePlan(-1),
   },
   {
     keys: ['down'],
     label: t.tui.keys.move,
     hidden: true,
-    run: (host) => host.setPlanWindow(moveBy(host.plan, host.planCount, 1)),
+    run: (host) => host.movePlan(1),
   },
   {
     keys: ['pageup'],
     label: t.tui.keys.move,
     hidden: true,
-    run: (host) => host.setPlanWindow(moveBy(host.plan, host.planCount, -host.page)),
+    run: (host) => host.pagePlan(-host.page),
   },
   {
     keys: ['pagedown'],
     label: t.tui.keys.move,
     hidden: true,
-    run: (host) => host.setPlanWindow(moveBy(host.plan, host.planCount, host.page)),
+    run: (host) => host.pagePlan(host.page),
   },
   {
     keys: ['g'],
     label: t.tui.keys.first,
     hidden: true,
-    run: (host) => host.setPlanWindow(goTo(0, host.planCount)),
+    run: (host) => host.resetPlan('first'),
   },
   {
     keys: ['G'],
     label: t.tui.keys.last,
     hidden: true,
-    run: (host) => host.setPlanWindow(goTo(host.planCount - 1, host.planCount)),
+    run: (host) => host.resetPlan('last'),
   },
+];
+
+/**
+ * The plan body, read-only: the window moves, requirements are marked and `r` reads the plan again.
+ * No key here writes; `Enter` opens the confirm, where `y` is the only writer.
+ */
+const planTable: KeyTable = [
+  ...planNavigation,
+  markBinding,
+  markAllBinding,
+  confirmBinding,
   {
     keys: ['r'],
     label: t.tui.keys.rebuild,
@@ -193,10 +236,32 @@ const planTable: KeyTable = [
   },
 ];
 
+/**
+ * The confirm: the plan body plus the one key that writes. `y` hands the core exactly the marks, `n`
+ * and `Esc` decline without running anything and keep the selection.
+ */
+const applyTable: KeyTable = [
+  {
+    keys: ['y'],
+    label: t.tui.keys.apply,
+    when: (host) => !host.applying,
+    run: (host) => host.runApply(),
+  },
+  ...planNavigation,
+  markBinding,
+  markAllBinding,
+  {
+    keys: ['n'],
+    label: t.tui.keys.decline,
+    run: (host) => host.go('plan'),
+  },
+];
+
 /** One table per surface; its keys are dispatched before the global ones and listed in its keybar. */
 export const surfaceKeys: Record<SurfaceId, KeyTable> = {
   install: installTable,
   plan: planTable,
+  apply: applyTable,
   status: [],
   list: [],
   stale: [],

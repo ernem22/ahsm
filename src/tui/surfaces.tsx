@@ -19,6 +19,10 @@ export interface SurfaceBodyProps {
   height: number;
   plan: ReadState<Plan>;
   planWindow: RowWindow;
+  /** The requirement ids the user marked: the plan body prints them and the confirm hands them on. */
+  marked: readonly string[];
+  /** The requirement row the focus is on, when it is below the last entry. */
+  requirementFocus: number | undefined;
 }
 
 /** A surface whose body is not built yet prints its own name; it is an entry like any other. */
@@ -31,8 +35,11 @@ const BODIES: Record<SurfaceId, React.ComponentType<SurfaceBodyProps>> = {
   install: ({ data, install, width, height }) => (
     <InstallSurface data={data} form={install} width={width} height={height} />
   ),
-  plan: ({ plan, width, height, planWindow }) => (
-    <PlanSurface read={plan} width={width} height={height} window={planWindow} />
+  plan: ({ plan, width, height, planWindow, marked, requirementFocus }) => (
+    <PlanSurface read={plan} width={width} height={height} window={planWindow} marked={marked} requirementFocus={requirementFocus} />
+  ),
+  apply: ({ plan, width, height, planWindow, marked, requirementFocus }) => (
+    <PlanSurface read={plan} width={width} height={height} window={planWindow} marked={marked} requirementFocus={requirementFocus} />
   ),
   status: Pending,
   list: Pending,

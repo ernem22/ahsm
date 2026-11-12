@@ -124,28 +124,49 @@ function padLines(lines: BodyLine[], height: number): BodyLine[] {
  * keybar however long the plan is. Nothing here writes a plan sentence: every word comes from
  * `planLines`, and this only windows, pads and tones it.
  */
-export function planFrame(plan: Plan, width: number, height: number, window: RowWindow): BodyLine[] {
+export function planFrame(
+  plan: Plan,
+  width: number,
+  height: number,
+  window: RowWindow,
+  marked: readonly string[],
+  requirementFocus: number | undefined,
+): BodyLine[] {
   const blocks = planBlocks(plan);
-  return [
-    ...rowLines(blocks, goTo(window.index, blocks.length).index, width, rowHeight(plan, width, height)),
-    ...tailLines(plan, width, height),
-  ];
+  const rows = rowLines(
+    blocks,
+    goTo(window.index, blocks.length).index,
+    width,
+    rowHeight(plan, width, height, marked, requirementFocus),
+  );
+  return [...rows, ...tailLines(plan, width, height, marked, requirementFocus)];
 }
 
-/** The lines the body pins above the keybar: the requirements, the warnings and the count, wrapped. */
-function tailLines(plan: Plan, width: number, height: number): BodyLine[] {
-  const tail = planTail(plan);
-  const lines = [...tail.requirements, ...tail.warnings, tail.count].flatMap((line) =>
-    wrapped(line.text, line.tone, width),
-  );
+/** The lines the body pins above the keybar: requirements, warnings, the mark statement and the count. */
+function tailLines(
+  plan: Plan,
+  width: number,
+  height: number,
+  marked: readonly string[],
+  requirementFocus: number | undefined,
+): BodyLine[] {
+  const tail = planTail(plan, marked, requirementFocus);
+  const pinned = [...tail.requirements, ...tail.warnings, ...(tail.summary ? [tail.summary] : []), tail.count];
+  const lines = pinned.flatMap((line) => wrapped(line.text, line.tone, width));
   // A body shorter than the rows below it gives up row lines, never the count line.
   const room = Math.max(0, Math.max(1, height) - 1);
   return lines.length > room ? lines.slice(lines.length - room) : lines;
 }
 
 /** The lines the row window gets: the body it was given, minus what the tail pins. */
-function rowHeight(plan: Plan, width: number, height: number): number {
-  return Math.max(1, Math.max(1, height) - tailLines(plan, width, height).length);
+function rowHeight(
+  plan: Plan,
+  width: number,
+  height: number,
+  marked: readonly string[],
+  requirementFocus: number | undefined,
+): number {
+  return Math.max(1, Math.max(1, height) - tailLines(plan, width, height, marked, requirementFocus).length);
 }
 
 /**
@@ -156,7 +177,7 @@ export function planPage(plan: Plan | undefined, width: number, height: number, 
   const body = Math.max(1, height - PLAN_HEADING);
   if (!plan) return body;
   const blocks = planBlocks(plan);
-  const view = rowView(blocks, goTo(window.index, blocks.length).index, width, rowHeight(plan, width, body));
+  const view = rowView(blocks, goTo(window.index, blocks.length).index, width, rowHeight(plan, width, body, [], undefined));
   return Math.max(1, view.end - view.start);
 }
 
@@ -178,18 +199,36 @@ export interface PlanSurfaceProps {
   width: number;
   height: number;
   window: RowWindow;
+  /** The requirement ids the user marked: their update runs with the apply. */
+  marked: readonly string[];
+  /** The requirement row the focus is on, when it is on one. */
+  requirementFocus: number | undefined;
 }
 
 /**
  * The plan, read-only: the rows that would run in the order they happen, the requirements they need,
  * and the count of both. `building plan…` while the read runs, the failure's own message if it throws.
  */
-export function PlanSurface({ read, width, height, window }: PlanSurfaceProps): React.ReactElement {
+export function PlanSurface({
+  read,
+  width,
+  height,
+  window,
+  marked,
+  requirementFocus,
+}: PlanSurfaceProps): React.ReactElement {
   return (
     <Box flexDirection="column">
       <Text dimColor>{t.tui.surfaces.plan}</Text>
       {read.status === 'done' && read.value ? (
-        planFrame(read.value, width, Math.max(1, height - PLAN_HEADING), window).map((cells, at) => (
+        planFrame(
+          read.value,
+          width,
+          Math.max(1, height - PLAN_HEADING),
+          window,
+          marked,
+          requirementFocus,
+        ).map((cells, at) => (
           <Line key={at} cells={cells} />
         ))
       ) : read.status === 'error' ? (

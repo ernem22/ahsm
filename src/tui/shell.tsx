@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import { buildPlan } from '../core/plan.js';
+import { applyPlan } from '../core/apply.js';
 import type { Ctx } from '../context.js';
 import { t } from '../i18n.js';
 import type { Data } from '../types.js';
@@ -19,10 +20,10 @@ import {
   type SurfaceId,
 } from './keys.js';
 import { planPage } from './plan-body.js';
-import { planSelection } from './plan.js';
+import { allUpdates, focusedRequirement, markableUpdates, planSelection, toggleUpdate } from './plan.js';
 import { useRead } from './read.js';
 import { SurfaceBody } from './surfaces.js';
-import { emptyWindow } from './window.js';
+import { emptyWindow, goTo, moveBy } from './window.js';
 
 /** The rail needs 100 columns; below it the letters still work, so width never changes what is reachable. */
 export const RAIL_MIN_WIDTH = 100;
@@ -47,8 +48,74 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   // The form lives here, not in the install component: leaving the surface keeps every choice.
   const [install, setInstall] = useState(() => initialForm(data, ctx));
   const [planWindow, setPlanWindow] = useState(emptyWindow);
+  // `Down` past the last entry walks the requirement rows; `space` marks the one under that focus.
+  const [requirementFocus, setRequirementFocus] = useState<number | undefined>();
+  // The requirement ids the user marked; a rebuild keeps them until they no longer exist.
+  const [updates, setUpdates] = useState<string[]>([]);
+  const [applying, setApplying] = useState(false);
   // The plan asks the core the same question `agentenv plan` does, for the selection on screen.
   const plan = useRead(() => buildPlan(data, ctx, planSelection(install)));
+
+  const entryCount = plan.state.value?.entries.length ?? 0;
+  const requirementCount = plan.state.value?.requirements.length ?? 0;
+  const focus = requirementFocus !== undefined && requirementFocus < requirementCount ? requirementFocus : undefined;
+
+  /** The focused requirement, when the focus is on one that offers a markable update. */
+  const toggleMark = (): void => {
+    const value = plan.state.value;
+    if (!value) return;
+    const id = focusedRequirement(value, focus);
+    if (id) setUpdates((marked) => toggleUpdate(marked, id));
+  };
+
+  /** `Down`/`Up` cross from the last entry into the requirement rows and back. */
+  const movePlan = (delta: number): void => {
+    let window = planWindow;
+    let at = focus;
+    if (delta > 0) {
+      if (at === undefined) {
+        if (window.index < entryCount - 1) window = moveBy(window, entryCount, 1);
+        else if (requirementCount > 0) at = 0;
+      } else if (at < requirementCount - 1) at += 1;
+    } else if (at === undefined) {
+      if (entryCount > 0) window = moveBy(window, entryCount, -1);
+    } else if (at > 0) {
+      at -= 1;
+    } else {
+      at = undefined;
+      window = goTo(entryCount - 1, entryCount);
+    }
+    setPlanWindow(window);
+    setRequirementFocus(at);
+  };
+
+  /** A page moves the entry window and leaves the requirement rows to `Down`. */
+  const pagePlan = (delta: number): void => {
+    setRequirementFocus(undefined);
+    setPlanWindow(moveBy(planWindow, entryCount, delta));
+  };
+
+  const resetPlan = (at: 'first' | 'last'): void => {
+    setRequirementFocus(undefined);
+    setPlanWindow(goTo(at === 'first' ? 0 : entryCount - 1, entryCount));
+  };
+
+  const markAll = (): void => {
+    const value = plan.state.value;
+    if (!value) return;
+    setUpdates((marked) => allUpdates(value, marked));
+  };
+
+  /** `y`: the core gets exactly the marks, and no options at all when nothing is marked. */
+  const runApply = (): void => {
+    const value = plan.state.value;
+    if (!value || applying) return;
+    const marked = updates.filter((id) => markableUpdates(value).includes(id));
+    setApplying(true);
+    void applyPlan(data, ctx, value, marked.length > 0 ? { updates: marked } : undefined).finally(() =>
+      setApplying(false),
+    );
+  };
 
   // Entering the plan reads it; `r` is the same call, so a second look costs one key.
   useEffect(() => {
@@ -60,16 +127,25 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     help,
     install,
     plan: planWindow,
-    planCount: plan.state.value?.entries.length ?? 0,
+    planCount: entryCount,
     page: planPage(plan.state.value, columns, bodyHeight(rows, status), planWindow),
+    requirementFocus: focus,
+    requirementCount,
     go: setSurface,
     openHelp: () => setHelp(true),
     closeHelp: () => setHelp(false),
     quit: () => exit(),
     say: setStatus,
     setInstall,
-    setPlanWindow,
+    movePlan,
+    pagePlan,
+    resetPlan,
     rebuildPlan: plan.load,
+    updates,
+    applying,
+    toggleUpdate: toggleMark,
+    markAllUpdates: markAll,
+    runApply,
   };
 
   useInput((input, key) => {
@@ -107,6 +183,8 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
             height={bodyHeight(rows, status)}
             plan={plan.state}
             planWindow={planWindow}
+            marked={updates}
+            requirementFocus={focus}
           />
         )}
       </Box>
