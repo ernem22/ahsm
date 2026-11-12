@@ -19,3 +19,15 @@ Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root, read lazily. See
 ### Git
 
 Conventional commits, LF line endings, and the checked-in pre-commit hook (`.githooks/pre-commit`). See `docs/agents/git.md`.
+
+## Where to look
+
+- `src/i18n.ts` — all user-facing copy.
+- `src/render.ts` — the one formatter for CLI/plan/outcome wording.
+- `src/core/*.ts` — one module per command: plan/apply/remove/status/list/stale/update.
+- `src/tui/keys.ts` — the key table that drives dispatch, keybar and help.
+- `src/tui/window.ts` — `rowsInView`/`goTo`, the row window every rows surface shares.
+- `test/tui-harness.ts` — the headless seam (`startTui`, `expectFrame`).
+- `.scratch/<feature>/spec.md` + `issues/NN-*.md` — decisions per ticket.
+
+On Windows, write files with the edit/write tools or `newline=''` — never a Python text-mode rewrite.
