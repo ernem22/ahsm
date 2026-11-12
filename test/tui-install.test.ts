@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { t } from '../src/i18n.js';
-import { OFFLINE_ROOT, fixture, startTui } from './tui-harness.js';
+import { expectFrame, OFFLINE_ROOT, fixture, startTui } from './tui-harness.js';
 
 /** The rows under one section heading, up to the blank line that separates it from the next section. */
 function section(lines: string[], heading: string): string[] {
@@ -282,16 +282,14 @@ test('a package taller than the window scrolls: the header and the focused row s
       // The items section is where the 12 rows are: the two Enter presses walk to it.
       await tui.press('\r', '\r');
       let lines = tui.lines();
-      assert.equal(lines.length, rows, `${width}x${rows}: the body overflows the window`);
-      for (const line of lines) assert.ok(line.length <= width, `${width}: ${line.length} > ${width}: ${line}`);
+      expectFrame(lines, { width, rows });
       assert.equal(lines[0]?.startsWith('agentenv  install'), true, 'the header scrolled away');
       assert.ok(lines.includes(t.tui.sections.items), 'the items heading is not on screen');
       assert.equal(tui.frame().includes('extra-11'), false, 'the whole package fit: the window is not under test');
 
       for (let at = 0; at < 11; at += 1) await tui.press('\u001B[B');
       lines = tui.lines();
-      assert.equal(lines.length, rows, `${width}x${rows}: the scrolled body overflows the window`);
-      for (const line of lines) assert.ok(line.length <= width, `${width}: ${line.length} > ${width}: ${line}`);
+      expectFrame(lines, { width, rows });
       assert.equal(lines[0]?.startsWith('agentenv  install'), true, 'the header scrolled away');
       assert.ok(lines.includes(t.tui.sections.items), 'the items heading scrolled away');
 

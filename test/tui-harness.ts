@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,6 +8,7 @@ import React from 'react';
 import { render } from 'ink';
 import { createContext, RecordingRunner, type Ctx } from '../src/context.js';
 import { loadData } from '../src/data.js';
+import { t } from '../src/i18n.js';
 import { App } from '../src/tui/App.js';
 import type { Data } from '../src/types.js';
 
@@ -20,6 +22,22 @@ const ANSI = /\u001B\[[0-9;?]*[ -/]*[@-~]/g;
 
 export function stripAnsi(text: string): string {
   return text.replace(ANSI, '');
+}
+
+/** The window a frame was laid out for: exactly `rows` lines, no line wider than `width`, header first. */
+export interface FrameExpectation {
+  width: number;
+  rows: number;
+}
+
+/**
+ * What every frame owes a terminal: no line may leave it, the header must not scroll away, and the
+ * body must not grow past the window its keybar is pinned to.
+ */
+export function expectFrame(lines: string[], expected: FrameExpectation): void {
+  assert.equal(lines.length, expected.rows, `the frame has ${lines.length} lines, not ${expected.rows}`);
+  for (const line of lines) assert.ok(line.length <= expected.width, `${line.length} > ${expected.width}: ${line}`);
+  assert.ok((lines[0] ?? '').startsWith(t.title), `the first line is not the header: ${lines[0]}`);
 }
 
 /** Captures one chunk per rendered frame; `columns` and `rows` are the window the frame is laid out for. */

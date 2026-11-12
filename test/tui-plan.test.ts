@@ -10,7 +10,7 @@ import { t } from '../src/i18n.js';
 import { planLines } from '../src/render.js';
 import { orderedPlan } from '../src/tui/plan.js';
 import type { Data } from '../src/types.js';
-import { OFFLINE_ROOT, fixture, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, OFFLINE_ROOT, fixture, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
 
 const ITEMS = ['skill-a', 'mcp-a', 'hook-a'];
 /** Where the detail column starts at 120 columns: the 50-column list, then the 2-column gutter. */
@@ -186,7 +186,7 @@ test('two columns at 120, one column at 80, and no line wider than the frame', a
       await openPlan(tui);
       await tui.press('\u001B[B', '\u001B[B');
       const lines = tui.lines();
-      for (const line of lines) assert.ok(line.length <= width, `${line.length} > ${width}: ${line}`);
+      expectFrame(lines, { width, rows: 30 });
 
       const row = '+ hook-a → fake [hook/builtin-hooks]';
       const shown = lines.filter((line) => line.includes(row)).length;
@@ -207,6 +207,7 @@ test('a long plan is reachable: the window moves and the requirements stay above
   try {
     await openPlan(tui);
     let lines = tui.lines();
+    expectFrame(lines, { width: 120, rows: 16 });
     assert.equal(lines[3]?.startsWith('> + extra-0'), true, 'the first row is not focused');
     assert.equal(tui.frame().includes('extra-11'), false, 'the whole plan fit: the window is not what is under test');
     assert.equal(lines[lines.length - 2], t.actions(12, 0, 0));

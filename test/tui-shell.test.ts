@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { t } from '../src/i18n.js';
-import { fixture, startTui } from './tui-harness.js';
+import { expectFrame, fixture, startTui } from './tui-harness.js';
 
 const RAIL = 'i install · p plan · s status · l list · v stale · u update · x remove';
 
@@ -16,6 +16,7 @@ test('the shell opens on install with a header, a target and a keybar', async ()
   const tui = await startTui({ ...fixture(true), width: 120 });
   try {
     const lines = tui.lines();
+    expectFrame(lines, { width: 120, rows: 30 });
     const header = lines[0] as string;
     assert.ok(header.startsWith('agentenv  install'), header);
     assert.ok(header.endsWith(RAIL), header);
@@ -55,7 +56,7 @@ test('the window is the height it was given, and the keybar is its last line', a
   const tui = await startTui({ ...fixture(true), width: 120, rows: 16 });
   try {
     const lines = tui.lines();
-    assert.equal(lines.length, 16);
+    expectFrame(lines, { width: 120, rows: 16 });
     assert.equal(lines[15], 'space choose · a all · Enter next · ? keys · q quit');
     assert.equal(lines[0]?.startsWith('agentenv  install'), true);
   } finally {
@@ -67,7 +68,7 @@ test('no rendered line is wider than the frame', async () => {
   for (const width of [120, 40]) {
     const tui = await startTui({ ...fixture(), width });
     try {
-      for (const line of tui.lines()) assert.ok(line.length <= width, `${line.length} > ${width}: ${line}`);
+      expectFrame(tui.lines(), { width, rows: 30 });
     } finally {
       await tui.stop();
     }
