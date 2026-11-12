@@ -61,5 +61,5 @@ On a machine whose provider has no `check` argv, the surface says `not covered` 
 - `test/tui-stale.test.ts` holds the three states with their reasons, `unknown` never printed as
   `up-to-date`, the not-covered answer with no rows and no command, an empty lockfile, the named/timed read
   and its cancel, `f`'s cycle and the heading's state filter, `/` narrowing with `Esc` clearing before it
-  leaves, `u` reaching the update surface, a read-only visit with the single recorded command, and 40
-  columns.
+  leaves, `u` reaching the update surface, a read-only visit with the single recorded command, the keybar
+  and the overlay naming each key once, and 40 columns.
