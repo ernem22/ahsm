@@ -21,7 +21,7 @@ test('the shell opens on install with a header, a target and a keybar', async ()
     assert.ok(header.endsWith(RAIL), header);
     assert.equal(header.length, 120);
     assert.equal(lines[1], 'target: Fake Harness');
-    assert.equal(lines[lines.length - 1], '? keys · q quit');
+    assert.equal(lines[lines.length - 1], 'space choose · a all · Enter next · ? keys · q quit');
   } finally {
     await tui.stop();
   }
@@ -32,13 +32,10 @@ test('the frame carries no stage of the old wizard', async () => {
   try {
     const frame = tui.frame();
     const oldCopy = [
-      t.harnesses,
       t.packages,
       t.planBuilding,
       '↑/↓ move',
       'space toggle',
-      'a all',
-      'Enter next',
       'Enter open package',
       'Enter plan',
       '← back',
@@ -46,7 +43,6 @@ test('the frame carries no stage of the old wizard', async () => {
       'y apply',
       'Enter to exit',
       'applying…',
-      'not detected',
       'updates marked — applying runs them',
     ];
     for (const copy of oldCopy) assert.equal(frame.includes(copy), false, `frame still shows ${copy}`);
@@ -60,7 +56,7 @@ test('the window is the height it was given, and the keybar is its last line', a
   try {
     const lines = tui.lines();
     assert.equal(lines.length, 16);
-    assert.equal(lines[15], '? keys · q quit');
+    assert.equal(lines[15], 'space choose · a all · Enter next · ? keys · q quit');
     assert.equal(lines[0]?.startsWith('agentenv  install'), true);
   } finally {
     await tui.stop();

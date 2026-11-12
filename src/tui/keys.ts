@@ -1,5 +1,6 @@
 import type { Key } from 'ink';
 import { t } from '../i18n.js';
+import { advance, moveCursor, stepBack, toggleFocused, toggleSection, type InstallForm } from './install.js';
 
 /** The eight surfaces of the window; the seven commands of the rail plus the home surface. */
 export type SurfaceId = 'install' | 'plan' | 'status' | 'list' | 'stale' | 'update' | 'remove';
@@ -8,11 +9,13 @@ export type SurfaceId = 'install' | 'plan' | 'status' | 'list' | 'stale' | 'upda
 export interface KeyHost {
   readonly surface: SurfaceId;
   readonly help: boolean;
+  readonly install: InstallForm;
   go(surface: SurfaceId): void;
   openHelp(): void;
   closeHelp(): void;
   quit(): void;
-  say(message: string): void;
+  say(message: string | undefined): void;
+  setInstall(form: InstallForm): void;
 }
 
 export interface KeyBinding {
@@ -69,9 +72,71 @@ export const globalKeys: KeyTable = [
   quitBinding,
 ];
 
+/**
+ * The install form: one focused section at a time. `space` and `a` change rows, `Up`/`Down` move the
+ * cursor (hidden from the keybar, listed in the overlay), `Enter` goes forward and `Esc` back — and a
+ * refused `Enter` says why instead of doing nothing.
+ */
+const installTable: KeyTable = [
+  {
+    keys: ['space'],
+    label: t.tui.keys.choose,
+    run: (host) => {
+      host.say(undefined);
+      host.setInstall(toggleFocused(host.install));
+    },
+  },
+  {
+    keys: ['a'],
+    label: t.tui.keys.all,
+    // The package section is a single choice, so "all" has nothing to mean there.
+    when: (host) => host.install.stage !== 'package',
+    run: (host) => {
+      host.say(undefined);
+      host.setInstall(toggleSection(host.install));
+    },
+  },
+  {
+    keys: ['up'],
+    label: t.tui.keys.move,
+    hidden: true,
+    run: (host) => host.setInstall(moveCursor(host.install, -1)),
+  },
+  {
+    keys: ['down'],
+    label: t.tui.keys.move,
+    hidden: true,
+    run: (host) => host.setInstall(moveCursor(host.install, 1)),
+  },
+  {
+    keys: ['return'],
+    label: t.tui.keys.next,
+    run: (host) => {
+      const next = advance(host.install);
+      if (next.kind === 'refused') {
+        host.say(next.message);
+        return;
+      }
+      host.say(undefined);
+      if (next.kind === 'plan') host.go('plan');
+      else host.setInstall(next.form);
+    },
+  },
+  {
+    keys: ['escape'],
+    label: t.tui.keys.back,
+    // While the overlay is open `Esc` closes it, and the overlay shares this frame's key set.
+    when: (host) => !host.help && host.install.stage !== 'harnesses',
+    run: (host) => {
+      host.say(undefined);
+      host.setInstall(stepBack(host.install));
+    },
+  },
+];
+
 /** One table per surface; its keys are dispatched before the global ones and listed in its keybar. */
 export const surfaceKeys: Record<SurfaceId, KeyTable> = {
-  install: [],
+  install: installTable,
   plan: [],
   status: [],
   list: [],

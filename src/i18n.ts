@@ -5,6 +5,7 @@ import type { AdapterVia } from './core/plan.js';
 import type { HarnessStatus, StatusValue } from './core/status.js';
 import type { InventoryScope } from './core/list.js';
 import type { StaleValue } from './core/stale.js';
+import type { Stage } from './tui/install.js';
 import type { SurfaceId } from './tui/keys.js';
 
 /**
@@ -179,9 +180,28 @@ export const t = {
       quit: 'quit',
       back: 'back',
       close: 'close',
+      choose: 'choose',
+      all: 'all',
+      next: 'next',
+      move: 'move',
     },
     helpTitle: (surface: string) => `keys — ${surface}`,
     keybarSeparator: ' · ',
+    /** The install surface's three sections, in the order it prints them. */
+    sections: { harnesses: 'harnesses', package: 'package', items: 'items' } as Record<Stage, string>,
+    chosenOf: (chosen: number, total: number) => `${chosen} of ${total} chosen`,
+    packageSummary: (id: string, count: number) => `${id} · ${count} item${count === 1 ? '' : 's'}`,
+    /** A harness the detection probe did not find: still listed, still chooseable. */
+    notDetected: 'not detected',
+    nothingChosenHarness: 'nothing chosen — space to choose a harness',
+    nothingChosenItem: 'nothing chosen — space to choose an item',
+    sourcePrefix: 'source:',
+    urlPrefix: 'url:',
+    packagePrefix: 'package:',
+    linkPrefix: 'link:',
+    /** Between the parts of one row's detail, and in front of an indented detail line. */
+    detailSeparator: '    ',
+    ellipsis: '…',
   },
   help: [
     'agentenv                              TUI (pick harnesses and a package, review, install)',
