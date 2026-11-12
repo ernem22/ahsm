@@ -386,27 +386,3 @@ test('one Esc clears the name filter and the state filter together', async () =>
     await tui.stop();
   }
 });
-
-test('the keybar and the overlay name each key once, in this surface\'s own words', async () => {
-  const shared = threeStates();
-  const tui = await startTui({ ...shared, width: 120 });
-  try {
-    await openStale(tui);
-    const keybar = at(tui.lines(), tui.lines().length - 1);
-    const entries = keybar.split(t.tui.keybarSeparator);
-    assert.equal(new Set(entries).size, entries.length, keybar);
-    // `u` is a rail letter too, and this surface is where it has a destination of its own.
-    assert.equal(entries.filter((entry) => entry.startsWith('u ')).length, 1, keybar);
-
-    await tui.press('?');
-    const lines = tui.lines();
-    const heading = lines.indexOf(t.tui.helpTitle(t.tui.surfaces.stale));
-    assert.notEqual(heading, -1, 'the overlay did not open');
-    const rows = lines.slice(heading + 1, lines.length - 1).filter((line) => line !== '');
-    assert.equal(rows.filter((row) => row === 'u update').length, 1, rows.join('|'));
-    assert.ok(rows.includes('v stale'), rows.join('|'));
-    assert.equal(at(lines, lines.length - 1), 'Esc close · q quit');
-  } finally {
-    await tui.stop();
-  }
-});

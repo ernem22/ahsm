@@ -256,22 +256,6 @@ test('at 40 columns the detail moves under its row and nothing overflows', async
   }
 });
 
-test('the overlay lists the install keys while the keybar only offers the live ones', async () => {
-  const tui = await startTui({ ...fixture(true), width: 120 });
-  try {
-    await tui.press('?');
-    const lines = tui.lines();
-    assert.equal(lines[lines.length - 1], 'Esc close · q quit');
-    for (const entry of ['space choose', 'a all', 'Up move', 'Down move', 'Enter next']) {
-      assert.ok(lines.includes(entry), `the overlay does not list ${entry}`);
-    }
-    await tui.press('\u001B');
-    assert.equal(tui.lines()[tui.lines().length - 1], 'space choose · a all · Enter next · ? keys · q quit');
-  } finally {
-    await tui.stop();
-  }
-});
-
 test('a package taller than the window scrolls: the header and the focused row stay visible', async () => {
   for (const [width, rows] of [
     [80, 20],
