@@ -3,6 +3,8 @@ import { Text } from 'ink';
 import type { Plan } from '../core/plan.js';
 import type { Data } from '../types.js';
 import { t } from '../i18n.js';
+import { ApplyBody } from './apply-body.js';
+import type { WriteState } from './apply.js';
 import { InstallSurface } from './install-surface.js';
 import type { InstallForm } from './install.js';
 import type { SurfaceId } from './keys.js';
@@ -23,6 +25,8 @@ export interface SurfaceBodyProps {
   marked: readonly string[];
   /** The requirement row the focus is on, when it is below the last entry. */
   requirementFocus: number | undefined;
+  /** What the apply has done so far: nothing, in flight, or the result the core reported. */
+  write: WriteState;
 }
 
 /** A surface whose body is not built yet prints its own name; it is an entry like any other. */
@@ -38,9 +42,12 @@ const BODIES: Record<SurfaceId, React.ComponentType<SurfaceBodyProps>> = {
   plan: ({ plan, width, height, planWindow, marked, requirementFocus }) => (
     <PlanSurface read={plan} width={width} height={height} window={planWindow} marked={marked} requirementFocus={requirementFocus} />
   ),
-  apply: ({ plan, width, height, planWindow, marked, requirementFocus }) => (
-    <PlanSurface read={plan} width={width} height={height} window={planWindow} marked={marked} requirementFocus={requirementFocus} />
-  ),
+  apply: ({ plan, width, height, planWindow, marked, requirementFocus, write }) =>
+    write.status === 'idle' ? (
+      <PlanSurface read={plan} width={width} height={height} window={planWindow} marked={marked} requirementFocus={requirementFocus} />
+    ) : (
+      <ApplyBody write={write} width={width} height={height} />
+    ),
   status: Pending,
   list: Pending,
   stale: Pending,

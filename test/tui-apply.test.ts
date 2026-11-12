@@ -8,7 +8,126 @@ import type { Plan } from '../src/core/plan.js';
 import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
 import { allUpdates, markableUpdates, toggleUpdate } from '../src/tui/plan.js';
+import { bodyHeight, statusLines } from '../src/tui/shell.js';
 import { OFFLINE_ROOT, expectFrame, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
+
+/** A second harness no provider lists, so a real outcome carries `not covered` rows beside the rest. */
+const OTHER_HARNESS = [
+  'id: other',
+  'label: Other Harness',
+  'detect:',
+  '  - ~/.other',
+  'config: { path: "~/.other/config.json", format: jsonc }',
+  '',
+].join('\n');
+
+const MCP_B = [
+  'id: mcp-b',
+  'kind: mcp',
+  'url: https://mcp.example.invalid/b',
+  'targets: [other]',
+  'note: "offline mcp for a harness no provider covers"',
+  '',
+].join('\n');
+
+/** The offline root narrowed to one package, with a provider-less harness when the test needs one. */
+function planRoot(items: string[], other = false): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-write-'));
+  fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
+  fs.writeFileSync(path.join(root, 'packages', 'base.yaml'), `id: base\ndefault: true\nitems: [${items.join(', ')}]\n`, 'utf8');
+  if (other) {
+    fs.writeFileSync(path.join(root, 'harnesses', 'other.yaml'), OTHER_HARNESS, 'utf8');
+    fs.writeFileSync(path.join(root, 'catalog', 'mcp-b.yaml'), MCP_B, 'utf8');
+  }
+  return root;
+}
+
+/**
+ * A home with the given harnesses detected, the fixture hook already in place (so the plan says
+ * `already`) and a lockfile entry (so a skill install can be verified instead of reported unverified).
+ */
+function preparedHome(root: string, dirs: string[], withHook = true): string {
+  const home = fixtureHome();
+  for (const dir of dirs) fs.mkdirSync(path.join(home, dir), { recursive: true });
+  const hook = loadData(root).items.get('hook-a');
+  const entry = { matcher: hook?.matcher, hooks: [{ type: 'command', command: hook?.hookCommand }] };
+  fs.mkdirSync(path.join(home, '.fake'), { recursive: true });
+  if (withHook) {
+    fs.writeFileSync(path.join(home, '.fake', 'settings.json'), JSON.stringify({ hooks: { PreToolUse: [entry] } }), 'utf8');
+  }
+  fs.writeFileSync(path.join(home, '.fake', '.skill-lock.json'), JSON.stringify({ skills: { alpha: { source: 'fixture/skills' } } }), 'utf8');
+  return home;
+}
+
+/** A write that is held open until the test lets it finish, so the in-flight screen can be read. */
+class GatedRunner implements Runner {
+  readonly calls: string[][] = [];
+  private readonly gate: Promise<void>;
+  private open!: () => void;
+
+  constructor() {
+    this.gate = new Promise<void>((resolve) => {
+      this.open = resolve;
+    });
+  }
+
+  async run(argv: string[]): Promise<RunResult> {
+    this.calls.push(argv);
+    if (argv.join(' ') === 'node --version') return { code: 0, stdout: 'v22.0.0\n', stderr: '' };
+    if ((argv[1] ?? '').endsWith('install-skill.mjs')) await this.gate;
+    return { code: 0, stdout: '', stderr: '' };
+  }
+
+  release(): void {
+    this.open();
+  }
+}
+
+/** One entry installs, one errors: a partial failure is what the result screen has to keep apart. */
+class MixedRunner implements Runner {
+  readonly calls: string[][] = [];
+
+  async run(argv: string[]): Promise<RunResult> {
+    this.calls.push(argv);
+    if (argv.join(' ') === 'node --version') return { code: 0, stdout: 'v22.0.0\n', stderr: '' };
+    if ((argv[1] ?? '').endsWith('install-mcp.mjs')) return { code: 1, stdout: '', stderr: 'mcp exploded' };
+    return { code: 0, stdout: '', stderr: '' };
+  }
+}
+
+/** Every requirement reads no version, so both are absent and both installers fail. */
+class BrokenRunner implements Runner {
+  readonly calls: string[][] = [];
+
+  async run(argv: string[]): Promise<RunResult> {
+    this.calls.push(argv);
+    if (argv.join(' ') === 'node --version') return { code: 0, stdout: '', stderr: '' };
+    if (argv[0] === 'npm') return { code: 1, stdout: '', stderr: 'npm ERR! EACCES' };
+    return { code: 1, stdout: '', stderr: 'node ERR! denied' };
+  }
+}
+
+/** Waits up to `deadlineMs` for a frame that makes `done` true; the deadline bounds a key that did nothing. */
+async function until(tui: TuiHarness, done: () => boolean, deadlineMs = 1000): Promise<void> {
+  const deadline = Date.now() + deadlineMs;
+  while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+}
+
+/** `agentenv`, three `Enter`s and the confirm screen: the form, the plan and the apply in one path. */
+async function journey(tui: TuiHarness): Promise<void> {
+  await tui.press('\r', '\r', '\r');
+  await until(tui, () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`) ?? false);
+  await until(tui, () => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
+  await tui.press('\r');
+  assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
+}
+
+/** Waits for the result screen, which is the only body that prints the result heading. */
+async function result(tui: TuiHarness): Promise<string[]> {
+  await until(tui, () => tui.frame().includes(t.tui.resultTitle), 2500);
+  assert.ok(tui.frame().includes(t.tui.resultTitle), `no result screen:\n${tui.frame()}`);
+  return tui.lines();
+}
 
 /** The two offered updates, told apart by their command: a mark either runs one or it does not. */
 const NODE_UPDATE = ['npm', 'install', '-g', 'node-update'];
@@ -236,6 +355,171 @@ test('the marks are exactly the requirement ids the core receives, for one, for 
   assert.deepEqual(toggleUpdate(['node'], 'node'), []);
   assert.deepEqual(allUpdates(plan, []), ['node', 'fake']);
   assert.deepEqual(allUpdates(plan, ['node', 'fake']), []);
+});
+
+test('while the write runs the body names the work, counts real seconds and refuses to leave', async () => {
+  const root = planRoot(['skill-a', 'hook-a']);
+  const runner = new GatedRunner();
+  const ctx = createContext({ home: preparedHome(root, ['.fake'], false), root, runner, platform: 'linux' });
+  const tui = await startTui({ data: loadData(root), ctx, width: 120 });
+  try {
+    await journey(tui);
+    await tui.press('y');
+    const busy = tui.frame();
+    assert.match(busy, /applying… \d+s/, busy);
+    assert.ok(busy.includes(t.tui.applyShape(2, 1, 0)), busy);
+    assert.ok(busy.includes(t.tui.applyNothingElse), busy);
+    assert.ok(busy.includes(t.tui.applyRefusal), busy);
+    assert.equal(/[%█░▒▓⠁-⣿]/.test(busy), false, 'a spinner, bar or percentage appeared');
+    expectFrame(tui.lines(), { width: 120, rows: 30 });
+
+    for (const key of ['q', '\u001B']) {
+      await tui.press(key);
+      const lines = tui.lines();
+      assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, `${key} left the write: ${lines[0] ?? ''}`);
+      assert.ok(tui.frame().includes(t.tui.applyRefusal), tui.frame());
+    }
+
+    // The count comes from the clock, so wait for the tick instead of guessing a duration.
+    await until(tui, () => /applying… [1-9]/.test(tui.frame()), 2500);
+    assert.match(tui.frame(), /applying… [1-9]\d*s/, 'the busy line never counted a second');
+    assert.equal(tui.frame().includes('%'), false, 'a percentage appeared');
+
+    runner.release();
+    const lines = await result(tui);
+    assert.ok(lines.includes(`${t.applyLabels.ok}  skill-a → fake`), lines.join('\n'));
+    assert.ok(lines.includes(`${t.applyLabels.ok}  hook-a → fake`), lines.join('\n'));
+    assert.equal(tui.frame().includes(t.tui.applyRefusal), false, 'the refusal outlived the write');
+  } finally {
+    await tui.stop();
+  }
+
+  // At 40 columns the refusal is exactly the frame's width, so it must arrive whole, not cut.
+  const narrowCtx = createContext({ home: preparedHome(root, ['.fake'], false), root, runner: new GatedRunner(), platform: 'linux' });
+  const narrow = await startTui({ data: loadData(root), ctx: narrowCtx, width: 40 });
+  try {
+    await journey(narrow);
+    await narrow.press('y');
+    const lines = narrow.lines();
+    expectFrame(lines, { width: 40, rows: 30 });
+    assert.match(narrow.frame(), /applying… \d+s/, narrow.frame());
+    assert.ok(lines.includes(t.tui.applyRefusal), 'the refusal was cut on the narrow frame');
+  } finally {
+    await narrow.stop();
+  }
+});
+
+test('the result is one row per entry: installed, already installed, not covered and error', async () => {
+  const root = planRoot(['skill-a', 'mcp-a', 'hook-a', 'mcp-b'], true);
+  const runner = new MixedRunner();
+  const ctx = createContext({ home: preparedHome(root, ['.fake', '.other']), root, runner, platform: 'linux' });
+  const tui = await startTui({ data: loadData(root), ctx, width: 120 });
+  try {
+    await journey(tui);
+    await tui.press('y');
+    const lines = await result(tui);
+    expectFrame(lines, { width: 120, rows: 30 });
+
+    const rows = [
+      `${t.applyLabels.ok}  skill-a → fake`,
+      `${t.applyLabels.unsupported}  skill-a → other (${t.providerMissing})`,
+      `${t.applyLabels.error}  mcp-a → fake (mcp exploded)`,
+      `${t.applyLabels.unsupported}  mcp-a → other (${t.providerMissing})`,
+      `${t.applyLabels.already}  hook-a → fake`,
+      `${t.applyLabels.unsupported}  mcp-b → other (${t.providerMissing})`,
+    ];
+    const at = lines.indexOf(t.tui.resultTitle);
+    assert.deepEqual(lines.slice(at + 1, at + 1 + rows.length), rows, 'the result is not the formatter rows');
+    for (const verdict of ['success', 'complete', 'done', 'failed']) {
+      assert.equal(tui.frame().includes(verdict), false, `the result claims a verdict: ${verdict}`);
+    }
+
+    const keybar = lines[lines.length - 1] as string;
+    assert.ok(keybar.includes(`${t.tui.keyNames.return} ${t.tui.keys.exit}`), keybar);
+    assert.ok(keybar.includes(`s ${t.tui.surfaces.status}`), keybar);
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('a requirement failure is its own row, and the items it blocked are rows too', async () => {
+  const root = planRoot(['skill-a']);
+  const runner = new BrokenRunner();
+  const ctx = createContext({ home: preparedHome(root, ['.fake']), root, runner, platform: 'linux' });
+  const tui = await startTui({ data: loadData(root), ctx, width: 120 });
+  try {
+    await journey(tui);
+    await tui.press('y');
+    const lines = await result(tui);
+    assert.ok(lines.includes(t.requirementFailed('node', 'node ERR! denied')), lines.join('\n'));
+    assert.ok(lines.includes(t.requirementFailed('fake', 'npm ERR! EACCES')), lines.join('\n'));
+    const blocked = lines.find((line) => line.startsWith(`${t.applyLabels.error}  skill-a → fake`));
+    assert.ok(blocked?.includes(t.requirementUnmet('node')), String(blocked));
+    assert.equal(tui.frame().includes(t.applyLabels.ok), false, 'a blocked item was reported as installed');
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('the result offers its ways out: s opens status, Esc returns to the form, Enter exits', async () => {
+  const root = planRoot(['skill-a', 'mcp-a', 'hook-a', 'mcp-b'], true);
+  const open = async (): Promise<TuiHarness> => {
+    const ctx = createContext({ home: preparedHome(root, ['.fake', '.other']), root, runner: new MixedRunner(), platform: 'linux' });
+    const tui = await startTui({ data: loadData(root), ctx, width: 120 });
+    await journey(tui);
+    await tui.press('y');
+    await result(tui);
+    return tui;
+  };
+
+  const toStatus = await open();
+  try {
+    await toStatus.press('s');
+    assert.equal(toStatus.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`), true, toStatus.lines()[0] ?? '');
+  } finally {
+    await toStatus.stop();
+  }
+
+  const toForm = await open();
+  try {
+    await toForm.press('\u001B');
+    const lines = toForm.lines();
+    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, lines[0] ?? '');
+    assert.ok(lines.includes(`  ${t.tui.chosenOf(2, 2)}`), 'the selection was lost on the way back');
+  } finally {
+    await toForm.stop();
+  }
+
+  const toExit = await open();
+  const exited = toExit.waitUntilExit().then(() => true);
+  await toExit.press('\r');
+  const left = await Promise.race([exited, new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2000))]);
+  assert.equal(left, true, 'Enter did not exit');
+});
+
+test('at 40 columns the result wraps and no line leaves the frame', async () => {
+  const root = planRoot(['skill-a', 'mcp-a', 'hook-a', 'mcp-b'], true);
+  const ctx = createContext({ home: preparedHome(root, ['.fake', '.other']), root, runner: new MixedRunner(), platform: 'linux' });
+  const tui = await startTui({ data: loadData(root), ctx, width: 40 });
+  try {
+    await journey(tui);
+    await tui.press('y');
+    const lines = await result(tui);
+    expectFrame(lines, { width: 40, rows: 30 });
+    assert.ok(lines.some((line) => line.startsWith(`${t.applyLabels.ok}  skill-a →`)), lines.join('\n'));
+    assert.ok(lines.some((line) => line.startsWith(t.applyLabels.unsupported)), lines.join('\n'));
+  } finally {
+    await tui.stop();
+  }
+});
+
+test('a status line wider than the frame takes lines from the body, not from the keybar', () => {
+  const refusal = { text: t.tui.applyRefusal, tone: 'warning' as const };
+  assert.equal(statusLines(refusal, 40).length, 1, 'the refusal fits 40 columns exactly');
+  const narrow = statusLines(refusal, 20);
+  assert.ok(narrow.length > 1, 'a 20-column frame wraps it');
+  assert.ok(narrow.every((line) => line.length <= 20), narrow.join(' | '));
+  assert.equal(bodyHeight(30, refusal, 20), 30 - 3 - narrow.length, 'the wrapped status line came out of the body');
 });
 
 test('a mark survives the narrow layout: it is the box and the words, never a colour', async () => {

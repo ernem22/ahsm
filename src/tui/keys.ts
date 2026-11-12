@@ -1,5 +1,6 @@
 import type { Key } from 'ink';
 import { t } from '../i18n.js';
+import type { Tone } from '../render.js';
 import { advance, moveCursor, stepBack, toggleFocused, toggleSection, type InstallForm } from './install.js';
 import type { RowWindow } from './window.js';
 
@@ -23,11 +24,13 @@ export interface KeyHost {
   readonly updates: readonly string[];
   /** A write is in flight: its own keys are off until it finishes. */
   readonly applying: boolean;
+  /** The write finished, so the apply surface shows the result rather than the plan. */
+  readonly result: boolean;
   go(surface: SurfaceId): void;
   openHelp(): void;
   closeHelp(): void;
   quit(): void;
-  say(message: string | undefined): void;
+  say(message: string | undefined, tone?: Tone): void;
   setInstall(form: InstallForm): void;
   movePlan(delta: number): void;
   pagePlan(delta: number): void;
@@ -46,6 +49,8 @@ export interface KeyBinding {
   hidden?: boolean;
   /** Inactive and unlisted while it returns false. */
   when?(host: KeyHost): boolean;
+  /** Returns the reason it does not act; the key stays listed and pressing it says so. */
+  refuses?(host: KeyHost): string | undefined;
   run(host: KeyHost): void;
 }
 
@@ -62,11 +67,25 @@ export const RAIL: readonly { key: string; surface: SurfaceId }[] = [
   { key: 'x', surface: 'remove' },
 ];
 
+/**
+ * A write is in flight. Every key that would leave the surface — or start a second write — says why it
+ * does not, because writes cannot be cancelled and the result is the only honest thing to wait for.
+ */
+function refusesDuringWrite(host: KeyHost): string | undefined {
+  return host.applying ? t.tui.applyRefusal : undefined;
+}
+
+/** The rows keys act on a body that is on screen: during the write the body is the busy block. */
+function notWhileWriting(host: KeyHost): boolean {
+  return !host.applying;
+}
+
 /** The rail letters as bindings: the rail prints them in the header, so they are not keybar entries. */
 const navigation: KeyTable = RAIL.map(({ key, surface }) => ({
   keys: [key],
   label: t.tui.surfaces[surface],
   hidden: true,
+  refuses: refusesDuringWrite,
   run: (host: KeyHost) => host.go(surface),
 }));
 
@@ -76,8 +95,8 @@ const navigation: KeyTable = RAIL.map(({ key, surface }) => ({
  */
 const closeBinding: KeyBinding = { keys: ['escape'], label: t.tui.keys.close, run: (host) => host.closeHelp() };
 
-/** Quitting is the one key that stays live in every mode. */
-const quitBinding: KeyBinding = { keys: ['q'], label: t.tui.keys.quit, run: (host) => host.quit() };
+/** Quitting is the one key that stays live in every mode; a write in flight is the one exception. */
+const quitBinding: KeyBinding = { keys: ['q'], label: t.tui.keys.quit, refuses: refusesDuringWrite, run: (host) => host.quit() };
 
 /** Keys that work on every surface; `?` and `q` also appear in every keybar. */
 export const globalKeys: KeyTable = [
@@ -87,7 +106,9 @@ export const globalKeys: KeyTable = [
     keys: ['escape'],
     label: t.tui.keys.back,
     when: (host) => host.surface !== 'install',
-    run: (host) => host.go(host.surface === 'apply' ? 'plan' : 'install'),
+    refuses: refusesDuringWrite,
+    // The confirm declines back to the plan; a finished write has no plan left to decline to.
+    run: (host) => host.go(host.surface === 'apply' && !host.result ? 'plan' : 'install'),
   },
   quitBinding,
 ];
@@ -158,12 +179,14 @@ const installTable: KeyTable = [
 const markBinding: KeyBinding = {
   keys: ['space'],
   label: t.tui.keys.mark,
+  when: notWhileWriting,
   run: (host) => host.toggleUpdate(),
 };
 
 const markAllBinding: KeyBinding = {
   keys: ['a'],
   label: t.tui.keys.markAll,
+  when: notWhileWriting,
   run: (host) => host.markAllUpdates(),
 };
 
@@ -183,36 +206,42 @@ const planNavigation: KeyTable = [
     keys: ['up'],
     label: t.tui.keys.move,
     hidden: true,
+    when: notWhileWriting,
     run: (host) => host.movePlan(-1),
   },
   {
     keys: ['down'],
     label: t.tui.keys.move,
     hidden: true,
+    when: notWhileWriting,
     run: (host) => host.movePlan(1),
   },
   {
     keys: ['pageup'],
     label: t.tui.keys.move,
     hidden: true,
+    when: notWhileWriting,
     run: (host) => host.pagePlan(-host.page),
   },
   {
     keys: ['pagedown'],
     label: t.tui.keys.move,
     hidden: true,
+    when: notWhileWriting,
     run: (host) => host.pagePlan(host.page),
   },
   {
     keys: ['g'],
     label: t.tui.keys.first,
     hidden: true,
+    when: notWhileWriting,
     run: (host) => host.resetPlan('first'),
   },
   {
     keys: ['G'],
     label: t.tui.keys.last,
     hidden: true,
+    when: notWhileWriting,
     run: (host) => host.resetPlan('last'),
   },
 ];
@@ -244,7 +273,7 @@ const applyTable: KeyTable = [
   {
     keys: ['y'],
     label: t.tui.keys.apply,
-    when: (host) => !host.applying,
+    refuses: refusesDuringWrite,
     run: (host) => host.runApply(),
   },
   ...planNavigation,
@@ -253,7 +282,27 @@ const applyTable: KeyTable = [
   {
     keys: ['n'],
     label: t.tui.keys.decline,
+    refuses: refusesDuringWrite,
     run: (host) => host.go('plan'),
+  },
+];
+
+/**
+ * The result: every key here leaves, and each names its own destination. `Enter` exits, `s` opens the
+ * follow-up question, `Esc` goes back to the form with the selection, `n` returns to the plan, and `r`
+ * reads the plan again after the write so the rows show what is now true.
+ */
+const resultTable: KeyTable = [
+  { keys: ['return'], label: t.tui.keys.exit, run: (host) => host.quit() },
+  { keys: ['s'], label: t.tui.surfaces.status, run: (host) => host.go('status') },
+  { keys: ['n'], label: t.tui.surfaces.plan, run: (host) => host.go('plan') },
+  {
+    keys: ['r'],
+    label: t.tui.keys.rebuild,
+    run: (host) => {
+      host.rebuildPlan();
+      host.go('plan');
+    },
   },
 ];
 
@@ -268,6 +317,12 @@ export const surfaceKeys: Record<SurfaceId, KeyTable> = {
   update: [],
   remove: [],
 };
+
+/** The apply surface's keys follow its state: confirming, then the result once the write resolved. */
+export function surfaceKeyTable(surface: SurfaceId, host: KeyHost): KeyTable {
+  if (surface === 'apply' && host.result) return resultTable;
+  return surfaceKeys[surface];
+}
 
 /** The overlay is a mode: only closing it and quitting stay live while it is open. */
 export const helpKeys: KeyTable = [
@@ -293,8 +348,8 @@ export function tokenOf(input: string, key: Key): string {
 }
 
 /** The table the current mode dispatches: the surface's own keys, then the global ones. */
-export function activeKeys(surface: SurfaceId, help: boolean): KeyTable {
-  return help ? helpKeys : [...surfaceKeys[surface], ...globalKeys];
+export function activeKeys(surface: SurfaceId, help: boolean, host: KeyHost): KeyTable {
+  return help ? helpKeys : [...surfaceKeyTable(surface, host), ...globalKeys];
 }
 
 /**
@@ -306,13 +361,18 @@ export function activeKeys(surface: SurfaceId, help: boolean): KeyTable {
  * listed even when the window is too narrow for the rail — width hides chrome, never knowledge.
  */
 export function frameKeys(surface: SurfaceId, help: boolean, host: KeyHost): KeyBinding[] {
-  const table: KeyTable = help ? [...surfaceKeys[surface], ...navigation, closeBinding, quitBinding] : activeKeys(surface, false);
+  const table: KeyTable = help
+    ? [...surfaceKeyTable(surface, host), ...navigation, closeBinding, quitBinding]
+    : activeKeys(surface, false, host);
   return table.filter((binding) => binding.when?.(host) ?? true);
 }
 
-/** The keybar's half of the frame's key set: everything the overlay lists except the `hidden` entries. */
-export function keybarKeys(frame: KeyBinding[]): KeyBinding[] {
-  return frame.filter((binding) => !binding.hidden);
+/**
+ * The keybar's half of the frame's key set: everything the overlay lists except the `hidden` entries
+ * and the ones that would refuse this press — a bar never advertises a key that does nothing.
+ */
+export function keybarKeys(frame: KeyBinding[], host: KeyHost): KeyBinding[] {
+  return frame.filter((binding) => !binding.hidden && binding.refuses?.(host) === undefined);
 }
 
 export function findBinding(table: KeyTable, host: KeyHost, token: string): KeyBinding | undefined {

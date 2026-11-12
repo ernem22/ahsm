@@ -4,7 +4,11 @@ import { buildPlan } from '../core/plan.js';
 import { applyPlan } from '../core/apply.js';
 import type { Ctx } from '../context.js';
 import { t } from '../i18n.js';
+import { toneColor, type Tone } from '../render.js';
 import type { Data } from '../types.js';
+import { applyShape, hasResult, isApplying, type WriteState } from './apply.js';
+import { ApplyBody } from './apply-body.js';
+import { wrap } from './format.js';
 import { HelpOverlay } from './help.js';
 import { initialForm } from './install.js';
 import {
@@ -28,9 +32,20 @@ import { emptyWindow, goTo, moveBy } from './window.js';
 /** The rail needs 100 columns; below it the letters still work, so width never changes what is reachable. */
 export const RAIL_MIN_WIDTH = 100;
 
-/** Header (two lines), status line when there is one, and the keybar: what the body may use. */
-export function bodyHeight(rows: number, status: string | undefined): number {
-  return Math.max(1, rows - 3 - (status === undefined ? 0 : 1));
+/** One line of the status strip: what happened, in the tone that says how much it matters. */
+export interface StatusLine {
+  text: string;
+  tone: Tone;
+}
+
+/** The status line wraps like any other text, so a long refusal cannot push the keybar off the frame. */
+export function statusLines(status: StatusLine | undefined, width: number): string[] {
+  return status === undefined ? [] : wrap(status.text, width);
+}
+
+/** Header (two lines), the status strip when there is one, and the keybar: what the body may use. */
+export function bodyHeight(rows: number, status: StatusLine | undefined, width: number): number {
+  return Math.max(1, rows - 3 - statusLines(status, width).length);
 }
 
 export interface ShellProps {
@@ -44,7 +59,7 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const { columns, rows } = useWindowSize();
   const [surface, setSurface] = useState<SurfaceId>('install');
   const [help, setHelp] = useState(false);
-  const [status, setStatus] = useState<string | undefined>();
+  const [status, setStatus] = useState<StatusLine | undefined>();
   // The form lives here, not in the install component: leaving the surface keeps every choice.
   const [install, setInstall] = useState(() => initialForm(data, ctx));
   const [planWindow, setPlanWindow] = useState(emptyWindow);
@@ -52,13 +67,19 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const [requirementFocus, setRequirementFocus] = useState<number | undefined>();
   // The requirement ids the user marked; a rebuild keeps them until they no longer exist.
   const [updates, setUpdates] = useState<string[]>([]);
-  const [applying, setApplying] = useState(false);
+  const [write, setWrite] = useState<WriteState>({ status: 'idle' });
   // The plan asks the core the same question `agentenv plan` does, for the selection on screen.
   const plan = useRead(() => buildPlan(data, ctx, planSelection(install)));
 
+  const applying = isApplying(write);
+  const result = hasResult(write);
   const entryCount = plan.state.value?.entries.length ?? 0;
   const requirementCount = plan.state.value?.requirements.length ?? 0;
   const focus = requirementFocus !== undefined && requirementFocus < requirementCount ? requirementFocus : undefined;
+
+  const say = (message: string | undefined, tone: Tone = 'dim'): void => {
+    setStatus(message === undefined ? undefined : { text: message, tone });
+  };
 
   /** The focused requirement, when the focus is on one that offers a markable update. */
   const toggleMark = (): void => {
@@ -109,11 +130,20 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   /** `y`: the core gets exactly the marks, and no options at all when nothing is marked. */
   const runApply = (): void => {
     const value = plan.state.value;
-    if (!value || applying) return;
+    if (!value || write.status === 'applying') return;
     const marked = updates.filter((id) => markableUpdates(value).includes(id));
-    setApplying(true);
-    void applyPlan(data, ctx, value, marked.length > 0 ? { updates: marked } : undefined).finally(() =>
-      setApplying(false),
+    setWrite({ status: 'applying', startedAt: Date.now(), shape: applyShape(value) });
+    // Writes cannot be cancelled, so the refusal is on screen for as long as it is true.
+    say(t.tui.applyRefusal, 'warning');
+    void applyPlan(data, ctx, value, marked.length > 0 ? { updates: marked } : undefined).then(
+      (outcome) => {
+        setWrite({ status: 'done', outcome });
+        setStatus(undefined);
+      },
+      (error: unknown) => {
+        setWrite({ status: 'error', message: error instanceof Error ? error.message : String(error) });
+        setStatus(undefined);
+      },
     );
   };
 
@@ -128,14 +158,14 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     install,
     plan: planWindow,
     planCount: entryCount,
-    page: planPage(plan.state.value, columns, bodyHeight(rows, status), planWindow),
+    page: planPage(plan.state.value, columns, bodyHeight(rows, status, columns), planWindow),
     requirementFocus: focus,
     requirementCount,
     go: setSurface,
     openHelp: () => setHelp(true),
     closeHelp: () => setHelp(false),
     quit: () => exit(),
-    say: setStatus,
+    say,
     setInstall,
     movePlan,
     pagePlan,
@@ -143,13 +173,21 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     rebuildPlan: plan.load,
     updates,
     applying,
+    result,
     toggleUpdate: toggleMark,
     markAllUpdates: markAll,
     runApply,
   };
 
   useInput((input, key) => {
-    findBinding(activeKeys(surface, help), host, tokenOf(input, key))?.run(host);
+    const binding = findBinding(activeKeys(surface, help, host), host, tokenOf(input, key));
+    if (!binding) return;
+    const refusal = binding.refuses?.(host);
+    if (refusal !== undefined) {
+      say(refusal, 'warning');
+      return;
+    }
+    binding.run(host);
   });
 
   // The target is what the user chose, not what detection found: a not detected harness is a choice.
@@ -162,7 +200,7 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   // While the overlay is open the live keys are the overlay's own, so the keybar never lists a dead key.
   const live = frameKeys(surface, false, host);
   const keys = help ? frameKeys(surface, true, host) : live;
-  const listed = keybarKeys(help ? [...helpKeys] : live);
+  const listed = keybarKeys(help ? [...helpKeys] : live, host);
 
   return (
     <Box flexDirection="column" height={rows}>
@@ -174,21 +212,30 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
       <Box flexDirection="column" flexGrow={1}>
         {help ? (
           <HelpOverlay title={t.tui.helpTitle(surfaceLabel)} keys={keys} />
+        ) : surface === 'apply' && write.status !== 'idle' ? (
+          <ApplyBody write={write} width={columns} height={bodyHeight(rows, status, columns)} />
         ) : (
           <SurfaceBody
             surface={surface}
             data={data}
             install={install}
             width={columns}
-            height={bodyHeight(rows, status)}
+            height={bodyHeight(rows, status, columns)}
             plan={plan.state}
             planWindow={planWindow}
             marked={updates}
             requirementFocus={focus}
+            write={write}
           />
         )}
       </Box>
-      {status ? <Text dimColor>{status}</Text> : null}
+      {status
+        ? statusLines(status, columns).map((line, at) => (
+            <Text key={at} color={toneColor(status.tone)} dimColor={status.tone === 'dim'}>
+              {line}
+            </Text>
+          ))
+        : null}
       <Text dimColor>{keybarText(listed, columns)}</Text>
     </Box>
   );

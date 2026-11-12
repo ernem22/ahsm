@@ -194,9 +194,19 @@ export const t = {
       markAll: 'mark all',
       apply: 'apply',
       decline: 'decline',
+      exit: 'exit',
     },
     helpTitle: (surface: string) => `keys — ${surface}`,
     keybarSeparator: ' · ',
+    /** While a write runs: what it is doing, how much of it, and what is not happening beside it. */
+    applying: (seconds: number) => `applying… ${seconds}s`,
+    applyShape: (installs: number, hooks: number, blocked: number) =>
+      `${installs} install${installs === 1 ? '' : 's'} · ${hooks} hook write${hooks === 1 ? '' : 's'} · ${blocked} blocked`,
+    applyNothingElse: 'nothing else runs until this finishes',
+    applyRefusal: 'q and Esc are disabled until it finishes',
+    resultTitle: 'result',
+    /** A result taller than the window: the rows that do not fit are counted, never silently dropped. */
+    moreRows: (count: number) => `… ${count} more row${count === 1 ? '' : 's'}`,
     /** The install surface's three sections, in the order it prints them. */
     sections: { harnesses: 'harnesses', package: 'package', items: 'items' } as Record<Stage, string>,
     chosenOf: (chosen: number, total: number) => `${chosen} of ${total} chosen`,
