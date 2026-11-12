@@ -130,10 +130,10 @@ export function fixtureHome(detected = false): string {
 }
 
 /** The real app's data and context, pointed at the offline fixtures and a fake home. */
-export function fixture(detected = false): { data: Data; ctx: Ctx } {
+export function fixture(detected = false, root = OFFLINE_ROOT): { data: Data; ctx: Ctx } {
   const home = fixtureHome(detected);
   return {
-    data: loadData(OFFLINE_ROOT),
-    ctx: createContext({ home, root: OFFLINE_ROOT, runner: new RecordingRunner() }),
+    data: loadData(root),
+    ctx: createContext({ home, root, runner: new RecordingRunner() }),
   };
 }

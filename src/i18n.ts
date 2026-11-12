@@ -202,8 +202,12 @@ export const t = {
     urlPrefix: 'url:',
     packagePrefix: 'package:',
     linkPrefix: 'link:',
+    /** The marks a rows surface leads with: the focus mark, its stand-in, and the two choice boxes. */
+    marks: { focused: '> ', blank: '  ', chosen: '[x] ', unchosen: '[ ] ' },
     /** Between the parts of one row's detail, and in front of an indented detail line. */
     detailSeparator: '    ',
+    /** Between two parts of the same detail, such as a hook's event and its matcher. */
+    partSeparator: ' · ',
     ellipsis: '…',
   },
   help: [

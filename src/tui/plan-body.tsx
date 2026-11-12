@@ -6,16 +6,16 @@ import { toneColor, type Tone } from '../render.js';
 import { truncate, wrap } from './format.js';
 import { planBlocks, planTail, type PlanBlock } from './plan.js';
 import type { ReadState } from './read.js';
-import { goTo, rowsInView, type RowWindow } from './window.js';
+import { goTo, rowsInView, type RowWindow, type WindowView } from './window.js';
 
-/** Two columns need 100 columns: a 50-column list, a 2-column gutter, a 62-column detail pane. */
+/** Two columns need 100 columns: a 50-column list, a 2-column gutter, and the rest for the detail. */
 export const WIDE_WIDTH = 100;
 export const ROW_COLUMN = 50;
 export const DETAIL_COLUMN = 62;
 export const GUTTER = 2;
 
-const MARK = '> ';
-const BLANK = '  ';
+/** The surface prints one heading line above the body it hands to `planFrame`. */
+export const PLAN_HEADING = 1;
 
 /** One span of a body line: its text, its tone, and whether it carries the focus. */
 interface Cell {
@@ -37,7 +37,7 @@ function columns(width: number): { rows: number; detail: number } | undefined {
 function head(block: PlanBlock, focused: boolean, width: number): Cell[] {
   const line = block.lines[0];
   if (!line) return [];
-  const mark = focused ? MARK : BLANK;
+  const mark = focused ? t.tui.marks.focused : t.tui.marks.blank;
   return [
     { text: mark, tone: line.tone, inverse: focused },
     { text: truncate(line.text, Math.max(0, width - mark.length)), tone: line.tone, inverse: focused },
@@ -65,15 +65,23 @@ function detailCell(block: PlanBlock, width: number, height: number): BodyLine[]
   return lines.slice(0, height);
 }
 
+/** The rows in view at this index, in lines: the focused row's wrapped continuations consume the window. */
+function rowView(blocks: PlanBlock[], index: number, width: number, height: number): WindowView {
+  const focused = goTo(index, blocks.length).index;
+  const heights = columns(width)
+    ? blocks.map(() => 1)
+    : blocks.map((block, at) => entryHeight(block, at === focused, width));
+  return rowsInView({ index: focused }, heights, height);
+}
+
 /** The rows the window shows, one column or two, padded to exactly `height` lines. */
 function rowLines(blocks: PlanBlock[], index: number, width: number, height: number): BodyLine[] {
   const itself = blocks[index];
   const heads = blocks.map((block, at) => head(block, at === index, columns(width)?.rows ?? width));
   const split = columns(width);
+  const view = rowView(blocks, index, width, height);
 
   if (!split) {
-    const heights = blocks.map((block, at) => entryHeight(block, at === index, width));
-    const view = rowsInView({ index }, heights, height);
     const lines: BodyLine[] = [];
     for (let at = view.start; at < view.end; at += 1) {
       lines.push(heads[at] ?? []);
@@ -84,7 +92,6 @@ function rowLines(blocks: PlanBlock[], index: number, width: number, height: num
     return padLines(lines, height);
   }
 
-  const view = rowsInView({ index }, blocks.map(() => 1), height);
   const detail = itself ? detailCell(itself, split.detail, height) : [];
   const lines: BodyLine[] = [];
   for (let offset = 0; offset < height; offset += 1) {
@@ -119,15 +126,38 @@ function padLines(lines: BodyLine[], height: number): BodyLine[] {
  */
 export function planFrame(plan: Plan, width: number, height: number, window: RowWindow): BodyLine[] {
   const blocks = planBlocks(plan);
+  return [
+    ...rowLines(blocks, goTo(window.index, blocks.length).index, width, rowHeight(plan, width, height)),
+    ...tailLines(plan, width, height),
+  ];
+}
+
+/** The lines the body pins above the keybar: the requirements, the warnings and the count, wrapped. */
+function tailLines(plan: Plan, width: number, height: number): BodyLine[] {
   const tail = planTail(plan);
-  const tailLines = [...tail.requirements, ...tail.warnings, tail.count].flatMap((line) =>
+  const lines = [...tail.requirements, ...tail.warnings, tail.count].flatMap((line) =>
     wrapped(line.text, line.tone, width),
   );
   // A body shorter than the rows below it gives up row lines, never the count line.
   const room = Math.max(0, Math.max(1, height) - 1);
-  const kept = tailLines.length > room ? tailLines.slice(tailLines.length - room) : tailLines;
-  const rows = rowLines(blocks, goTo(window.index, blocks.length).index, width, Math.max(1, Math.max(1, height) - kept.length));
-  return [...rows, ...kept];
+  return lines.length > room ? lines.slice(lines.length - room) : lines;
+}
+
+/** The lines the row window gets: the body it was given, minus what the tail pins. */
+function rowHeight(plan: Plan, width: number, height: number): number {
+  return Math.max(1, Math.max(1, height) - tailLines(plan, width, height).length);
+}
+
+/**
+ * One page is one window of rows — exactly the rows this frame shows — so `PgDn` never leaves a row
+ * unread between the view it left and the view it lands on.
+ */
+export function planPage(plan: Plan | undefined, width: number, height: number, window: RowWindow): number {
+  const body = Math.max(1, height - PLAN_HEADING);
+  if (!plan) return body;
+  const blocks = planBlocks(plan);
+  const view = rowView(blocks, goTo(window.index, blocks.length).index, width, rowHeight(plan, width, body));
+  return Math.max(1, view.end - view.start);
 }
 
 /** One body line: each cell keeps its own tone, and focus is the inverse video the design asks for. */
@@ -159,7 +189,9 @@ export function PlanSurface({ read, width, height, window }: PlanSurfaceProps): 
     <Box flexDirection="column">
       <Text dimColor>{t.tui.surfaces.plan}</Text>
       {read.status === 'done' && read.value ? (
-        planFrame(read.value, width, Math.max(1, height - 1), window).map((cells, at) => <Line key={at} cells={cells} />)
+        planFrame(read.value, width, Math.max(1, height - PLAN_HEADING), window).map((cells, at) => (
+          <Line key={at} cells={cells} />
+        ))
       ) : read.status === 'error' ? (
         <Text color={toneColor('error')}>{read.message}</Text>
       ) : (

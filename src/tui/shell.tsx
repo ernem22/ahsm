@@ -18,6 +18,7 @@ import {
   type KeyHost,
   type SurfaceId,
 } from './keys.js';
+import { planPage } from './plan-body.js';
 import { planSelection } from './plan.js';
 import { useRead } from './read.js';
 import { SurfaceBody } from './surfaces.js';
@@ -60,7 +61,7 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     install,
     plan: planWindow,
     planCount: plan.state.value?.entries.length ?? 0,
-    page: Math.max(1, rows - 6),
+    page: planPage(plan.state.value, columns, bodyHeight(rows, status), planWindow),
     go: setSurface,
     openHelp: () => setHelp(true),
     closeHelp: () => setHelp(false),

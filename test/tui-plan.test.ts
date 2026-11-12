@@ -180,7 +180,7 @@ test('the requirement rows carry the too old verdict, its update command and a m
 });
 
 test('two columns at 120, one column at 80, and no line wider than the frame', async () => {
-  for (const width of [120, 80]) {
+  for (const width of [120, 100, 80]) {
     const tui = await startTui({ ...withRunner(ready()), width });
     try {
       await openPlan(tui);
@@ -302,6 +302,72 @@ test('a rebuild keeps the plan rows in their order', async () => {
     await tui.press('r');
     await settle(tui, () => tui.frame().includes('blocked:'));
     assert.deepEqual(tui.lines(), first, 'the same plan rendered differently after r');
+  } finally {
+    await tui.stop();
+  }
+});
+
+/** The `extra-N` row heads a frame prints, in the order it prints them; a continuation line is not a head. */
+function extraIndices(lines: string[]): number[] {
+  const found = lines.map((line) => /^[> ]{2}\+ extra-(\d+)/.exec(line)?.[1]);
+  return found.filter((at): at is string => at !== undefined).map(Number);
+}
+
+/** The `extra-N` row the focus mark is on. */
+function focusedExtra(lines: string[]): number | undefined {
+  const line = lines.find((row) => row.startsWith(t.tui.marks.focused) && row.includes('extra-'));
+  const at = line === undefined ? undefined : /extra-(\d+)/.exec(line)?.[1];
+  return at === undefined ? undefined : Number(at);
+}
+
+test('PgDn moves by exactly the rows the window shows, so no row is skipped', async () => {
+  const tui = await startTui({ ...withRunner(ready(), longRoot()), width: 80, rows: 16 });
+  try {
+    await openPlan(tui);
+    const before = extraIndices(tui.lines());
+    assert.equal(focusedExtra(tui.lines()), 0, 'the first row is not focused');
+    assert.ok(before.length > 1, before.join(','));
+    assert.deepEqual(
+      before,
+      before.map((_, at) => at),
+      'the first window is not the top of the list',
+    );
+
+    await tui.press('\u001B[6~');
+    const after = extraIndices(tui.lines());
+    assert.equal(
+      focusedExtra(tui.lines()),
+      before.length,
+      `PgDn moved past a row: ${before.length} rows were on screen and the focus went to ${focusedExtra(tui.lines())}`,
+    );
+    assert.ok(Math.min(...after) <= Math.max(...before) + 1, `a row was skipped: ${before.join(',')} then ${after.join(',')}`);
+  } finally {
+    await tui.stop();
+  }
+});
+
+/** At exactly 100 columns the detail pane is `width − 52`, not the 62 it is from 114 columns up. */
+const DETAIL_MAX_AT_100 = 48;
+
+test('at exactly 100 columns the detail column is 48 wide, and no line leaves the frame', async () => {
+  const tui = await startTui({ ...withRunner(ready()), width: 100 });
+  try {
+    await openPlan(tui);
+    await tui.press('\u001B[B', '\u001B[B');
+    const lines = tui.lines();
+
+    // 50 columns of rows, a 2-column gutter, and what is left for the detail: 48 here, 62 from 114 up.
+    assert.equal(DETAIL_AT + DETAIL_MAX_AT_100, 100);
+    assert.equal(lines[5]?.startsWith(`${t.tui.marks.focused}+ hook-a`), true, String(lines[5]));
+    assert.equal(
+      lines.some((line) => line.slice(DETAIL_AT).startsWith('+ hook-a → fake')),
+      true,
+      'the detail column does not open at 52',
+    );
+    for (const line of lines) {
+      assert.ok(line.length <= 100, `${line.length} > 100: ${line}`);
+      assert.ok(line.length - DETAIL_AT <= DETAIL_MAX_AT_100, `the detail pane is wider than 48: ${line}`);
+    }
   } finally {
     await tui.stop();
   }

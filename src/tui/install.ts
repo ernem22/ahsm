@@ -3,6 +3,7 @@ import { detectHarnesses } from '../core/detect.js';
 import { defaultPackageId, resolveSelection } from '../core/selection.js';
 import { t } from '../i18n.js';
 import type { Data, ItemDef } from '../types.js';
+import { goTo } from './window.js';
 
 export const STAGES = ['harnesses', 'package', 'items'] as const;
 export type Stage = (typeof STAGES)[number];
@@ -58,25 +59,35 @@ export function initialForm(data: Data, ctx: Ctx): InstallForm {
   const rows = installRows(data, ctx);
   const packageId = defaultPackageId(data) ?? '';
   const selection = packageId ? resolveSelection(data, ctx) : { harnessIds: [], itemIds: [] };
-  return {
+  return clampCursors({
     stage: 'harnesses',
     ...rows,
     harnessIds: selection.harnessIds,
     packageId,
     itemIds: selection.itemIds,
     cursors: { harnesses: 0, package: rows.packages.findIndex((row) => row.id === packageId), items: 0 },
-  };
+  });
 }
 
 export function chosenPackage(form: InstallForm): PackageRow | undefined {
   return form.packages.find((row) => row.id === form.packageId);
 }
 
-/** The rows the focused section prints, so every action can clamp its cursor against them. */
-export function sectionSize(form: InstallForm): number {
-  if (form.stage === 'harnesses') return form.harnesses.length;
-  if (form.stage === 'package') return form.packages.length;
+/** The rows one section prints, so every action can clamp its cursor against them. */
+export function sectionSize(form: InstallForm, stage: Stage = form.stage): number {
+  if (stage === 'harnesses') return form.harnesses.length;
+  if (stage === 'package') return form.packages.length;
   return chosenPackage(form)?.itemIds.length ?? 0;
+}
+
+/**
+ * Every cursor kept inside its own section: a new package can be shorter than the old one, and a
+ * section that renders with no focused row would leave `space` acting on nothing.
+ */
+function clampCursors(form: InstallForm): InstallForm {
+  const cursors = { ...form.cursors };
+  for (const stage of STAGES) cursors[stage] = goTo(cursors[stage], sectionSize(form, stage)).index;
+  return { ...form, cursors };
 }
 
 /** The item definitions behind the chosen package, in its order. */
@@ -87,7 +98,7 @@ export function packageItems(data: Data, form: InstallForm): ItemDef[] {
 }
 
 function atStage(form: InstallForm, stage: Stage): InstallForm {
-  return { ...form, stage };
+  return clampCursors({ ...form, stage });
 }
 
 /** `space`: one row of the focused section, whichever section that is. */
@@ -105,7 +116,7 @@ export function toggleFocused(form: InstallForm): InstallForm {
   if (form.stage === 'package') {
     const pkg = form.packages[cursor];
     if (!pkg) return form;
-    return { ...form, packageId: pkg.id, itemIds: [...pkg.itemIds] };
+    return clampCursors({ ...form, packageId: pkg.id, itemIds: [...pkg.itemIds] });
   }
   const pkg = chosenPackage(form);
   const id = pkg?.itemIds[cursor];
