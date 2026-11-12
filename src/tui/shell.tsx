@@ -8,8 +8,9 @@ import { HelpOverlay } from './help.js';
 import {
   activeKeys,
   findBinding,
+  frameKeys,
+  keybarKeys,
   keybarText,
-  listedKeys,
   railText,
   tokenOf,
   type KeyHost,
@@ -25,10 +26,10 @@ export interface ShellProps {
   ctx: Ctx;
 }
 
-/** The window: a header naming the surface and the target, a body, a status line, a keybar. */
+/** The window: a header naming the surface and the target, a body, a status line, the keybar last. */
 export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const { exit } = useApp();
-  const { columns } = useWindowSize();
+  const { columns, rows } = useWindowSize();
   const [surface, setSurface] = useState<SurfaceId>('install');
   const [help, setHelp] = useState(false);
   const [status, setStatus] = useState<string | undefined>();
@@ -56,21 +57,22 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
 
   const surfaceLabel = t.tui.surfaces[surface];
   const rail = railText(columns, RAIL_MIN_WIDTH);
-  const overlayKeys = listedKeys(activeKeys(surface, false), host);
-  const keybarKeys = listedKeys(activeKeys(surface, help), host);
+  // One key set for the frame: the overlay prints all of it, the keybar the entries it does not hide.
+  const keys = frameKeys(surface, help, host);
+  const listed = keybarKeys(keys);
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" height={rows}>
       <Box justifyContent="space-between">
         <Text bold>{`${t.title}  ${surfaceLabel}`}</Text>
         {rail ? <Text dimColor>{rail}</Text> : null}
       </Box>
       <Text dimColor>{`${t.target}: ${target}`}</Text>
       <Box flexDirection="column" flexGrow={1}>
-        {help ? <HelpOverlay title={t.tui.helpTitle(surfaceLabel)} keys={overlayKeys} /> : <SurfaceBody surface={surface} />}
+        {help ? <HelpOverlay title={t.tui.helpTitle(surfaceLabel)} keys={keys} /> : <SurfaceBody surface={surface} />}
       </Box>
       {status ? <Text dimColor>{status}</Text> : null}
-      <Text dimColor>{keybarText(keybarKeys, columns)}</Text>
+      <Text dimColor>{keybarText(listed, columns)}</Text>
     </Box>
   );
 }

@@ -19,7 +19,7 @@ export interface KeyBinding {
   /** Input tokens that dispatch this binding; the first one names it on screen. */
   keys: string[];
   label: string;
-  /** Dispatchable but absent from the keybar and the help overlay; the rail has its own row. */
+  /** Absent from the keybar; the rail and the help overlay still print it, because it is a real key. */
   hidden?: boolean;
   /** Inactive and unlisted while it returns false. */
   when?(host: KeyHost): boolean;
@@ -39,12 +39,22 @@ export const RAIL: readonly { key: string; surface: SurfaceId }[] = [
   { key: 'x', surface: 'remove' },
 ];
 
+/** The rail letters as bindings: the rail prints them in the header, so they are not keybar entries. */
 const navigation: KeyTable = RAIL.map(({ key, surface }) => ({
   keys: [key],
   label: t.tui.surfaces[surface],
   hidden: true,
   run: (host: KeyHost) => host.go(surface),
 }));
+
+/**
+ * `Esc` while the overlay is open. The overlay and the keybar share this one binding, so a frame can
+ * never say `Esc back` in one place and `Esc close` in the other.
+ */
+const closeBinding: KeyBinding = { keys: ['escape'], label: t.tui.keys.close, run: (host) => host.closeHelp() };
+
+/** Quitting is the one key that stays live in every mode. */
+const quitBinding: KeyBinding = { keys: ['q'], label: t.tui.keys.quit, run: (host) => host.quit() };
 
 /** Keys that work on every surface; `?` and `q` also appear in every keybar. */
 export const globalKeys: KeyTable = [
@@ -56,7 +66,7 @@ export const globalKeys: KeyTable = [
     when: (host) => host.surface !== 'install',
     run: (host) => host.go('install'),
   },
-  { keys: ['q'], label: t.tui.keys.quit, run: (host) => host.quit() },
+  quitBinding,
 ];
 
 /** One table per surface; its keys are dispatched before the global ones and listed in its keybar. */
@@ -72,9 +82,9 @@ export const surfaceKeys: Record<SurfaceId, KeyTable> = {
 
 /** The overlay is a mode: only closing it and quitting stay live while it is open. */
 export const helpKeys: KeyTable = [
-  { keys: ['escape'], label: t.tui.keys.close, run: (host) => host.closeHelp() },
+  closeBinding,
   { keys: ['?'], label: t.tui.keys.close, hidden: true, run: (host) => host.closeHelp() },
-  { keys: ['q'], label: t.tui.keys.quit, run: (host) => host.quit() },
+  quitBinding,
 ];
 
 /** A keypress as one token, so a table never has to know how Ink spells a key. */
@@ -98,13 +108,26 @@ export function activeKeys(surface: SurfaceId, help: boolean): KeyTable {
   return help ? helpKeys : [...surfaceKeys[surface], ...globalKeys];
 }
 
-export function findBinding(table: KeyTable, host: KeyHost, token: string): KeyBinding | undefined {
-  return table.find((binding) => binding.keys.includes(token) && (binding.when?.(host) ?? true));
+/**
+ * One key set per frame. The overlay prints all of it and the keybar prints the entries that are not
+ * `hidden`, so the two can never disagree about what a key is called or whether it is there.
+ *
+ * While the overlay is open that set is the overlay's own table plus the rail letters: `Esc` really
+ * closes and `?` really closes, so neither is called `back` or `keys`, and the surface's letters stay
+ * listed even when the window is too narrow for the rail — width hides chrome, never knowledge.
+ */
+export function frameKeys(surface: SurfaceId, help: boolean, host: KeyHost): KeyBinding[] {
+  const table: KeyTable = help ? [...surfaceKeys[surface], ...navigation, closeBinding, quitBinding] : activeKeys(surface, false);
+  return table.filter((binding) => binding.when?.(host) ?? true);
 }
 
-/** What the keybar and the help overlay print, in table order. */
-export function listedKeys(table: KeyTable, host: KeyHost): KeyBinding[] {
-  return table.filter((binding) => !binding.hidden && (binding.when?.(host) ?? true));
+/** The keybar's half of the frame's key set: everything the overlay lists except the `hidden` entries. */
+export function keybarKeys(frame: KeyBinding[]): KeyBinding[] {
+  return frame.filter((binding) => !binding.hidden);
+}
+
+export function findBinding(table: KeyTable, host: KeyHost, token: string): KeyBinding | undefined {
+  return table.find((binding) => binding.keys.includes(token) && (binding.when?.(host) ?? true));
 }
 
 /** The key's own name on screen, from the first token it dispatches. */
@@ -113,7 +136,7 @@ export function keyName(binding: KeyBinding): string {
   return t.tui.keyNames[token] ?? token;
 }
 
-/** `space choose` — one keybar entry, the name and the work. */
+/** `space choose` — a binding's own words, the one renderer the keybar, the rail and the overlay use. */
 export function entryText(binding: KeyBinding): string {
   return `${keyName(binding)} ${binding.label}`;
 }
@@ -133,5 +156,5 @@ export function keybarText(bindings: KeyBinding[], width: number): string {
 /** `i install · p plan · …`, or nothing when the header has no room for it. */
 export function railText(width: number, minWidth: number): string | undefined {
   if (width < minWidth) return undefined;
-  return RAIL.map(({ key, surface }) => `${key} ${t.tui.surfaces[surface]}`).join(t.tui.keybarSeparator);
+  return navigation.map(entryText).join(t.tui.keybarSeparator);
 }

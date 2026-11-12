@@ -22,7 +22,7 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI, '');
 }
 
-/** Captures one chunk per rendered frame; `columns` is the terminal width the frame is laid out for. */
+/** Captures one chunk per rendered frame; `columns` and `rows` are the window the frame is laid out for. */
 export class CapturingStdout extends Writable {
   readonly chunks: string[] = [];
   readonly columns: number;
@@ -47,8 +47,10 @@ class FakeStdin extends PassThrough {
   setRawMode(): void {}
 }
 
-/** One millisecond of real time, long enough for Ink's 20 ms lone-Escape flush to land. */
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 35));
+/** A lone Escape is not a keypress Ink dispatches at once: its parser buffers one for its own 20 ms. */
+const LONE_ESCAPE = '\u001B';
+/** Upper bound for that buffered key to arrive; the wait ends the moment its frame does. */
+const ESCAPE_FLUSH_TIMEOUT_MS = 250;
 
 export interface TuiOptions {
   data: Data;
@@ -79,19 +81,35 @@ export async function startTui(options: TuiOptions): Promise<TuiHarness> {
     patchConsole: false,
     exitOnCtrlC: false,
   });
-  await settle();
+  await instance.waitUntilRenderFlush();
 
-  const frames = (): string[] =>
-    stdout.chunks.map(stripAnsi).filter((chunk) => chunk.trim() !== '' && chunk !== '\n');
+  /**
+   * Every frame Ink flushed, in order, ANSI stripped. `waitUntilRenderFlush()` brackets each frame with
+   * an empty chunk of its own, and that barrier is the only chunk dropped here: a frame that renders
+   * nothing but blank lines is a frame, so it must not read as the one before it.
+   */
+  const frames = (): string[] => stdout.chunks.filter((chunk) => chunk !== '').map(stripAnsi);
   const frame = (): string => frames()[frames().length - 1] ?? '';
+
+  /** Waits for what a timer or a render will make true; the deadline bounds a key that does nothing. */
+  const until = async (done: () => boolean): Promise<void> => {
+    const deadline = Date.now() + ESCAPE_FLUSH_TIMEOUT_MS;
+    while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+  };
 
   return {
     frame,
     lines: () => frame().split('\n').map((line) => line.replace(/\s+$/, '')),
     async press(...keys) {
       for (const key of keys) {
+        const before = frames().length;
         stdin.write(key);
-        await settle();
+        await instance.waitUntilRenderFlush();
+        if (key === LONE_ESCAPE) {
+          // Ink emits it when its own timer fires, so wait for that frame rather than guess a delay.
+          await until(() => frames().length > before);
+          await instance.waitUntilRenderFlush();
+        }
       }
     },
     async waitUntilExit() {
@@ -99,7 +117,7 @@ export async function startTui(options: TuiOptions): Promise<TuiHarness> {
     },
     async stop() {
       instance.unmount();
-      await settle();
+      await instance.waitUntilExit();
     },
   };
 }

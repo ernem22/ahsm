@@ -286,8 +286,9 @@ Copy that this design will surface, and must not silently fix (the CLI's output 
 1. Catalogue `note:` values are Turkish while every UI string is English. The TUI shows them labelled
    `note:`, so they read as data, but the mixture is now visible on a screen instead of buried in
    `catalog/*.yaml`.
-2. `t.updateTitle` is `UPDATE` in capitals while `planTitle` and `resultTitle` are lowercase. The TUI prints
-   the string as it comes from `render.ts`, so `update` is the one surface with a shouting heading.
+2. `t.updateTitle` is `UPDATE` in capitals while `t.plan` is `PLAN` and every other heading is sentence case
+   (the wizard's `planTitle`/`resultTitle` went with the wizard). The TUI prints the string as it comes from
+   `render.ts`, so heading case is not consistent.
 3. `t.removeNotCovered` produces `no provider can remove a mcp yet`. The article is wrong for `mcp` and
    `hook`, and the TUI shows it more often than the CLI does.
 4. `t.actions` prints `2 action(s), 1 skipped, 2 blocked`. The parenthesised plural is a pipe affordance; it
