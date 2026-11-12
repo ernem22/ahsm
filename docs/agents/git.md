@@ -38,6 +38,10 @@ It is a plain `#!/bin/sh` script with LF endings, so it needs no executable bit 
 translation anywhere; git just runs it. `git commit --no-verify` skips it — reserve that for work in
 progress, never for a commit you intend to keep.
 
+The gate writes to a temporary log and a passing commit prints one line (`pre-commit: eol + typechecks +
+tests OK`); a failing one prints the log's last 40 lines and names the full log, then exits with the
+gate's status.
+
 The full gate, including the build and the end-to-end run, is `npm run check`. Run it before handing
 work off.
 

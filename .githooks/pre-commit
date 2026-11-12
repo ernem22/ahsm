@@ -4,9 +4,28 @@
 #   git config core.hooksPath .githooks
 # The file is plain ASCII with LF line endings (pinned by .gitattributes), so it needs no
 # executable bit and no CRLF translation to run under the sh git ships on any platform.
-set -e
+#
+# The gate runs into a temporary log: a passing commit prints one line, so the hook does not fill
+# the session with the output of a check that already passed. A failing one prints the log's tail
+# and names the log, so the failure is still readable in the commit's own output.
+set -u
 
-npm run check:eol
-npm run typecheck
-npm run typecheck:test
-npm test
+log=$(mktemp 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/agentenv-pre-commit.$$.log")
+
+status=0
+{
+  npm run check:eol &&
+    npm run typecheck &&
+    npm run typecheck:test &&
+    npm test
+} >"$log" 2>&1 || status=$?
+
+if [ "$status" -eq 0 ]; then
+  rm -f "$log"
+  echo "pre-commit: eol + typechecks + tests OK"
+  exit 0
+fi
+
+tail -n 40 "$log"
+echo "pre-commit: the gate failed (exit $status); last 40 lines above, full log: $log" >&2
+exit "$status"
