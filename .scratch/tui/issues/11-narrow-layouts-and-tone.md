@@ -13,10 +13,10 @@ width, and one `NO_COLOR` frame with no colour sequence but the same state words
 **Proves it:** open each of the eight surfaces in a 120, an 80 and a 40 column window and in a `NO_COLOR`
 terminal. Nothing wraps mid-token, no row loses its state word, and focus is still visible when colour is gone.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The two narrow layouts exist and every surface uses them
-- [ ] `NO_COLOR` and a dumb terminal drop colour and nothing else
-- [ ] Every mark is ASCII; `…` and `→` are the only exceptions
-- [ ] The width sweep test runs all surfaces at 120, 80 and 40 and fails on an over-wide line
-- [ ] `npm run check` passes and no CLI output changed
+- [x] The two narrow layouts exist and every surface uses them
+- [x] `NO_COLOR` and a dumb terminal drop colour and nothing else
+- [x] Every mark is ASCII; `…` and `→` are the only exceptions
+- [x] The width sweep test runs all surfaces at 120, 80 and 40 and fails on an over-wide line
+- [x] `npm run check` passes and no CLI output changed
