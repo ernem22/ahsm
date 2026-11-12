@@ -158,16 +158,32 @@ export interface KeyBinding {
 
 export type KeyTable = readonly KeyBinding[];
 
-/** The seven commands, in the order the rail prints them. */
-export const RAIL: readonly { key: string; surface: SurfaceId }[] = [
-  { key: 'i', surface: 'install' },
-  { key: 'p', surface: 'plan' },
-  { key: 's', surface: 'status' },
-  { key: 'l', surface: 'list' },
-  { key: 'v', surface: 'stale' },
-  { key: 'u', surface: 'update' },
-  { key: 'x', surface: 'remove' },
-];
+/**
+ * The rail letter each surface answers to; `apply` has none, because `Enter` on the plan is its way in.
+ * This record is the guardrail: a new `SurfaceId` cannot compile until it has a row here.
+ */
+const RAIL_LETTERS: Record<SurfaceId, string | undefined> = {
+  install: 'i',
+  plan: 'p',
+  apply: undefined,
+  status: 's',
+  list: 'l',
+  stale: 'v',
+  update: 'u',
+  remove: 'x',
+};
+
+/**
+ * Every surface, in the order the tables list them. The rail and the key-table guardrail test both walk
+ * this list, so a surface is never added to one and silently left out of the other.
+ */
+export const SURFACES: SurfaceId[] = Object.keys(RAIL_LETTERS) as SurfaceId[];
+
+/** The seven commands, in the order the rail prints them: the surfaces that have a letter. */
+export const RAIL: readonly { key: string; surface: SurfaceId }[] = SURFACES.flatMap((surface) => {
+  const key = RAIL_LETTERS[surface];
+  return key === undefined ? [] : [{ key, surface }];
+});
 
 /**
  * A write is in flight. Every key that would leave the surface — or start a second write — says why it

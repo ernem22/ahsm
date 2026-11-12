@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { t } from '../src/i18n.js';
-import type { SurfaceId } from '../src/tui/keys.js';
+import { entryText, RAIL as RAIL_ROWS, SURFACES as SURFACE_IDS, type SurfaceId } from '../src/tui/keys.js';
 import { expectFrame, fixture, startTui, type TuiHarness } from './tui-harness.js';
 
 /**
@@ -24,7 +24,8 @@ interface SurfaceCase {
 }
 
 const MOVES = ['Up move', 'Down move', 'PgUp move', 'PgDn move', 'g first', 'G last'];
-const RAIL = ['i install', 'p plan', 's status', 'l list', 'v stale', 'u update', 'x remove'];
+/** The rail's entries, from the one table the rail itself is built from. */
+const RAIL = RAIL_ROWS.map((row) => entryText({ keys: [row.key], label: t.tui.surfaces[row.surface], run: () => {} }));
 
 /** The frame the surface answers with: its read is not in flight and its body is not the placeholder. */
 function settled(ready: () => boolean): Promise<void> {
@@ -51,23 +52,24 @@ async function toApply(tui: TuiHarness): Promise<void> {
   await tui.press('\r');
 }
 
-const SURFACES: SurfaceCase[] = [
-  {
-    id: 'install',
+/**
+ * One row per surface, keyed by the surface itself: the record makes a new `SurfaceId` a compile error
+ * until it has a row here, so the guardrail cannot be skipped by adding a surface in a hurry.
+ */
+const CASES: Record<SurfaceId, Omit<SurfaceCase, 'id'>> = {
+  install: {
     open: () => Promise.resolve(),
     own: ['space choose', 'a all', 'Enter next'],
     hidden: ['Up move', 'Down move'],
     back: 'stay',
   },
-  {
-    id: 'plan',
+  plan: {
     open: async (tui) => opens(tui, 'p', 'plan', () => !tui.frame().includes(t.planBuilding)),
     own: ['Enter apply', 'r rebuild'],
     hidden: MOVES,
     back: 'install',
   },
-  {
-    id: 'apply',
+  apply: {
     open: async (tui) => {
       await toApply(tui);
       await settled(() => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`) === true);
@@ -76,42 +78,40 @@ const SURFACES: SurfaceCase[] = [
     hidden: MOVES,
     back: 'plan',
   },
-  {
-    id: 'status',
+  status: {
     open: async (tui) => opens(tui, 's', 'status', () => tui.frame().includes(t.harnesses)),
     own: ['r refresh'],
     hidden: MOVES,
     back: 'install',
   },
-  {
-    id: 'list',
+  list: {
     open: async (tui) => opens(tui, 'l', 'list', () => tui.frame().includes(t.skillsTitle)),
     own: ['/ filter', 'f carriers', 'r refresh'],
     hidden: MOVES,
     back: 'install',
   },
-  {
-    id: 'stale',
+  stale: {
     open: async (tui) => opens(tui, 'v', 'stale', () => tui.frame().includes(t.staleEmpty)),
     own: ['/ search', 'f filter', 'u update', 'r refresh'],
     hidden: MOVES,
     back: 'install',
   },
-  {
-    id: 'update',
+  update: {
     open: async (tui) => opens(tui, 'u', 'update', () => tui.frame().includes(t.updateNone)),
     own: ['y apply', 'n decline'],
     hidden: MOVES,
     back: 'install',
   },
-  {
-    id: 'remove',
+  remove: {
     open: async (tui) => opens(tui, 'x', 'remove', () => true),
     own: [],
     hidden: [],
     back: 'install',
   },
-];
+};
+
+/** The cases in the surface table's own order, so the test and the rail never keep two lists. */
+const SURFACES: SurfaceCase[] = SURFACE_IDS.map((id) => ({ id, ...CASES[id] }));
 
 /** A keybar entry's token: its key name, which is the first word `entryText` writes. */
 function token(entry: string): string {

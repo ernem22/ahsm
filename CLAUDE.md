@@ -27,6 +27,7 @@ Conventional commits, LF line endings, and the checked-in pre-commit hook (`.git
 - `src/core/*.ts` — one module per command: plan/apply/remove/status/list/stale/update.
 - `src/tui/rows-frame.tsx` — the shared rows frame: the 50/2/62 split, the truncated head, the wrapped detail and the window; list, status and plan all mount it.
 - `src/tui/keys.ts` — the key table that drives dispatch, keybar and help.
+- `src/tui/*` — one module + hook + body + test per surface; the map is in `docs/agents/tui.md`.
 - `src/tui/window.ts` — `rowsInView`/`goTo`, the row window every rows surface shares.
 - `test/tui-harness.ts` — the headless seam (`startTui`, `expectFrame`).
 - `.scratch/<feature>/spec.md` + `issues/NN-*.md` — decisions per ticket.
