@@ -45,8 +45,14 @@ work off.
 
 `dist/cli.js` is the surface every script and every user runs, so a change to the interactive window or
 to anything else it never reaches still has to leave the commands' output alone. `npm run cli:diff`
-proves it without a hand-run: it builds HEAD out of `git archive` into a scratch directory, builds the
-working tree, and runs `plan`, `plan --package group`, `apply --yes`, `status`, `list`, `stale`,
-`update`, `remove --yes` and `--help` from both against one fixed sandbox HOME pointed at
+proves it without a hand-run: it builds a base revision out of `git archive` into a scratch directory,
+builds the working tree, and runs `plan`, `plan --package group`, `apply --yes`, `status`, `list`,
+`stale`, `update`, `remove --yes` and `--help` from both against one sandbox HOME pointed at
 `test/fixtures/offline`. It prints `IDENTICAL` or `DIFF` per command and exits non-zero on any
-difference in stdout, stderr or exit code. Run it after any change that touches `src/`.
+difference in stdout, stderr or exit code.
+
+The base is `HEAD` unless `--base <rev>` says otherwise: `npm run cli:diff -- --base 398f147`. On a
+clean tree the two sides are the same commit, so it says `clean tree — comparing HEAD with itself,
+nothing to prove` instead of claiming a result. `plan` and `status` must exit 0 on both sides, because
+two identical failures would read as a match. Run it after any change that touches `src/`, with a base
+that predates the branch when you want the change itself proved.
