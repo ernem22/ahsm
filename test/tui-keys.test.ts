@@ -99,9 +99,9 @@ const SURFACES: SurfaceCase[] = [
   },
   {
     id: 'update',
-    open: async (tui) => opens(tui, 'u', 'update', () => true),
-    own: [],
-    hidden: [],
+    open: async (tui) => opens(tui, 'u', 'update', () => tui.frame().includes(t.updateNone)),
+    own: ['y apply', 'n decline'],
+    hidden: MOVES,
     back: 'install',
   },
   {

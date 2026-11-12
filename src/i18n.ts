@@ -204,6 +204,8 @@ export const t = {
       search: 'search',
       /** `u` on the stale surface: the plan for exactly the skills it lists as stale. */
       update: 'update',
+      /** `v` on the update result: the freshness check again, now that the copies were refreshed. */
+      staleAgain: 'stale again',
       /** A text mode's own two keys: `Esc` empties the filter, `Enter` keeps it. */
       filterClear: 'clear filter',
       filterKeep: 'keep',

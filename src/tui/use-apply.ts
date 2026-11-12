@@ -1,12 +1,11 @@
-import { useCallback, useState } from 'react';
 import { applyPlan } from '../core/apply.js';
 import type { Plan } from '../core/plan.js';
 import type { Ctx } from '../context.js';
-import { t } from '../i18n.js';
 import type { Tone } from '../render.js';
 import type { Data } from '../types.js';
-import { applyShape, hasResult, isApplying, type WriteState } from './apply.js';
+import { applyShape, type WriteState } from './apply.js';
 import { markableUpdates } from './plan.js';
+import { useWrite } from './use-write.js';
 
 /** The write, as the apply surface shows it: nothing yet, in flight, or the result the core reported. */
 export interface ApplyState {
@@ -38,26 +37,16 @@ export interface ApplyOptions {
  * one's answer.
  */
 export function useApplySurface({ data, ctx, plan, updates, say }: ApplyOptions): ApplyState {
-  const [write, setWrite] = useState<WriteState>({ status: 'idle' });
-  const reset = useCallback(() => setWrite({ status: 'idle' }), []);
+  const write = useWrite({
+    say,
+    run: plan
+      ? () => {
+          const marked = updates.filter((id) => markableUpdates(plan).includes(id));
+          return applyPlan(data, ctx, plan, marked.length > 0 ? { updates: marked } : undefined);
+        }
+      : undefined,
+    shape: plan ? applyShape(plan) : { installs: 0, hooks: 0, blocked: 0 },
+  });
 
-  const runApply = (): void => {
-    if (!plan || write.status === 'applying') return;
-    const marked = updates.filter((id) => markableUpdates(plan).includes(id));
-    setWrite({ status: 'applying', startedAt: Date.now(), shape: applyShape(plan) });
-    // Writes cannot be cancelled, so the refusal is on screen for as long as it is true.
-    say(t.tui.applyRefusal, 'warning');
-    void applyPlan(data, ctx, plan, marked.length > 0 ? { updates: marked } : undefined).then(
-      (outcome) => {
-        setWrite({ status: 'done', outcome });
-        say(undefined);
-      },
-      (error: unknown) => {
-        setWrite({ status: 'error', message: error instanceof Error ? error.message : String(error) });
-        say(undefined);
-      },
-    );
-  };
-
-  return { state: write, applying: isApplying(write), result: hasResult(write), runApply, reset };
+  return { state: write.state, applying: write.applying, result: write.result, runApply: write.write, reset: write.reset };
 }

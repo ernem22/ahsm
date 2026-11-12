@@ -94,7 +94,7 @@ test('every letter of the rail reaches its surface, and Esc returns to install',
       ['s', 'status', t.harnesses],
       ['l', 'list', t.skillsTitle],
       ['v', 'stale', t.staleEmpty],
-      ['u', 'update', t.tui.surfaces.update],
+      ['u', 'update', t.updateNone],
       ['x', 'remove', t.tui.surfaces.remove],
     ];
     for (const [key, name, marker] of rail) {

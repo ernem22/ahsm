@@ -104,6 +104,16 @@ export interface StaleKeys extends SlowRowsKeys {
   readonly filter: FilterKeys;
 }
 
+/** The update surface's own state beyond the window: its slow read and the one write it can approve. */
+export interface UpdateKeys extends SlowRowsKeys {
+  /** The approved update is in flight: every key that would leave is off until it finishes. */
+  readonly applying: boolean;
+  /** The write finished, so the surface shows the result rather than the plan. */
+  readonly result: boolean;
+  /** `y`: run the plan through `applyPlan`, exactly as `agentenv update --yes` does. */
+  runApply(): void;
+}
+
 /** Each surface's host is its own keys plus the chrome every table may use. */
 export type InstallHost = ChromeHost & InstallKeys;
 export type PlanHost = ChromeHost & PlanKeys;
@@ -113,6 +123,14 @@ export type StatusHost = ChromeHost & SlowRowsKeys;
 export type ListHost = ChromeHost & ListKeys;
 export type StaleHost = ChromeHost & StaleKeys;
 
+/** The update host also owns where the plan declines to: the shell knows which surface opened it. */
+export type UpdateHost = ChromeHost & UpdateKeys & {
+  /** `n` and `Esc`: leave the plan without writing, back to the surface it was opened from. */
+  decline(): void;
+  /** `v` after a finished write: the stale surface again, to see what is true now. */
+  staleAgain(): void;
+};
+
 /** Every surface's host, named once so a table is handed only the host it owns. */
 export interface SurfaceHosts {
   install: InstallHost;
@@ -121,7 +139,7 @@ export interface SurfaceHosts {
   status: StatusHost;
   list: ListHost;
   stale: StaleHost;
-  update: ChromeHost;
+  update: UpdateHost;
   remove: ChromeHost;
 }
 
@@ -430,6 +448,33 @@ export function staleKeys(host: StaleHost): KeyTable {
   ];
 }
 
+/**
+ * The update plan, read-only until `y`: the rows the update would install move like any other window,
+ * and `y` is the only key here that writes. `n` and `Esc` decline back to where `u` was opened, so
+ * declining costs nothing and nothing is installed beside it. `Esc` spends itself on a running check
+ * first, exactly as on the other slow rows surfaces.
+ */
+export function updateKeys(host: UpdateHost): KeyTable {
+  return [
+    stopWaitingKey(host),
+    { keys: ['y'], label: t.tui.keys.apply, refuses: refusesDuringWrite(host), run: () => host.runApply() },
+    ...rowsNavigation(host),
+    { keys: ['n'], label: t.tui.keys.decline, refuses: refusesDuringWrite(host), run: () => host.decline() },
+    { keys: ['escape'], label: t.tui.keys.back, refuses: refusesDuringWrite(host), run: () => host.decline() },
+  ];
+}
+
+/**
+ * The result of an approved update: every key leaves, and `v` goes back to the stale surface for the
+ * question the result changes the answer to. `Esc` falls through to the shell's own back.
+ */
+export function updateResultKeys(host: UpdateHost): KeyTable {
+  return [
+    { keys: ['return'], label: t.tui.keys.exit, run: () => host.quit() },
+    { keys: ['v'], label: t.tui.keys.staleAgain, run: () => host.staleAgain() },
+  ];
+}
+
 /** The filter's mode: a letter is text here, so the table binds just the two keys that end it. */
 export function filterModeKeys(host: FilterKeys): KeyTable {
   return [
@@ -446,7 +491,7 @@ const TABLES: Record<SurfaceId, (hosts: SurfaceHosts) => KeyTable> = {
   status: (hosts) => statusKeys(hosts.status),
   list: (hosts) => listKeys(hosts.list),
   stale: (hosts) => staleKeys(hosts.stale),
-  update: () => [],
+  update: (hosts) => (hosts.update.result ? updateResultKeys(hosts.update) : updateKeys(hosts.update)),
   remove: () => [],
 };
 

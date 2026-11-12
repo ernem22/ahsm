@@ -28,6 +28,7 @@ import { useListSurface } from './use-list.js';
 import { usePlanSurface } from './use-plan.js';
 import { useStaleSurface } from './use-stale.js';
 import { useStatusSurface } from './use-status.js';
+import { useUpdateSurface } from './use-update.js';
 
 /** The rail needs 100 columns; below it the letters still work, so width never changes what is reachable. */
 export const RAIL_MIN_WIDTH = 100;
@@ -83,6 +84,9 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
   const statusSurface = useStatusSurface({ data, ctx, width: columns, height, active: surface === 'status' });
   const list = useListSurface({ data, ctx, harnessIds: install.form.harnessIds, width: columns, height, active: surface === 'list' });
   const stale = useStaleSurface({ data, ctx, width: columns, height, active: surface === 'stale' });
+  const update = useUpdateSurface({ data, ctx, width: columns, height, active: surface === 'update', say });
+  // The update plan declines back to the surface it was opened from; the shell is the only place that knows.
+  const [updateOrigin, setUpdateOrigin] = useState<SurfaceId>('install');
 
   /**
    * Entering the confirm starts its write state from nothing: a result belongs to the plan it came
@@ -90,12 +94,16 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
    */
   const go = (next: SurfaceId): void => {
     if (next === 'apply') apply.reset();
+    if (next === 'update' && surface !== 'update') {
+      update.reset();
+      setUpdateOrigin(surface);
+    }
     setSurface(next);
   };
 
   const chrome: ChromeHost = {
     surface,
-    applying: apply.applying,
+    applying: apply.applying || update.keys.applying,
     result: apply.result,
     go,
     openHelp: () => setHelp(true),
@@ -117,7 +125,7 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     status: { ...chrome, ...statusSurface.keys },
     list: { ...chrome, ...list.keys },
     stale: { ...chrome, ...stale.keys },
-    update: chrome,
+    update: { ...chrome, ...update.keys, decline: () => go(updateOrigin), staleAgain: () => go('stale') },
     remove: chrome,
   };
 
@@ -128,6 +136,7 @@ export function Shell({ data, ctx }: ShellProps): React.ReactElement {
     status: statusSurface,
     list,
     stale,
+    update,
   };
 
   useInput((input, key) => {

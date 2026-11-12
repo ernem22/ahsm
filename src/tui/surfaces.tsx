@@ -15,6 +15,8 @@ import type { ListState } from './use-list.js';
 import type { PlanState } from './use-plan.js';
 import type { StaleState } from './use-stale.js';
 import type { StatusState } from './use-status.js';
+import type { UpdateState } from './use-update.js';
+import { UpdateSurface } from './update-surface.js';
 
 /** What each surface's own hook returned: the shell hands a surface nothing of another surface's state. */
 export interface SurfaceStates {
@@ -24,6 +26,7 @@ export interface SurfaceStates {
   status: StatusState;
   list: ListState;
   stale: StaleState;
+  update: UpdateState;
 }
 
 export interface SurfaceBodyProps {
@@ -54,7 +57,7 @@ const BODIES: Record<SurfaceId, (props: SurfaceBodyProps) => React.ReactElement>
   status: ({ states, width, height }) => <StatusSurface state={states.status} width={width} height={height} />,
   list: ({ states, width, height }) => <ListSurface state={states.list} width={width} height={height} />,
   stale: ({ states, width, height }) => <StaleSurface state={states.stale} width={width} height={height} />,
-  update: Pending,
+  update: ({ states, width, height }) => <UpdateSurface state={states.update} width={width} height={height} />,
   remove: Pending,
 };
 
