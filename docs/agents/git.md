@@ -40,3 +40,13 @@ progress, never for a commit you intend to keep.
 
 The full gate, including the build and the end-to-end run, is `npm run check`. Run it before handing
 work off.
+
+## CLI output must not move
+
+`dist/cli.js` is the surface every script and every user runs, so a change to the interactive window or
+to anything else it never reaches still has to leave the commands' output alone. `npm run cli:diff`
+proves it without a hand-run: it builds HEAD out of `git archive` into a scratch directory, builds the
+working tree, and runs `plan`, `plan --package group`, `apply --yes`, `status`, `list`, `stale`,
+`update`, `remove --yes` and `--help` from both against one fixed sandbox HOME pointed at
+`test/fixtures/offline`. It prints `IDENTICAL` or `DIFF` per command and exits non-zero on any
+difference in stdout, stderr or exit code. Run it after any change that touches `src/`.
