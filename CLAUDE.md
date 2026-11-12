@@ -25,9 +25,11 @@ Conventional commits, LF line endings, and the checked-in pre-commit hook (`.git
 - `src/i18n.ts` — all user-facing copy.
 - `src/render.ts` — the one formatter for CLI/plan/outcome wording.
 - `src/core/*.ts` — one module per command: plan/apply/remove/status/list/stale/update.
+- `src/tui/rows-frame.tsx` — the shared rows frame: the 50/2/62 split, the truncated head, the wrapped detail and the window; list, status and plan all mount it.
 - `src/tui/keys.ts` — the key table that drives dispatch, keybar and help.
 - `src/tui/window.ts` — `rowsInView`/`goTo`, the row window every rows surface shares.
 - `test/tui-harness.ts` — the headless seam (`startTui`, `expectFrame`).
 - `.scratch/<feature>/spec.md` + `issues/NN-*.md` — decisions per ticket.
+- `~/.agents/skills/retro/SKILL.md` — the retrospective procedure; `scripts/session_stats.py` beside it summarizes `$PI_SESSION_FILE`.
 
-On Windows, write files with the edit/write tools or `newline=''` — never a Python text-mode rewrite.
+On Windows, targeted edits go through the edit tool — never a heredoc (or a Python text-mode rewrite) that builds TypeScript string literals, because `\n` escapes arrive corrupted.
