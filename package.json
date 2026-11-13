@@ -1,7 +1,6 @@
 {
   "name": "agentenv",
   "version": "0.1.0",
-  "private": true,
   "description": "Install and track agent-harness setup (skills, MCP servers, hooks) from one package list.",
   "type": "module",
   "bin": {
@@ -22,7 +21,8 @@
     "check:eol": "node scripts/check-eol.mjs",
     "check:scripts": "node scripts/check-syntax.mjs",
     "e2e": "npm run build && node scripts/e2e.mjs && node scripts/e2e-list.mjs && node scripts/e2e-stale.mjs && node scripts/e2e-update.mjs && node scripts/e2e-remove.mjs",
-    "e2e:network": "npm run build && node scripts/e2e.mjs --network"
+    "e2e:network": "npm run build && node scripts/e2e.mjs --network",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "ink": "^8.0.0",
@@ -37,5 +37,29 @@
     "@types/react": "^19.3.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
-  }
+  },
+  "license": "MIT",
+  "keywords": [
+    "agents",
+    "ai",
+    "cli",
+    "tui",
+    "skills",
+    "mcp",
+    "hooks",
+    "claude-code",
+    "codex",
+    "opencode",
+    "pi"
+  ],
+  "files": [
+    "dist",
+    "catalog",
+    "packages",
+    "harnesses",
+    "providers",
+    "requires",
+    "README.md",
+    "LICENSE"
+  ]
 }

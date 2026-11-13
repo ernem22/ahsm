@@ -169,10 +169,14 @@ capturing output stream, asserting on frames with ANSI stripped.
 
 ## Limitations
 
-- Unpublished, no licence file yet — treat it as a personal tool until that changes.
+- Not on npm yet: `npx agentenv` does not exist. Install from a tarball or a checkout.
 - `update` can only refresh skills whose source appears in `catalog/`; anything installed from an
   uncatalogued source is reported as such rather than guessed at.
 - An update installs whatever the source holds — a difference is not a direction, so a rewind upstream
   reinstalls the older copy.
 - MCP and hook *freshness* is not checked; only skills have a staleness verdict.
 - Only user-level scope; no Windows-specific installer beyond `npm install -g`.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
