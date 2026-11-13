@@ -7,90 +7,97 @@ title: agentenv
 
 # agentenv
 
-Agent harness'larının skills + MCP + hooks kurulumunu tek yerden yapan, neyin nerede kurulu olduğunu bilen araç.
+A tool that performs the installation of skills + MCP + hooks for agent harnesses from one place, and
+knows what is installed where.
 
 ## Overview
 
-agentenv, bir makinedeki agent harness'larının (Claude Code, Codex CLI, opencode, pi) skills, MCP
-sunucuları ve hook'larını tek bir listeden seçip kurar. Öğeler bu depoda **kaynak tanımı** olarak durur
-(skill'ler için git deposu/URL, MCP için sunucu paketi, hook için dosya), isimli paketler halinde
-gruplanır; TUI listeyi gösterir, seçim harness bazında ya da hepsine birden yapılır.
+agentenv picks the skills, MCP servers and hooks of the agent harnesses on a machine (Claude Code, Codex
+CLI, opencode, pi) from a single list and installs them. Items live in this repo as **source definitions**
+(a git repo/URL for skills, a server package for MCP, a file for a hook), grouped into named packages; the
+TUI shows the list, and the selection is made per harness or for all of them at once.
 
-Skill kurulumunu agentenv kendi yazmaz: `npx skills` gibi olgun araçlara devreder. Kendi yazdığı tek
-şey, ortak yükleyicisi olmayan MCP config kaydı ve hook birleştirmesidir.
+agentenv does not write the skill installation itself: it delegates it to mature tools such as
+`npx skills`. The only thing it writes itself is the MCP config record and the hook merge, which have no
+common installer.
 
-Kurulumdan sonra agentenv hangi öğenin hangi harness'a, hangi kapsamda kurulduğunu bilir. "Proje içine
-mi kuruldu, npx ile mi, harness klasörüne mi" belirsizliği tek doğru kaynağa iner.
+After an installation agentenv knows which item was installed into which harness, in which scope. The
+ambiguity of "was it installed into the project, via npx, or into the harness folder" collapses into a
+single source of truth.
 
 ## Problem
 
-Kurulum bugün dört ayrı harness'ın dört farklı config formatına dağılmış durumda: her yeni skill, MCP
-sunucusu veya hook için dosyalar elle düzenleniyor. İki sonuç doğuyor:
+Today installation is spread over four different config formats of four different harnesses: for every new
+skill, MCP server or hook the files are edited by hand. Two consequences follow:
 
-- **Görünürlük kaybı.** Bir öğenin kurulu olup olmadığı, hangi harness'ta ve hangi kapsamda durduğu
-  hiçbir yerden tek seferde okunamıyor.
-- **Tekrar.** Aynı 8-10 öğe her kurulumda yeniden seçiliyor ve her harness için ayrı ayrı yazılıyor;
-  biri unutulduğunda harness'lar arasında sessiz farklar oluşuyor.
+- **Loss of visibility.** Whether an item is installed, and in which harness and which scope it sits,
+  cannot be read anywhere in one go.
+- **Repetition.** The same 8-10 items are selected again on every installation and written separately for
+  every harness; when one is forgotten, silent differences appear between harnesses.
 
 ## Capabilities
 
-- **Öğe kataloğu.** Her öğe bir kaynak tanımıdır — skills için git deposu/URL (istenirse tek skill
-  adıyla), MCP için sunucu paketi ve config şablonu, hook için olay + eşleşme + komut. Yanında ad,
-  hedef harness'lar, kısa not ve istenirse link bulunur.
-- **Paketler.** İsimli öğe listeleri tek bir YAML dosyasında tanımlanır; her paketin kendi notu ve
-  linki olabilir. TUI'de paket seçildiğinde içeriği işaretli gelir, kullanıcı tek tek değiştirebilir.
-- **TUI.** Harness'ları ve öğeleri listeler, paket notlarını gösterir, seçim alır. Kurulum öncesi
-  yapılacak işi (çalışacak komut, hook için yazılacak girdi) gösterip onay ister; hedef dosyanın farkı gösterilmez,
-  çünkü skills/MCP dosyasını sağlayıcı yazar. Yalnız kendi yazdığı hook dosyasını, üzerine yazmadan önce
-  yedekler.
-- **Tek seferde çoklu kurulum.** Seçilenler tek bir harness'a ya da tüm harness'lara birden yazılabilir.
-- **Kurulumu devretme (skills + MCP).** Skill dosyalarını ve MCP kayıtlarını agentenv yazmaz; sağlayıcı
-  araçları çağırır (`npx skills add <kaynak> -g -a <harness>`, `npx add-mcp <paket>`). Symlink/kopya,
-  check/update/remove o araçların işi.
-- **Sağlayıcı modeli.** Her öğe türü için birden fazla sağlayıcı tanımlanabilir; her sağlayıcı hangi
-  harness'ları desteklediğini bildirir. Desteklenmeyen ikili sessizce atlanmaz, "kapsanmıyor" olarak
-  gösterilir.
-- **Hook'lar.** Çok-harness bir hook kurucusu yok; agentenv hook'ları `settings.json`'a birleştirir —
-  hedef dosya ve yazılacak girdi gösterilir, onay istenir, yedek alınır, dosyadaki diğer ayarlar korunur.
-- **Ön koşullar.** Eksik olan araçlar (Node/npx, uv, gerekli harness binary'si) plan aşamasında
-  listelenir ve onay sonrası kurulur; kurulum tarifi platform başına veridir.
-- **Doğru formata yazma.** Her harness kendi formatını alır; MCP anahtarı düz metin yazılmaz, `${VAR}`
-  referansı ve gerekli değişken adları plan çıktısında görünür.
-- **Kaldırma.** Kurulan öğeler geri alınabilir: skills için `npx skills remove`, MCP için
-  `npx add-mcp remove`, hook'lar için kayıtlı girdinin config'ten silinmesi. Kaldırma **her harness'ı**
-  kapsar (skill dizinleri ortak); plan etkilenen dizinleri ve harness'ları önceden gösterir.
-- **Durum.** Kurulu öğelerin harness + kapsam haritası tek komutla görülebilir. Kayıt ile
-  doğrulanabilen gerçek karşılaştırılır: `güncel` / `eksik` / `bilinmiyor`. Üç durum yeter: kayıtlı ama
-  içeriği değişmiş hook da `eksik` sayılır, doğrulanamayan skills/MCP `bilinmiyor` der.
-- **Sırlar.** MCP config'ine düz anahtar yazılmaz; `${ENV_VAR}` referansı yazılır ve TUI hangi
-  değişkenin gerektiğini söyler.
-- **Genişletilebilirlik.** Yeni bir harness, yeni bir kapsam (ör. proje seviyesi) veya yeni bir öğe türü
-  eklemek kod yazmayı gerektirmez; tanım dosyası eklemek yeter.
+- **Item catalog.** Every item is a source definition — a git repo/URL for skills (optionally with a single
+  skill name), a server package and config template for MCP, event + matcher + command for a hook. Beside
+  it are a name, the target harnesses, a short note and, optionally, a link.
+- **Packages.** Named item lists are defined in a single YAML file; every package can have its own note and
+  link. When a package is selected in the TUI its contents come marked, and the user can change them one by
+  one.
+- **TUI.** Lists the harnesses and the items, shows package notes, takes a selection. Before the
+  installation it shows the work to be done (the command that will run, the entry to be written for a hook)
+  and asks for approval; the target file's difference is not shown, because the skills/MCP file is written
+  by the provider. Only the hook file it writes itself is backed up before being overwritten.
+- **Multiple installations at once.** The selected items can be written into a single harness or into all
+  harnesses at once.
+- **Delegating the installation (skills + MCP).** agentenv does not write the skill files and the MCP
+  records; it calls the provider tools (`npx skills add <source> -g -a <harness>`, `npx add-mcp <package>`).
+  Symlink/copy, check/update/remove are those tools' job.
+- **Provider model.** More than one provider can be defined for each item kind; every provider declares
+  which harnesses it supports. An unsupported pair is not silently skipped, it is shown as "not covered".
+- **Hooks.** There is no multi-harness hook builder; agentenv merges hooks into `settings.json` — the target
+  file and the entry to be written are shown, approval is asked, a backup is taken, the other settings in
+  the file are preserved.
+- **Requirements.** The tools that are missing (Node/npx, uv, the harness binary that is needed) are listed
+  at the plan stage and installed after approval; the installation recipe is given per platform.
+- **Writing in the right format.** Every harness gets its own format; the MCP key is not written in plain
+  text, the `${VAR}` reference and the required variable names are visible in the plan output.
+- **Removal.** Installed items can be taken back: `npx skills remove` for skills, `npx add-mcp remove` for
+  MCP, deletion of the recorded entry from the config for hooks. Removal covers **every harness** (the
+  skill directories are shared); the plan shows the affected directories and harnesses in advance.
+- **Status.** The harness + scope map of the installed items can be seen with one command. The record is
+  compared with the truth that can be verified: `up-to-date` / `missing` / `unknown`. Three states are
+  enough: a hook that is recorded but whose content has changed also counts as `missing`, skills/MCP that
+  cannot be verified say `unknown`.
+- **Secrets.** No plain key is written into the MCP config; a `${ENV_VAR}` reference is written and the TUI
+  says which variable is required.
+- **Extensibility.** Adding a new harness, a new scope (e.g. project level) or a new item kind does not
+  require writing code; adding a definition file is enough.
 
 ## Alternatives Considered
 
-Aynı işin parçalarını yapan araçlar var; hiçbiri dördünü birden kapatmıyor (yerel dosyadan paket + TUI + çoklu harness + durum doğruluğu).
+There are tools that do parts of the same work; none of them covers all four at once (package from a local
+file + TUI + multiple harnesses + honest status).
 
-| Araç | Ne yapıyor | agentenv'de eksik kalan | Link |
+| Tool | What it does | What is still missing in agentenv | Link |
 |---|---|---|---|
-| `skills` (vercel-labs) | `npx skills add` ile git repolarından skill kurar, 75+ harness, lockfile | Skills dışına çıkmıyor: MCP kaydı, hook birleştirme ve yerel paket tanımı yok | https://github.com/vercel-labs/skills |
-| Bridle | Profiller, skills/agents/commands/MCP'yi Claude Code, OpenCode, Goose, Amp, Copilot CLI arasında çevirir | Öğeler GitHub'dan gelir (yerel dosya kütüphanesi yok); hook birleştirme ve TUI yok | https://github.com/neiii/bridle |
-| skillz | Skills/plugin/hook/MCP/subagent kur-kaldır, isimli profiller | Yalnızca Claude Code + Codex; TUI yok, seçim profille sınırlı | https://github.com/killallgit/skillz |
-| harness-ai-kit | Typed asset şeması, bağımlılık çözümü ve lockfile ile "agent asset paket yöneticisi" | Kurulum ağırlıklı, yerel tek dosya paket + not/link fikri yok | https://github.com/seed-forge/harness-ai-kit |
-| skill-manager | Harness'lar arası envanter: ne kullanımda, nerede aktif; aç/kapat | Masaüstü uygulaması; terminal/TUI akışı ve tek komutla kurulum yok | https://github.com/mode-io/skill-manager |
-| chezmoi / `mise dotfiles` | Genel dotfile yönetimi, şablonlama, sürüm izleme | Harness farkında değil: skills/MCP/hook formatlarını bilmez, seçim yaptırmaz | https://mise.jdx.dev/dotfiles.html |
+| `skills` (vercel-labs) | Installs skills from git repos with `npx skills add`, 75+ harnesses, lockfile | Does not go beyond skills: no MCP record, no hook merging and no local package definition | https://github.com/vercel-labs/skills |
+| Bridle | Translates profiles, skills/agents/commands/MCP between Claude Code, OpenCode, Goose, Amp, Copilot CLI | Items come from GitHub (no local file library); no hook merging and no TUI | https://github.com/neiii/bridle |
+| skillz | Installs/removes skills/plugins/hooks/MCP/subagents, named profiles | Claude Code + Codex only; no TUI, selection limited to a profile | https://github.com/killallgit/skillz |
+| harness-ai-kit | An "agent asset package manager" with a typed asset schema, dependency resolution and a lockfile | Installation-heavy, no local single-file package + note/link idea | https://github.com/seed-forge/harness-ai-kit |
+| skill-manager | Cross-harness inventory: what is in use, where it is active; on/off | Desktop application; no terminal/TUI flow and no one-command installation | https://github.com/mode-io/skill-manager |
+| chezmoi / `mise dotfiles` | General dotfile management, templating, version tracking | Not harness-aware: does not know the skills/MCP/hook formats, does not let you choose | https://mise.jdx.dev/dotfiles.html |
 
 ## Tech Notes
 
-| Konu | Karar | Gerekçe |
+| Topic | Decision | Rationale |
 |---|---|---|
-| Dil / dağıtım | TypeScript + Ink; Node ≥20, `npx agentenv` ile kurulumsuz çalışır | Harness config'leri zaten JSON; tek dil hem TUI'yi hem kurulum kodunu taşıyor. Her ortamda çalışması Node varlığına bağlı, Node'suz makine hedef değil. |
-| Harness tanımları | Veri dosyaları (`harnesses/*.yaml`): algılama yolları (`~/klasör` veya `path:binary`), sağlayıcıların beklediği `agentId`, hook bölümü | Yeni harness = yeni dosya; çekirdek kod harness adı bilmez. |
-| Öğe türleri | Her tür için bir yerleşim tanımı: `skill` = `npx skills`, `mcp` = `npx add-mcp`, `hook` = `settings.json` birleştirme | Yeni tür eklemek yeni tanım eklemek olur, `if` zinciri değil. |
-| Sağlayıcılar | Tür başına birden fazla sağlayıcı, her biri desteklediği harness'ları ve komutlarını bildirir | `add-mcp` desteklemediği harness'ta `mcpm`'e, ya da ileride başka bir araca düşülebilsin |
-| Skill kurulumu | `skills` paketinin programatik API'si (`installSkills`/`removeSkills`), birincil; `npx skills` yedek | Yapısal sonuç (`failed[]`), doğru kaldırma semantiği (paylaşılan kopya başka agent kullanıyorsa kalır) ve alt süreç yok. Node ≥22.20 gerektirir. |
-| Paketler | `packages/*.yaml`: `id`, `items[]`, `note`, `link` — dosya başına tek paket | İnsan tarafından okunur/düzenlenir; TUI notu ve linki buradan gösterir. |
-| Kurulum durumu | `~/.agentenv/state.json` (öğe, harness, sağlayıcı, komut, tarih) + doğrulanabilen hedef; hook'lar `güncel`/`eksik`, skills/MCP `bilinmiyor` | Doğrulamadığımız şeye "güncel" dememek, kaydı gerçeğin yerine koymamak için. |
-| Kapsam | Bugün yalnız kullanıcı seviyesi: iki sağlayıcı komutuna `-g` sabit yazılı | Proje kapsamı açılınca `{scope}` değişkeni olur; ayrı kod yolu açılmaz. |
-| Platform | Windows / macOS / Linux yol farkları tek bir yol katmanında | Geliştirme Windows'ta, kullanım başka makinelerde olabilir. |
-| i18n | Tüm kullanıcı metinleri `src/i18n.ts`'te tek tablo, bugün yalnızca İngilizce | Çoklu dil sonradan eklenebilsin, metinler koda gömülmesin. |
+| Language / distribution | TypeScript + Ink; Node ≥20, runs without installation via `npx agentenv` | Harness configs are already JSON; one language carries both the TUI and the installation code. Running in every environment depends on Node being present; a machine without Node is not a target. |
+| Harness definitions | Data files (`harnesses/*.yaml`): detection paths (`~/folder` or `path:binary`), the `agentId` providers expect, the hook section | A new harness = a new file; the core code does not know harness names. |
+| Item kinds | One layout definition per kind: `skill` = `npx skills`, `mcp` = `npx add-mcp`, `hook` = `settings.json` merge | Adding a new kind becomes adding a new definition, not an `if` chain. |
+| Providers | More than one provider per kind, each declaring the harnesses it supports and its commands | So that where `add-mcp` does not support a harness we can fall back to `mcpm`, or later to another tool |
+| Skill installation | The `skills` package's programmatic API (`installSkills`/`removeSkills`), primary; `npx skills` fallback | A structured result (`failed[]`), correct removal semantics (a shared copy stays if another agent uses it) and no subprocess. Requires Node ≥22.20. |
+| Packages | `packages/*.yaml`: `id`, `items[]`, `note`, `link` — one package per file | Read/edited by humans; the TUI shows the note and the link from here. |
+| Installation state | `~/.agentenv/state.json` (item, harness, provider, command, time) + the verifiable target; hooks `up-to-date`/`missing`, skills/MCP `unknown` | So as not to call "up-to-date" something we have not verified, and not to put the record in place of the truth. |
+| Scope | Today only user level: `-g` is written fixed into the two provider commands | When project scope opens it becomes a `{scope}` variable; no separate code path is opened. |
+| Platform | Windows / macOS / Linux path differences in a single path layer | Development may be on Windows, use on other machines. |
+| i18n | All user-facing text in a single table in `src/i18n.ts`, today only English | So that multiple languages can be added later and the text is not embedded in the code. |
