@@ -1,5 +1,5 @@
 {
-  "name": "ahsm",
+  "name": "@ernem22/ahsm",
   "version": "0.1.0",
   "description": "Agent Harness Setup Manager — install and track agent-harness setup (skills, MCP servers, hooks) from one package list.",
   "type": "module",

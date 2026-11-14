@@ -1,6 +1,6 @@
 # ahsm
 
-The npm package is `ahsm`; it installs the command `ahsm`.
+The npm package is `@ernem22/ahsm`; it installs the command `ahsm`.
 
 Install and track agent-harness setup — skills, MCP servers and hooks — from one package list, across
 **Claude Code, Codex, pi and opencode**, and keep an honest record of what landed where.
