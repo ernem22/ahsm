@@ -34,7 +34,7 @@ export interface PlanOptions {
  * requirement rows, and the ids the user marked for the next apply. Nothing here writes.
  */
 export function usePlanSurface({ data, ctx, selection, width, height, active }: PlanOptions): PlanState {
-  // The plan asks the core the same question `agentenv plan` does, for the selection on screen.
+  // The plan asks the core the same question `ahsm plan` does, for the selection on screen.
   const read = useRead(() => buildPlan(data, ctx, selection));
   const [window, setWindow] = useState<RowWindow>(emptyWindow);
   // `Down` past the last entry walks the requirement rows; `space` marks the one under that focus.

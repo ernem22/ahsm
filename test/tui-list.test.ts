@@ -155,11 +155,11 @@ test('slash filters as you type, states the matched count, and Esc clears before
     await waitIdle(tui);
     await tui.press('\u001B');
     assert.ok((tui.lines()[3] ?? '').includes('filter: none'), at(tui.lines(), 3));
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'Esc cleared the surface, not the filter');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.list}`), true, 'Esc cleared the surface, not the filter');
     assert.equal(tui.frame().includes(match), false, 'the cleared filter still counts matches');
     await waitIdle(tui);
     await tui.press('\u001B');
-    assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'Esc did not leave the surface');
+    assert.equal(tui.lines()[0]?.startsWith('ahsm  install'), true, 'Esc did not leave the surface');
   } finally {
     await tui.stop();
   }
@@ -226,7 +226,7 @@ test('Esc clears the carrier filter too, in the same step as the name filter', a
     const lines = tui.lines();
     assert.ok((lines[3] ?? '').includes('filter: none'), at(lines, 3));
     assert.equal((lines[3] ?? '').includes('carriers:'), false, 'Esc left the carrier filter on');
-    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'Esc left the surface');
+    assert.equal(lines[0]?.startsWith(`ahsm  ${t.tui.surfaces.list}`), true, 'Esc left the surface');
     assert.ok(tui.frame().includes('beta'), 'the cleared carrier filter did not restore the rows');
   } finally {
     await tui.stop();
@@ -260,7 +260,7 @@ test('with the overlay open the surface owns no Esc: the overlay closes, the fil
 
     await tui.press('\u001B');
     assert.equal(tui.lines().includes(t.tui.helpTitle(t.tui.surfaces.list)), false, 'Esc did not close the overlay');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'Esc left the surface');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.list}`), true, 'Esc left the surface');
     assert.equal(tui.lines()[3], filtered, 'closing the overlay changed the filter');
     assert.ok((tui.lines().at(-1) ?? '').startsWith('Esc clear filter'), tui.lines().at(-1) ?? '');
   } finally {
@@ -315,16 +315,16 @@ test('the slow read is named and timed, and Esc stops waiting without leaving', 
     await tui.press('l');
     await settle(tui, () => tui.frame().includes('reading the provider inventory…'));
     assert.match(tui.frame(), /reading the provider inventory… \d+s/, tui.frame());
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true);
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.list}`), true);
 
     await tui.press('\u001B');
     assert.ok(tui.frame().includes(t.tui.stoppedWaiting), `no stopped copy in:\n${tui.frame()}`);
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'Esc left the surface instead of stopping');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.list}`), true, 'Esc left the surface instead of stopping');
 
     // The stopped read is a settled one: this Esc is the surface's, and it leaves.
     await waitIdle(tui);
     await tui.press('\u001B');
-    assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'the previous surface is not reachable');
+    assert.equal(tui.lines()[0]?.startsWith('ahsm  install'), true, 'the previous surface is not reachable');
     expectFrame(tui.lines(), { width: 120, rows: 30 });
   } finally {
     await tui.stop();
@@ -344,7 +344,7 @@ test('r reads again, an empty inventory says so, and a failed read keeps the sur
     assert.ok(tui.frame().includes(t.listEmpty), tui.frame());
     await tui.press('r');
     await settle(tui, () => tui.frame().includes('lockfile missing'));
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'the failure left the surface');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.list}`), true, 'the failure left the surface');
     expectFrame(tui.lines(), { width: 120, rows: 30 });
   } finally {
     await tui.stop();

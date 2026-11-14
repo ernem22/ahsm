@@ -25,9 +25,9 @@ import {
 } from './render.js';
 import type { Data } from './types.js';
 
-/** `AGENTENV_ROOT` points the CLI at another data root (fixtures, e2e sandboxes). */
-const root = process.env.AGENTENV_ROOT
-  ? path.resolve(process.env.AGENTENV_ROOT)
+/** `AHSM_ROOT` points the CLI at another data root (fixtures, e2e sandboxes). */
+const root = process.env.AHSM_ROOT
+  ? path.resolve(process.env.AHSM_ROOT)
   : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function printPlan(plan: Plan): void {
@@ -46,20 +46,20 @@ async function printStatus(data: Data, ctx: Ctx): Promise<void> {
   for (const line of statusLines(report)) console.log(line.text);
 }
 
-/** `agentenv list`: an explicit, read-only read of the provider's inventory (never plan or status). */
+/** `ahsm list`: an explicit, read-only read of the provider's inventory (never plan or status). */
 async function printInventory(data: Data, ctx: Ctx): Promise<void> {
   const report = await readSkillInventory(data, ctx);
   for (const line of listLines(report)) console.log(line.text);
 }
 
-/** `agentenv stale`: the provider's own update check, read-only — nothing is installed, nothing written. */
+/** `ahsm stale`: the provider's own update check, read-only — nothing is installed, nothing written. */
 async function printStale(data: Data, ctx: Ctx): Promise<void> {
   const report = await readStaleSkills(data, ctx);
   for (const line of staleLines(report)) console.log(line.text);
 }
 
 /**
- * `agentenv update`: install the skills the provider marked stale again, through the install path.
+ * `ahsm update`: install the skills the provider marked stale again, through the install path.
  * Without `--yes` it only shows what that run would do — the check and the plan both write nothing.
  */
 async function runUpdate(data: Data, ctx: Ctx, argv: string[]): Promise<number> {

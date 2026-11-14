@@ -1,4 +1,4 @@
-# agentenv
+# ahsm
 
 Installs and tracks agent-harness setup — skills, MCP servers and hooks — from one package list, and
 knows what landed where.
@@ -6,7 +6,7 @@ knows what landed where.
 ## Language
 
 **Harness**:
-A coding agent whose setup agentenv manages — Claude Code, Codex, pi, opencode.
+A coding agent whose setup ahsm manages — Claude Code, Codex, pi, opencode.
 _Avoid_: client, agent, tool, assistant
 
 **Item**:
@@ -31,7 +31,7 @@ _Avoid_: registry (say which registry), catalog (that is ours under `catalog/`)
 
 **Provider**:
 The external tool that performs an installation for one item type — the `skills` CLI for skills,
-`add-mcp` for MCP servers. agentenv does not install skills or MCP servers itself.
+`add-mcp` for MCP servers. ahsm does not install skills or MCP servers itself.
 _Avoid_: installer, adapter, driver
 
 **Requirement**:
@@ -49,7 +49,7 @@ word belongs to the item states (`up-to-date` / `missing` / `unknown`)
 
 **Installation (kurulum)**:
 The act of making something present, always qualified by its object: harness installation, skill
-installation, MCP installation, hook installation, agentenv installation. There is no separate verb for
+installation, MCP installation, hook installation, ahsm installation. There is no separate verb for
 "writing config" as opposed to "installing a runtime" — the object says which.
 _Avoid_: setup (as a noun), apply/bootstrap (as user-facing words)
 
@@ -58,7 +58,7 @@ Where an installation lands: user level (the only one today) or project level (l
 _Avoid_: target, destination, profile
 
 **Record (kayıt)**:
-What agentenv remembers about an installation: item, harness, provider, command, time. It says what we
+What ahsm remembers about an installation: item, harness, provider, command, time. It says what we
 did, not what is true now — which is why an update that reinstalled one stale skill records that command,
 narrowed, and the plan recognises it as the item's own.
 _Avoid_: state (as a concept; `state.json` is just the file), history, log

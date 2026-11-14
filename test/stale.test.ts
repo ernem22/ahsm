@@ -45,7 +45,7 @@ function fixture(overrides: Partial<ProviderDef> = {}): Data {
 }
 
 function tempHome(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-stale-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-stale-'));
 }
 
 interface Locked {

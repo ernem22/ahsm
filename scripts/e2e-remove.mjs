@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * End-to-end check of `agentenv remove` — the one surface that answers both removal cases with the same
- * rules: everything the record holds, and a skill the user names that agentenv may never have installed.
+ * End-to-end check of `ahsm remove` — the one surface that answers both removal cases with the same
+ * rules: everything the record holds, and a skill the user names that ahsm may never have installed.
  *
  *   node scripts/e2e-remove.mjs      # offline: no network, no provider installs
  *
@@ -45,13 +45,13 @@ function assert(condition, message) {
 }
 
 function sandbox() {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-remove-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-remove-'));
   fs.mkdirSync(path.join(home, '.fake'), { recursive: true });
   fs.writeFileSync(path.join(home, '.fake', 'settings.json'), '{}\n', 'utf8');
   return home;
 }
 
-/** A skill installed outside agentenv: a file and a lockfile entry, no record anywhere. */
+/** A skill installed outside ahsm: a file and a lockfile entry, no record anywhere. */
 function handInstall(home, name) {
   const dir = path.join(home, '.fake', 'skills');
   fs.mkdirSync(dir, { recursive: true });
@@ -65,14 +65,14 @@ function handInstall(home, name) {
 
 /** A copy of the fixture root with one file replaced, so a scenario can bend the fake provider. */
 function copiedRoot(rewrite) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-remove-root-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-remove-root-'));
   fs.cpSync(offlineRoot, root, { recursive: true });
   rewrite(root);
   return root;
 }
 
 function run(home, args, root = offlineRoot) {
-  const env = { ...process.env, HOME: home, USERPROFILE: home, AGENTENV_ROOT: root };
+  const env = { ...process.env, HOME: home, USERPROFILE: home, AHSM_ROOT: root };
   const result = spawnSync(process.execPath, [cli, ...args], { cwd: repo, env, encoding: 'utf8' });
   return { code: result.status ?? 1, out: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
@@ -95,7 +95,7 @@ function stateOf(home) {
   return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { entries: [] };
 }
 
-console.log('agentenv remove');
+console.log('ahsm remove');
 
 check('remove onaydan önce etkilenen harness\'ları ve dizinleri gösterir, hiçbir şey yazmaz', () => {
   const home = sandbox();
@@ -134,7 +134,7 @@ check('remove --yes her kayıtlı öğeyi kaldırır ve kaydı boşaltır', () =
   assert(run(home, ['status']).out.includes(t.statusEmpty), 'status kaydı boş göstermiyor');
 });
 
-check('agentenv\'in kurmadığı skill adıyla kaldırılır', () => {
+check('ahsm\'in kurmadığı skill adıyla kaldırılır', () => {
   const home = sandbox();
   const lockPath = handInstall(home, 'by-hand');
 

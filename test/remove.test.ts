@@ -85,12 +85,12 @@ function adapterData(): Data {
 }
 
 function tempHome(withHarness = true): string {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-remove-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-remove-'));
   if (withHarness) fs.mkdirSync(path.join(home, '.fake'), { recursive: true });
   return home;
 }
 
-/** The record as agentenv leaves it, written straight so a test says only what it needs. */
+/** The record as ahsm leaves it, written straight so a test says only what it needs. */
 function record(ctx: Ctx, entries: Array<{ itemId: string; harness: string; kind?: Kind }>): void {
   const stored: StateEntry[] = entries.map((entry, index) => ({
     itemId: entry.itemId,
@@ -232,7 +232,7 @@ test('remove: adı verilen skill kayıtlı öğeyle aynı kurallarla planlanır'
   );
 });
 
-test('remove: agentenv\'in kurmadığı skill adıyla kaldırılır', async () => {
+test('remove: ahsm\'in kurmadığı skill adıyla kaldırılır', async () => {
   const home = tempHome();
   const data = adapterData();
   const { ctx, removedCalls } = adapterContext(home, {

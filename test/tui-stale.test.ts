@@ -24,7 +24,7 @@ interface Setup {
 }
 
 interface Options {
-  /** The provider lockfile's `skills` map: what agentenv believes it installed, and from where. */
+  /** The provider lockfile's `skills` map: what ahsm believes it installed, and from where. */
   locked?: Record<string, unknown>;
   /** What the provider's own `check` prints. */
   stdout?: string;
@@ -218,16 +218,16 @@ test('the slow read is named and timed, and Esc stops waiting without leaving', 
     await tui.press('v');
     await settle(tui, () => tui.frame().includes('reading the provider update check…'));
     assert.match(tui.frame(), /reading the provider update check… \d+s/, tui.frame());
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true);
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.stale}`), true);
 
     await tui.press('\u001B');
     assert.ok(tui.frame().includes(t.tui.stoppedWaiting), `no cancelled copy in:\n${tui.frame()}`);
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, 'Esc left the surface instead of stopping');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.stale}`), true, 'Esc left the surface instead of stopping');
 
     // The stopped check is a settled one: this Esc is the surface's, and it leaves.
     await waitIdle(tui);
     await tui.press('\u001B');
-    assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'the previous surface is not reachable');
+    assert.equal(tui.lines()[0]?.startsWith('ahsm  install'), true, 'the previous surface is not reachable');
     expectFrame(tui.lines(), { width: 120, rows: 30 });
   } finally {
     await tui.stop();
@@ -287,10 +287,10 @@ test('slash narrows by name, states the matched count, and Esc clears before it 
     await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal((tui.lines()[3] ?? '').includes('filter: none'), true, at(tui.lines(), 3));
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, 'Esc cleared the surface, not the filter');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.stale}`), true, 'Esc cleared the surface, not the filter');
     await waitIdle(tui);
     await tui.press('\u001B');
-    assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'Esc did not leave the surface');
+    assert.equal(tui.lines()[0]?.startsWith('ahsm  install'), true, 'Esc did not leave the surface');
   } finally {
     await tui.stop();
   }
@@ -303,7 +303,7 @@ test('u opens the update surface from a stale row, and the keybar names the key'
     await openStale(tui);
     assert.ok((tui.lines()[tui.lines().length - 1] ?? '').includes('u update'), at(tui.lines(), tui.lines().length - 1));
     await tui.press('u');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.update}`), true, at(tui.lines(), 0));
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.update}`), true, at(tui.lines(), 0));
     assert.equal(tui.lines()[2], t.tui.surfaces.update);
   } finally {
     await tui.stop();
@@ -386,7 +386,7 @@ test('one Esc clears the name filter and the state filter together', async () =>
     lines = tui.lines();
     assert.ok(at(lines, 3).includes('filter: none'), at(lines, 3));
     assert.equal(at(lines, 3).includes('state:'), false, 'Esc left the state filter on');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, 'Esc left the surface');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.stale}`), true, 'Esc left the surface');
     assert.equal(stateRows(lines).length, 4, lines.join('\n'));
   } finally {
     await tui.stop();

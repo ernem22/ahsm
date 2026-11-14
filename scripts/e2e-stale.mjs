@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * End-to-end check of `agentenv stale` — the read-only freshness surface.
+ * End-to-end check of `ahsm stale` — the read-only freshness surface.
  *
  * `stale` asks the provider's own update check (`skills check`) whether each recorded skill is still
  * what its source offers. Offline that check cannot reach a source, which is a legitimate `unknown`:
@@ -48,7 +48,7 @@ const HASH = '0123456789abcdef0123456789abcdef01234567';
 
 /** A disposable HOME whose provider lockfile already records one installed skill. */
 function sandbox(locked = {}, markers = []) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-stale-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-stale-'));
   const file = path.join(home, '.fake', '.skill-lock.json');
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify({ version: 3, skills: locked }, null, 2), 'utf8');
@@ -74,7 +74,7 @@ function recorded(name, extra = {}) {
 }
 
 function run(home, args) {
-  const env = { ...process.env, HOME: home, USERPROFILE: home, AGENTENV_ROOT: offlineRoot, DISABLE_TELEMETRY: '1' };
+  const env = { ...process.env, HOME: home, USERPROFILE: home, AHSM_ROOT: offlineRoot, DISABLE_TELEMETRY: '1' };
   const result = spawnSync(process.execPath, [cli, ...args], { cwd: repo, env, encoding: 'utf8' });
   return { code: result.status ?? 1, out: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
@@ -92,7 +92,7 @@ function treeHash(dir) {
   return hash.digest('hex');
 }
 
-console.log('agentenv stale');
+console.log('ahsm stale');
 
 check('stale: sağlayıcı güncelleme bildirirse stale yazar', () => {
   const home = sandbox({ alpha: recorded('alpha') }, [path.join('upstream', 'alpha')]);

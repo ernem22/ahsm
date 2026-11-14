@@ -60,7 +60,7 @@ async function openStatus(tui: TuiHarness, marker = t.harnesses): Promise<void> 
   await tui.press('s');
   await settle(
     tui,
-    () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`) === true && tui.frame().includes(marker),
+    () => tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.status}`) === true && tui.frame().includes(marker),
   );
   // The report is on screen and the checks are in: the next key is the surface's, not the wait's.
   await waitIdle(tui);
@@ -191,7 +191,7 @@ test('r re-reads the report without leaving the surface', async () => {
 
     await tui.press('r');
     await settle(tui, () => tui.frame().includes(`${t.harnessLabels.ready}  fake  20.0.0 · min 20`));
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`), true, 'r left the surface');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.status}`), true, 'r left the surface');
     assert.equal(tui.frame().includes(t.harnessLabels['too-old']), false, 'the frame kept the old verdict');
   } finally {
     await tui.stop();
@@ -228,7 +228,7 @@ test('no key on the status surface writes: the record and the tree are untouched
     await waitIdle(tui);
     await tui.press('?');
     await tui.press('\u001B');
-    await settle(tui, () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`) === true);
+    await settle(tui, () => tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.status}`) === true);
 
     assert.deepEqual(snapshot(shared.home), before, 'a visit to status changed a file');
     for (const argv of shared.runner.calls.slice(calls)) {
@@ -256,17 +256,17 @@ test('the slow read is named and timed, and Esc stops waiting without leaving', 
     await tui.press('s');
     await settle(tui, () => tui.frame().includes('reading the status…'));
     assert.match(tui.frame(), /reading the status… \d+s/, tui.frame());
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`), true);
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.status}`), true);
     assert.ok((tui.lines().at(-1) ?? '').startsWith('Esc stop waiting'), tui.lines().at(-1) ?? '');
 
     await tui.press('\u001B');
     assert.ok(tui.frame().includes(t.tui.stoppedWaiting), `no cancelled copy in:\n${tui.frame()}`);
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`), true, 'Esc left the surface instead of stopping');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.status}`), true, 'Esc left the surface instead of stopping');
 
     // The stopped read is a settled one: this Esc is the surface's, and it leaves.
     await waitIdle(tui);
     await tui.press('\u001B');
-    assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'the previous surface is not reachable');
+    assert.equal(tui.lines()[0]?.startsWith('ahsm  install'), true, 'the previous surface is not reachable');
     expectFrame(tui.lines(), { width: 120, rows: 30 });
   } finally {
     release();
@@ -286,7 +286,7 @@ test('a read that fails shows its message instead of a blank surface', async () 
     await tui.press('s');
     await settle(tui, () => tui.frame().includes('the check died'));
     const lines = tui.lines();
-    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`), true, 'the failure left the surface');
+    assert.equal(lines[0]?.startsWith(`ahsm  ${t.tui.surfaces.status}`), true, 'the failure left the surface');
     assert.equal(lines.includes('the check died'), true, lines.join('\n'));
     assert.ok(lines[lines.length - 1]?.includes('r refresh'), 'the keybar went with the failure');
   } finally {
@@ -296,7 +296,7 @@ test('a read that fails shows its message instead of a blank surface', async () 
 
 /** A root with twelve more harnesses than the fixture has, none of them requiring a version check. */
 function manyHarnesses(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-status-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-status-'));
   fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
   for (let at = 1; at <= 12; at += 1) {
     const id = `h-${String(at).padStart(2, '0')}`;
@@ -378,7 +378,7 @@ test('at 40 columns every row still leads with its state word and no line leaves
     await openStatus(tui);
     const lines = tui.lines();
     expectFrame(lines, { width: 40, rows: 30 });
-    assert.equal(lines[0], `agentenv  ${t.tui.surfaces.status}`);
+    assert.equal(lines[0], `ahsm  ${t.tui.surfaces.status}`);
     assert.ok(
       lines.some((line) => line.startsWith(`${t.tui.marks.focused}${t.harnessLabels['too-old']}  fake  1.2.0 · min 20`)),
       lines.join('\n'),

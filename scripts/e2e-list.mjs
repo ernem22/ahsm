@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * End-to-end check of `agentenv list` — the read-only skill inventory surface.
+ * End-to-end check of `ahsm list` — the read-only skill inventory surface.
  *
  * `list` asks the skills provider what is installed, so it is the one command whose answer is not
- * limited to what agentenv itself did. That also means its output includes whatever the machine's real
+ * limited to what ahsm itself did. That also means its output includes whatever the machine's real
  * `~/.agents` store holds, so these scenarios assert the scan's *behaviour* (it runs, it names a
  * hand-installed skill, it writes nothing, it survives a damaged record) rather than an exact inventory.
  *
@@ -44,9 +44,9 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-/** A disposable HOME holding one skill installed by hand, i.e. outside agentenv. */
+/** A disposable HOME holding one skill installed by hand, i.e. outside ahsm. */
 function sandbox() {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-list-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-list-'));
   const skill = path.join(home, '.claude', 'skills', 'by-hand');
   fs.mkdirSync(skill, { recursive: true });
   fs.writeFileSync(path.join(skill, 'SKILL.md'), '---\nname: by-hand\ndescription: installed by hand\n---\n', 'utf8');
@@ -56,7 +56,7 @@ function sandbox() {
 }
 
 function run(home, args) {
-  const env = { ...process.env, HOME: home, USERPROFILE: home, AGENTENV_ROOT: offlineRoot };
+  const env = { ...process.env, HOME: home, USERPROFILE: home, AHSM_ROOT: offlineRoot };
   const result = spawnSync(process.execPath, [cli, ...args], { cwd: repo, env, encoding: 'utf8' });
   return { code: result.status ?? 1, out: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
@@ -74,7 +74,7 @@ function treeHash(dir) {
   return hash.digest('hex');
 }
 
-console.log('agentenv list');
+console.log('ahsm list');
 
 check('list elle kurulmuş skill\'i adıyla ve kapsamıyla gösterir', () => {
   const home = sandbox();

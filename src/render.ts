@@ -181,7 +181,7 @@ export function removeOutcomeLines(outcome: RemoveOutcome): Line[] {
 
 /**
  * The one listing formatter: name, scope, and the harnesses the provider says carry each skill,
- * including skills agentenv never installed. A skill no harness reports is still listed.
+ * including skills ahsm never installed. A skill no harness reports is still listed.
  */
 export function listLines(report: SkillInventoryReport): Line[] {
   const lines: Line[] = [{ text: t.skillsTitle, tone: 'dim' }];

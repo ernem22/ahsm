@@ -1,10 +1,10 @@
 {
-  "name": "agentenv-cli",
+  "name": "ahsm",
   "version": "0.1.0",
-  "description": "Install and track agent-harness setup (skills, MCP servers, hooks) from one package list.",
+  "description": "Agent Harness Setup Manager — install and track agent-harness setup (skills, MCP servers, hooks) from one package list.",
   "type": "module",
   "bin": {
-    "agentenv": "dist/cli.js"
+    "ahsm": "dist/cli.js"
   },
   "engines": {
     "node": ">=22.20"
@@ -64,11 +64,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ernem22/agentenv.git"
+    "url": "git+https://github.com/ernem22/ahsm.git"
   },
-  "homepage": "https://github.com/ernem22/agentenv",
+  "homepage": "https://github.com/ernem22/ahsm",
   "bugs": {
-    "url": "https://github.com/ernem22/agentenv/issues"
+    "url": "https://github.com/ernem22/ahsm/issues"
   },
   "author": "ernem22"
 }

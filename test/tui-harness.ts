@@ -193,7 +193,7 @@ export async function waitIdle(tui: TuiHarness, deadlineMs = IDLE_TIMEOUT_MS): P
 
 /** A disposable home; `detected: true` plants the fixture harness's detect path in it. */
 export function fixtureHome(detected = false): string {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-'));
   if (detected) fs.mkdirSync(path.join(home, '.fake'), { recursive: true });
   return home;
 }

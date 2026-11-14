@@ -30,7 +30,7 @@ function ctx(home: string) {
 }
 
 function homeWithClaude(): string {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-sel-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-sel-'));
   fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
   return home;
 }

@@ -1,4 +1,4 @@
-# agentenv
+# ahsm
 
 Installs and tracks agent-harness setup (skills, MCP servers, hooks) from one package list.
 

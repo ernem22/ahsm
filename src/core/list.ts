@@ -26,11 +26,11 @@ export interface SkillInventoryReport {
 }
 
 /**
- * Read-only: asks the skills provider what is actually installed, so skills installed outside agentenv
+ * Read-only: asks the skills provider what is actually installed, so skills installed outside ahsm
  * appear too (a record is not evidence — ADR-0002). Reads `state.json` at no point: a damaged record
  * cannot make the picture incomplete, and nothing is written, not even a backup.
  *
- * `listSkills()` costs ~7 s per hundred skills, which is why this is only reachable from `agentenv list`
+ * `listSkills()` costs ~7 s per hundred skills, which is why this is only reachable from `ahsm list`
  * and never from `plan` or `status` (whose contract is fast and side-effect free).
  */
 export async function readSkillInventory(data: Data, ctx: Ctx): Promise<SkillInventoryReport> {

@@ -1,27 +1,27 @@
 ---
-id: agentenv
+id: ahsm
 type: goal-and-requirements
 status: active
-title: agentenv
+title: ahsm
 ---
 
-# agentenv
+# ahsm
 
 A tool that performs the installation of skills + MCP + hooks for agent harnesses from one place, and
 knows what is installed where.
 
 ## Overview
 
-agentenv picks the skills, MCP servers and hooks of the agent harnesses on a machine (Claude Code, Codex
+ahsm picks the skills, MCP servers and hooks of the agent harnesses on a machine (Claude Code, Codex
 CLI, opencode, pi) from a single list and installs them. Items live in this repo as **source definitions**
 (a git repo/URL for skills, a server package for MCP, a file for a hook), grouped into named packages; the
 TUI shows the list, and the selection is made per harness or for all of them at once.
 
-agentenv does not write the skill installation itself: it delegates it to mature tools such as
+ahsm does not write the skill installation itself: it delegates it to mature tools such as
 `npx skills`. The only thing it writes itself is the MCP config record and the hook merge, which have no
 common installer.
 
-After an installation agentenv knows which item was installed into which harness, in which scope. The
+After an installation ahsm knows which item was installed into which harness, in which scope. The
 ambiguity of "was it installed into the project, via npx, or into the harness folder" collapses into a
 single source of truth.
 
@@ -49,12 +49,12 @@ skill, MCP server or hook the files are edited by hand. Two consequences follow:
   by the provider. Only the hook file it writes itself is backed up before being overwritten.
 - **Multiple installations at once.** The selected items can be written into a single harness or into all
   harnesses at once.
-- **Delegating the installation (skills + MCP).** agentenv does not write the skill files and the MCP
+- **Delegating the installation (skills + MCP).** ahsm does not write the skill files and the MCP
   records; it calls the provider tools (`npx skills add <source> -g -a <harness>`, `npx add-mcp <package>`).
   Symlink/copy, check/update/remove are those tools' job.
 - **Provider model.** More than one provider can be defined for each item kind; every provider declares
   which harnesses it supports. An unsupported pair is not silently skipped, it is shown as "not covered".
-- **Hooks.** There is no multi-harness hook builder; agentenv merges hooks into `settings.json` — the target
+- **Hooks.** There is no multi-harness hook builder; ahsm merges hooks into `settings.json` — the target
   file and the entry to be written are shown, approval is asked, a backup is taken, the other settings in
   the file are preserved.
 - **Requirements.** The tools that are missing (Node/npx, uv, the harness binary that is needed) are listed
@@ -78,7 +78,7 @@ skill, MCP server or hook the files are edited by hand. Two consequences follow:
 There are tools that do parts of the same work; none of them covers all four at once (package from a local
 file + TUI + multiple harnesses + honest status).
 
-| Tool | What it does | What is still missing in agentenv | Link |
+| Tool | What it does | What is still missing in ahsm | Link |
 |---|---|---|---|
 | `skills` (vercel-labs) | Installs skills from git repos with `npx skills add`, 75+ harnesses, lockfile | Does not go beyond skills: no MCP record, no hook merging and no local package definition | https://github.com/vercel-labs/skills |
 | Bridle | Translates profiles, skills/agents/commands/MCP between Claude Code, OpenCode, Goose, Amp, Copilot CLI | Items come from GitHub (no local file library); no hook merging and no TUI | https://github.com/neiii/bridle |
@@ -91,7 +91,7 @@ file + TUI + multiple harnesses + honest status).
 
 | Topic | Decision | Rationale |
 |---|---|---|
-| Language / distribution | TypeScript + Ink; Node ≥20, runs without installation via `npx agentenv` | Harness configs are already JSON; one language carries both the TUI and the installation code. Running in every environment depends on Node being present; a machine without Node is not a target. |
+| Language / distribution | TypeScript + Ink; Node ≥20, runs without installation via `npx ahsm` | Harness configs are already JSON; one language carries both the TUI and the installation code. Running in every environment depends on Node being present; a machine without Node is not a target. |
 | Harness definitions | Data files (`harnesses/*.yaml`): detection paths (`~/folder` or `path:binary`), the `agentId` providers expect, the hook section | A new harness = a new file; the core code does not know harness names. |
 | Item kinds | One layout definition per kind: `skill` = `npx skills`, `mcp` = `npx add-mcp`, `hook` = `settings.json` merge | Adding a new kind becomes adding a new definition, not an `if` chain. |
 | Providers | More than one provider per kind, each declaring the harnesses it supports and its commands | So that where `add-mcp` does not support a harness we can fall back to `mcpm`, or later to another tool |

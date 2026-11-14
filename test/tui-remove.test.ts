@@ -208,7 +208,7 @@ test('x shows every affected harness and path before any key writes, and the rec
     await openRemove(tui);
     const lines = tui.lines();
     expectFrame(lines, { width: 120, rows: 30 });
-    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.remove}`), true);
+    assert.equal(lines[0]?.startsWith(`ahsm  ${t.tui.surfaces.remove}`), true);
     assert.equal(lines[2], t.tui.surfaces.remove);
 
     // The rows are the formatter's, one per recorded item, before any key acts.
@@ -263,13 +263,13 @@ test('y removes the planned items through the core and clears exactly their reco
     assert.ok(keybar.includes(`${t.tui.keyNames.return} ${t.tui.keys.exit}`), keybar);
     assert.ok(keybar.includes(`s ${t.tui.surfaces.status}`), keybar);
     await tui.press('s');
-    await settle(tui, () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`) === true);
+    await settle(tui, () => tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.status}`) === true);
   } finally {
     await tui.stop();
   }
 });
 
-test('a name agentenv never installed is planned, removed, and writes no record', async () => {
+test('a name ahsm never installed is planned, removed, and writes no record', async () => {
   const shared = setup({ installed: [{ name: 'alpha', source: 'fixture/skills', agents: ['fake'] }] });
   const tui = await startTui({ ...shared, width: 120 });
   try {
@@ -335,19 +335,19 @@ test('n and Esc decline without writing, and Esc in the name mode cancels the mo
     for (const char of 'ghost') await tui.press(char);
     // Esc is the mode's: it empties the name and leaves the plan where it was.
     await tui.press('\u001B');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.remove}`), true, tui.frame());
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.remove}`), true, tui.frame());
     assert.equal(tui.frame().includes(t.tui.removeNameTitle), false, 'the name mode outlived Esc');
     assert.equal(tui.frame().includes(`${t.tui.removeNamePrompt} ghost`), false, 'the cancelled name is still there');
 
     // In the settled plan, Esc leaves the surface without writing.
     await waitIdle(tui);
     await tui.press('\u001B');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
 
     // `n` is the same decline.
     await openRemove(tui);
     await tui.press('n');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
     assert.deepEqual(shared.stub.removeCalls, [], 'a declined plan wrote something');
     assert.equal(readState(shared.ctx).state.entries.length, 1, 'a declined plan changed the record');
   } finally {
@@ -434,7 +434,7 @@ test('while the removal runs the body names the work and refuses every key that 
     assert.ok(busy.includes(t.tui.applyRefusal), busy);
     for (const key of ['q', '\u001B', 'n', 'x']) {
       await tui.press(key);
-      assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.remove}`), true, `${key} left the write`);
+      assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.remove}`), true, `${key} left the write`);
       assert.ok(tui.frame().includes(t.tui.applyRefusal), tui.frame());
     }
     release();
@@ -458,7 +458,7 @@ test('the empty record is stated, and y has nothing to promise or to clear', asy
     assert.equal((tui.lines().at(-1) ?? '').includes('y remove'), false, tui.lines().at(-1) ?? '');
     await tui.press('y');
     assert.ok(tui.frame().includes(t.tui.removeEmpty), tui.frame());
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.remove}`), true);
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.remove}`), true);
   } finally {
     await tui.stop();
   }
@@ -508,7 +508,7 @@ test('r reads the removal plan again, so the rows show what the record says now'
     writeState(shared.ctx, { version: 1, entries: [] });
     await tui.press('r');
     await settle(tui, () => tui.frame().includes(t.tui.removeEmpty));
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.remove}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.remove}`), true, tui.lines()[0] ?? '');
     assert.equal(planRows(tui.lines()).length, 0, tui.frame());
   } finally {
     await tui.stop();

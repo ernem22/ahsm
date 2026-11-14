@@ -13,7 +13,7 @@ import type { SurfaceId } from './tui/keys.js';
  * table and picking one at startup — nothing else in the UI should hold literal copy.
  */
 export const t = {
-  title: 'agentenv',
+  title: 'ahsm',
   target: 'target',
   noHarness: 'no installed harness found',
   packages: 'packages',
@@ -34,7 +34,7 @@ export const t = {
   blocked: 'blocked',
   actions: (runs: number, skipped: number, blocked: number) =>
     `${runs} action(s), ${skipped} skipped, ${blocked} blocked`,
-  applyHint: 'to run it: agentenv apply --yes (add --update <ids|all> to mark too-old prerequisites; default: none)',
+  applyHint: 'to run it: ahsm apply --yes (add --update <ids|all> to mark too-old prerequisites; default: none)',
   statusEmpty: 'record is empty — nothing installed yet',
   itemsTitle: 'items',
   skillsTitle: 'skills (provider inventory)',
@@ -62,7 +62,7 @@ export const t = {
   staleNewer: 'the source has a newer copy — an installation would replace it',
   staleGone: 'the source no longer offers it — an installation would not restore it',
   updateTitle: 'UPDATE',
-  updateHint: 'to run it: agentenv update --yes',
+  updateHint: 'to run it: ahsm update --yes',
   updateNone: 'no stale skill — nothing to update',
   /** The note an update entry carries: why an install is planned for something already installed. */
   updateStaleCopy: (name: string) => `${name} is stale — the same installation replaces it`,
@@ -130,7 +130,7 @@ export const t = {
     error: 'error',
     absent: 'not installed',
   } as Record<RemoveResult['status'], string>,
-  removeHint: 'to run it: agentenv remove --yes',
+  removeHint: 'to run it: ahsm remove --yes',
   stateUnreadable: (where: string) =>
     `state.json at ${where} could not be read; it was left untouched and treated as empty. 'apply' will try to back it up before recording.`,
   stateNotReadable: (where: string) =>
@@ -268,7 +268,7 @@ export const t = {
     removeMixedConfirm: (count: number, recorded: number) =>
       `y remove ${count} item${count === 1 ? '' : 's'} · the record is cleared for the ${recorded} recorded item${recorded === 1 ? '' : 's'}`,
     /** A record with nothing in it: the one other way to remove a skill is named. */
-    removeEmpty: 'nothing recorded — a name removes a skill agentenv never installed',
+    removeEmpty: 'nothing recorded — a name removes a skill ahsm never installed',
     /** A record the key cannot act on: the rows themselves say why, so this claims nothing else. */
     removeUnremovable: 'nothing here can be removed — the rows say why',
     /** What the removal plan's read is called while it runs (it reads the inventory only for a new name). */
@@ -301,14 +301,14 @@ export const t = {
     ellipsis: '…',
   },
   help: [
-    'agentenv                              TUI (pick harnesses and a package, review, install)',
-    'agentenv plan [--package id]          print the plan only',
-    'agentenv apply --yes [--package id]   apply the plan (--update <ids|all> marks too-old prerequisites; default: none)',
-    'agentenv status                       show what is installed',
-    'agentenv list                         list every skill the provider inventory reports (read-only)',
-    'agentenv stale                        mark each installed skill up-to-date / stale / unknown (read-only)',
-    'agentenv update [--yes]               install every stale skill again (same install path and record)',
-    'agentenv remove [--package id]        remove recorded items (add --skill <name,name> for named skills)',
+    'ahsm                                  TUI (pick harnesses and a package, review, install)',
+    'ahsm plan [--package id]              print the plan only',
+    'ahsm apply --yes [--package id]       apply the plan (--update <ids|all> marks too-old prerequisites; default: none)',
+    'ahsm status                           show what is installed',
+    'ahsm list                             list every skill the provider inventory reports (read-only)',
+    'ahsm stale                            mark each installed skill up-to-date / stale / unknown (read-only)',
+    'ahsm update [--yes]                   install every stale skill again (same install path and record)',
+    'ahsm remove [--package id]            remove recorded items (add --skill <name,name> for named skills)',
     '',
     'flags: --package <id> (default: the package marked default) · --harness <id,id>',
     '       --update <ids|all|none> marks too-old prerequisite updates (default: none — they stay blocked)',

@@ -28,7 +28,7 @@ export interface RemoveEntry {
   command?: string[];
   reason?: string;
   /**
-   * True when the user named the skill instead of it coming out of the record: agentenv did not have
+   * True when the user named the skill instead of it coming out of the record: ahsm did not have
    * to install it, so the name itself is what the provider is asked to remove.
    */
   named?: boolean;
@@ -101,7 +101,7 @@ function lockedNames(data: Data, ctx: Ctx, item: ItemDef): string[] {
  * Plans a removal for every recorded item (or the given subset). Removal is deliberately all-harness:
  * the skill directories are shared, so a per-harness removal would claim something untrue.
  *
- * A skill the user names is planned the same way whether or not agentenv installed it: when a record
+ * A skill the user names is planned the same way whether or not ahsm installed it: when a record
  * covers the name the recorded rules apply, otherwise the name alone is what the provider removes.
  */
 export function buildRemovePlan(data: Data, ctx: Ctx, selection: RemoveSelection = {}): RemovePlan {
@@ -269,7 +269,7 @@ function namedEntries(
 /**
  * Read-only: plans the removal the user asked for — everything recorded, a package's items, and/or the
  * skills they named. Removal and `list` share the inventory read, which is why this is async: the plan
- * can then show the harnesses and directories of a skill agentenv never installed, before approval.
+ * can then show the harnesses and directories of a skill ahsm never installed, before approval.
  * Reading the inventory is the only thing that can fail here, and it does not block the removal.
  */
 export async function planRemoval(data: Data, ctx: Ctx, selection: RemoveSelection = {}): Promise<RemovePlan> {
@@ -409,7 +409,7 @@ export async function applyRemovePlan(data: Data, ctx: Ctx, plan: RemovePlan): P
     version: 1,
     entries: stored.state.entries.filter((record) => !removedItems.has(record.itemId)),
   };
-  // Nothing recorded was removed (a named skill agentenv did not install, say): rewriting the file
+  // Nothing recorded was removed (a named skill ahsm did not install, say): rewriting the file
   // would only churn it. A damaged record was still backed up above, so this cannot erase history.
   if (next.entries.length === stored.state.entries.length) return { results, warnings };
 

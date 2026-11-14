@@ -10,7 +10,7 @@
 # and names the log, so the failure is still readable in the commit's own output.
 set -u
 
-log=$(mktemp 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/agentenv-pre-commit.$$.log")
+log=$(mktemp 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/ahsm-pre-commit.$$.log")
 
 status=0
 {

@@ -36,7 +36,7 @@ const MCP_B = [
 
 /** The offline root narrowed to one package, with a provider-less harness when the test needs one. */
 function planRoot(items: string[], other = false): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-write-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-write-'));
   fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
   fs.writeFileSync(path.join(root, 'packages', 'base.yaml'), `id: base\ndefault: true\nitems: [${items.join(', ')}]\n`, 'utf8');
   if (other) {
@@ -117,13 +117,13 @@ async function until(done: () => boolean, deadlineMs = 1000): Promise<void> {
   while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
 }
 
-/** `agentenv`, three `Enter`s and the confirm screen: the form, the plan and the apply in one path. */
+/** `ahsm`, three `Enter`s and the confirm screen: the form, the plan and the apply in one path. */
 async function journey(tui: TuiHarness): Promise<void> {
   await tui.press('\r', '\r', '\r');
-  await until(() => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`) ?? false);
+  await until(() => tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.plan}`) ?? false);
   await until(() => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
   await tui.press('\r');
-  assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
+  assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
 }
 
 /** Waits for the result screen, which is the only body that prints the result heading. */
@@ -153,7 +153,7 @@ class ScriptedRunner implements Runner {
 
 /** The offline root narrowed to one entry and two too-old requirements with distinct updates. */
 function marksRoot(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-apply-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-apply-'));
   fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
   fs.writeFileSync(path.join(root, 'packages', 'base.yaml'), 'id: base\ndefault: true\nitems: [mcp-a]\n', 'utf8');
   fs.writeFileSync(
@@ -238,7 +238,7 @@ test('y hands the core exactly the marked requirement: only its update runs', as
   try {
     await openWithNodeFocused(tui);
     await tui.press(' ', '\r');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
     assert.ok((tui.lines().at(-1) ?? '').includes('y apply'), tui.lines().at(-1) ?? '');
 
     await tui.press('y');
@@ -281,7 +281,7 @@ test('with nothing marked, y hands the core no updates and no update runs', asyn
   try {
     await openPlan(tui);
     await tui.press('\r');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
     const before = shared.runner.calls.length;
 
     await tui.press('y');
@@ -317,15 +317,15 @@ test('n and Esc decline without writing, and the install selection is still ther
   const tui = await startTui({ ...shared, width: 120 });
   try {
     await tui.press('\r', '\r', '\r');
-    await settle(() => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`) ?? false);
+    await settle(() => tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.plan}`) ?? false);
     // `a` marks the plan's requirement rows, so the plan has to be read before the key can act at all.
     await waitIdle(tui);
     await tui.press('a');
 
     await tui.press('\r');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true);
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.apply}`), true);
     await tui.press('n');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`), true, 'n did not decline back to the plan');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.plan}`), true, 'n did not decline back to the plan');
     assert.equal(ran(shared.runner, NODE_UPDATE), false, 'declining ran the marked update');
     assert.equal(ran(shared.runner, FAKE_UPDATE), false, 'declining ran an unmarked update');
     // Coming back re-reads the plan, so the marks are only on the frame once that read is in again.
@@ -333,7 +333,7 @@ test('n and Esc decline without writing, and the install selection is still ther
     assert.ok(tui.frame().includes(t.updatesMarked), 'declining lost the marks');
 
     await tui.press('\r', '\u001B');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`), true, 'Esc did not decline back to the plan');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.plan}`), true, 'Esc did not decline back to the plan');
     assert.equal(ran(shared.runner, NODE_UPDATE), false, 'Esc ran the marked update');
     assert.equal(ran(shared.runner, FAKE_UPDATE), false, 'Esc ran an unmarked update');
 
@@ -341,7 +341,7 @@ test('n and Esc decline without writing, and the install selection is still ther
     await waitIdle(tui);
     await tui.press('\u001B');
     const lines = tui.lines();
-    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true);
+    assert.equal(lines[0]?.startsWith(`ahsm  ${t.tui.surfaces.install}`), true);
     assert.equal(lines.includes(`  ${t.tui.chosenOf(1, 1)}`), true, 'the selection was lost on the way back');
   } finally {
     await tui.stop();
@@ -386,7 +386,7 @@ test('while the write runs the body names the work, counts real seconds and refu
     for (const key of ['q', '\u001B']) {
       await tui.press(key);
       const lines = tui.lines();
-      assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, `${key} left the write: ${lines[0] ?? ''}`);
+      assert.equal(lines[0]?.startsWith(`ahsm  ${t.tui.surfaces.apply}`), true, `${key} left the write: ${lines[0] ?? ''}`);
       assert.ok(tui.frame().includes(t.tui.applyRefusal), tui.frame());
     }
 
@@ -485,7 +485,7 @@ test('the result offers its ways out: s opens status, Esc returns to the form, E
   const toStatus = await open();
   try {
     await toStatus.press('s');
-    assert.equal(toStatus.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`), true, toStatus.lines()[0] ?? '');
+    assert.equal(toStatus.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.status}`), true, toStatus.lines()[0] ?? '');
   } finally {
     await toStatus.stop();
   }
@@ -494,7 +494,7 @@ test('the result offers its ways out: s opens status, Esc returns to the form, E
   try {
     await toForm.press('\u001B');
     const lines = toForm.lines();
-    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, lines[0] ?? '');
+    assert.equal(lines[0]?.startsWith(`ahsm  ${t.tui.surfaces.install}`), true, lines[0] ?? '');
     assert.ok(lines.includes(`  ${t.tui.chosenOf(2, 2)}`), 'the selection was lost on the way back');
   } finally {
     await toForm.stop();
@@ -534,7 +534,7 @@ test('a status line wider than the frame takes lines from the body, not from the
     expectFrame(lines, { width: 20, rows: 30 });
     // The refusal arrives whole, above the keybar, and the keybar is still the frame's last line.
     assert.ok(flat(tui.frame()).includes(flat(t.tui.listNoCarriers)), tui.frame());
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true);
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.list}`), true);
     assert.ok((lines[lines.length - 1] ?? '').length > 0, 'the keybar left the frame');
     assert.equal(lines[lines.length - 1]?.includes(t.tui.listNoCarriers), false, 'the refusal took the keybar');
   } finally {
@@ -548,18 +548,18 @@ test('a second apply starts from nothing: the previous result is not the new con
   try {
     await openWithNodeFocused(tui);
     await tui.press(' ', '\r');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.apply}`), true, tui.lines()[0] ?? '');
     await tui.press('y');
     await result(tui);
     assert.equal(tui.lines().includes(t.tui.resultTitle), true, 'the write never reported a result');
 
     // Back to the plan, then the confirm again: this plan's answer is the confirm, not the old result.
     await tui.press('n');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.plan}`), true, tui.lines()[0] ?? '');
     await settle(() => tui.frame() !== '' && !tui.frame().includes(t.planBuilding));
     await tui.press('\r');
     const lines = tui.lines();
-    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`), true, lines[0] ?? '');
+    assert.equal(lines[0]?.startsWith(`ahsm  ${t.tui.surfaces.apply}`), true, lines[0] ?? '');
     assert.equal(lines.includes(t.tui.resultTitle), false, 'the previous result was shown as this confirm');
     expectFrame(lines, { width: 120, rows: 30 });
     const keybar = lines[lines.length - 1] ?? '';

@@ -40,7 +40,7 @@ function fixture(): Data {
 }
 
 function tempHome(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-list-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-list-'));
 }
 
 /** A context whose skills API is a stub (never the network) and whose runner records any command. */
@@ -99,7 +99,7 @@ test('list: ad, kapsam ve harness\'lar sağlayıcı envanterinden gelir', async 
   assert.deepEqual(byName.get('beta')?.harnesses, [CODEX]);
 });
 
-test('list: agentenv dışında kurulmuş skill de görünür, kimsenin taşımadığı skill de', async () => {
+test('list: ahsm dışında kurulmuş skill de görünür, kimsenin taşımadığı skill de', async () => {
   const home = tempHome();
   const { ctx } = listingContext(home, installed);
 

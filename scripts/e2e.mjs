@@ -42,7 +42,7 @@ function assert(condition, message) {
 }
 
 function sandbox(withHarness = true) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-'));
   if (withHarness) {
     fs.mkdirSync(path.join(home, '.fake'), { recursive: true });
     fs.writeFileSync(
@@ -59,7 +59,7 @@ function run(home, args, root, extraEnv = {}) {
     ...process.env,
     HOME: home,
     USERPROFILE: home,
-    AGENTENV_ROOT: root,
+    AHSM_ROOT: root,
     ...extraEnv,
   };
   const result = spawnSync(process.execPath, [cli, ...args], { cwd: repo, env, encoding: 'utf8' });
@@ -88,7 +88,7 @@ function settingsOf(home) {
  * wrote: the same CLI is too old at plan time and usable after its marked update, without new code.
  */
 function versionedRoot() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-root-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-root-'));
   fs.cpSync(offlineRoot, root, { recursive: true });
   const version = JSON.stringify(path.join(root, 'bin', 'fake-version.mjs'));
   const update = JSON.stringify(path.join(root, 'bin', 'fake-update.mjs'));
@@ -110,7 +110,7 @@ install:
 
 /** A root whose requirement is absent until its install command writes the version the check reads. */
 function missingRoot() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-root-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-root-'));
   fs.cpSync(offlineRoot, root, { recursive: true });
   const check = JSON.stringify(path.join(root, 'bin', 'fake-missing-version.mjs'));
   const update = JSON.stringify(path.join(root, 'bin', 'fake-update.mjs'));
@@ -139,7 +139,7 @@ function updatesRan(home) {
 const otherPlatform = process.platform === 'win32' ? 'linux' : 'win32';
 
 function copiedRoot() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-root-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-root-'));
   fs.cpSync(offlineRoot, root, { recursive: true });
   return root;
 }
@@ -256,7 +256,7 @@ check('status harness bölümünde sürümü ve asgari sürümü gösterir', () 
 
 check('status asgari sürümün altındaki harness için güncelleme komutunu gösterir', () => {
   // Same fixture, one number raised: the declared minimum is now above the version the CLI prints.
-  const strictRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-root-'));
+  const strictRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-root-'));
   fs.cpSync(offlineRoot, strictRoot, { recursive: true });
   fs.writeFileSync(
     path.join(strictRoot, 'requires', 'fake.yaml'),
@@ -446,7 +446,7 @@ check('bozuk state.json: plan yazmaz ve uyarır, apply yedekleyip kaydeder', () 
 check('eksik ön koşul: öğeler kurulmaz, sebep söylenir', () => {
   const empty = sandbox();
   // Empty PATH hides `node` from the requirement check while the CLI itself runs by absolute path.
-  const noTools = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-nopath-'));
+  const noTools = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-nopath-'));
   const { out, code } = run(empty, PASS, offlineRoot, { PATH: noTools });
   assert(code === 1, `çıkış kodu 1 değil: ${code}`);
   assert(/requirement/.test(out), `ön koşul mesajı yok: ${out}`);
@@ -464,7 +464,7 @@ check('remove hepsinden kaldırır ve kaydı boşaltır', () => {
 
 if (network) {
   console.log('network (gerçek npx skills / add-mcp, geçici HOME)');
-  const real = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-net-'));
+  const real = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-net-'));
   fs.mkdirSync(path.join(real, '.claude'), { recursive: true });
   fs.writeFileSync(path.join(real, '.claude', 'settings.json'), '{\n  // yorum\n  "model": "opus"\n}\n', 'utf8');
 

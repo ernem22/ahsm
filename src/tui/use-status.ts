@@ -29,7 +29,7 @@ export interface StatusOptions {
  * timed and stopped; `r` asks again and no key here writes.
  */
 export function useStatusSurface({ data, ctx, width, height, active }: StatusOptions): StatusState {
-  // `status` asks the core the same question `agentenv status` does, and writes nothing to answer it.
+  // `status` asks the core the same question `ahsm status` does, and writes nothing to answer it.
   const read = useRead(() => readStatus(data, ctx));
   const [window, setWindow] = useState<RowWindow>(emptyWindow);
 

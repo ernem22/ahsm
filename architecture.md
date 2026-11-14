@@ -1,16 +1,16 @@
 ---
-id: agentenv-architecture
+id: ahsm-architecture
 type: architecture-design
 status: active
-title: agentenv architecture
-parent: agentenv
+title: ahsm architecture
+parent: ahsm
 ---
 
-# agentenv architecture
+# ahsm architecture
 
 ## Shape
 
-agentenv is an **orchestrator**: it does not write the installation itself, it calls the providers. Only
+ahsm is an **orchestrator**: it does not write the installation itself, it calls the providers. Only
 hook merging is its own code. Five parts, four of them data:
 
 - **Catalog** (data): item definitions and packages.
@@ -30,9 +30,9 @@ single status view.
 - **The plan is side-effect free** and includes the requirements too. `apply` only applies the plan.
 - If there is no provider for a target, the plan says `not covered`; it is never silently skipped.
 - There is no write without approval and no requirement installation without approval. The hook file
-  agentenv writes itself and a corrupt `state.json` are backed up before being written; skills/MCP files are
+  ahsm writes itself and a corrupt `state.json` are backed up before being written; skills/MCP files are
   written by the provider.
-- agentenv does not write the skills and MCP files (the provider writes them); hook merging is ours.
+- ahsm does not write the skills and MCP files (the provider writes them); hook merging is ours.
 - Verification is read from the fast source: the lockfile for skills (~1 ms), the harness config for MCP.
   `listSkills()` is not used for the plan — it takes ~7 s on 103 skills; the API is used on the
   installation/removal path, in the explicit `list` command and for the names of `remove --skill` that have
@@ -64,6 +64,9 @@ src/context.ts      Ctx, Runner (real + recording), argv expansion
 src/cli.ts          commands + TUI entry
 ~/.agentenv/        state.json, backups/<time>/
 ```
+
+The state directory keeps the name `~/.agentenv/`: existing installations keep their record and backups
+there, so the rename of the tool does not move anyone's history.
 
 ## Schemas
 
@@ -118,7 +121,7 @@ install:
   linux:  [bash, -lc, "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt install -y nodejs"]
 ```
 
-`AGENTENV_ROOT` changes the data root (for snapshots/test sets); the `{root}` variable gives that root in an
+`AHSM_ROOT` changes the data root (for snapshots/test sets); the `{root}` variable gives that root in an
 argv. Commands are written as an **argv array**; if a `{variable}` in an element is empty that element is
 dropped (e.g. if `skill` is not defined, `--skill {skill}` is not added at all). Item definitions: `kind`,
 the source field (`source`+`skill` / `package` or `url` / `event`+`matcher`+`hookCommand`), `targets`,
@@ -206,15 +209,15 @@ items: [emil-skills, context7, bash-log]
 
    Both sections go through a single formatter (`src/render.ts`); the CLI writes the row, the TUI turns the
    tone into colour.
-8. **list** — explicit command (`agentenv list`, `src/core/list.ts`): the provider's own inventory
+8. **list** — explicit command (`ahsm list`, `src/core/list.ts`): the provider's own inventory
    (`listSkills`) is read and, per row, the skill name, the scope and the harnesses carrying that skill are
-   written. Because the source is the inventory, skills installed outside agentenv (by hand, with another
+   written. Because the source is the inventory, skills installed outside ahsm (by hand, with another
    CLI) are visible too; a skill that no harness reports is still listed as `no harness reports it`, and an
    undefined provider agent appears under its own name. The record is not read (ADR-0002) and nothing is
    written: a corrupt `state.json` does not change the list, not even a backup is taken and no command is
    run. Scope today is user level only (the provider's `-g`), the row says so. Because the inventory is slow
    this read does not enter `plan`/`status` — `list` is the only gate.
-9. **stale** — explicit command (`agentenv stale`, `src/core/stale.ts`): for each recorded skill the question
+9. **stale** — explicit command (`ahsm stale`, `src/core/stale.ts`): for each recorded skill the question
    "does the source still offer the same thing?" is answered `up-to-date` / `stale` / `unknown`. The
    comparison is not ours, it is the provider's own account: `skills check -g` (the `check:` argv in the
    provider definition) compares the `skillFolderHash` recorded at installation with the tree digest the
@@ -224,7 +227,7 @@ items: [emil-skills, context7, bash-log]
    skill, `up-to-date` only when the check completed for that source's skills, the rest is `unknown` (the
    source could not be reached, the command did not finish, there is no hash/source in the record). If the
    provider offers no `check:`, "not covered" is written instead of rows.
-10. **update** — explicit command (`agentenv update`, `src/core/update.ts`): the skills that `stale` called
+10. **update** — explicit command (`ahsm update`, `src/core/update.ts`): the skills that `stale` called
     **stale** are installed again through the same installation path. The comparison is again the provider's
     own check; the work is again `buildPlan` + `applyPlan`: the stale rows are mapped to the catalog item and
     to the harnesses in the record, the plan is built only for those (item, harness) pairs and the entries
@@ -236,9 +239,9 @@ items: [emil-skills, context7, bash-log]
     that has no item in the catalog, that the record did not write to a harness, or whose harness is not
     defined here is not silently skipped — the row is written with its reason (in the sense of
     `not covered`).
-11. **remove** — explicit command (`agentenv remove`, `src/core/remove.ts`): it answers two states **with the
+11. **remove** — explicit command (`ahsm remove`, `src/core/remove.ts`): it answers two states **with the
     same rules**. Every recorded item is removed (it can be narrowed with `--package`); `--skill <name,name>`
-    removes the named skill even if agentenv did not install it. The single gate is `planRemoval`: if the
+    removes the named skill even if ahsm did not install it. The single gate is `planRemoval`: if the
     record already covers the name the recorded rules apply (the same provider, the same paths, the same
     record cleanup); if it does not, the plan reads the inventory that `list` reads and fills the
     harnesses/directories from there. The inventory is read only if the name is not in the record. Removal
@@ -286,7 +289,7 @@ mapping stays in the provider and harness definition.
   stale skill's name and its fresh sibling not being reinstalled.
 - `node scripts/e2e-remove.mjs` — five separate scenarios without network for `remove` (wired into `npm run
   e2e`): the plan showing the affected harnesses and directories before approval and writing nothing, every
-  recorded item going away with `--yes` and the record emptying, a skill agentenv did not install being
+  recorded item going away with `--yes` and the record emptying, a skill ahsm did not install being
   removed by name (without creating a record), one name being reported with a provider error and the other
   still being removed, and a name with no provider saying `not covered`.
 - `scripts/check-syntax.mjs` (`npm run check:scripts`) — parses `scripts/*.mjs` and
@@ -331,16 +334,16 @@ the flow continues. The three rules below will apply only when the plugin/discov
 
 - If there is no `npx` no provider runs; the plan says so as a requirement (a Node installation is
   recommended).
-- The harness version is asked of the harness's **own CLI** (`claude --version`); agentenv does not write,
+- The harness version is asked of the harness's **own CLI** (`claude --version`); ahsm does not write,
   but the CLI can create its own cache (e.g. `opencode` on its first run creates `~/.cache/opencode`,
-  `~/.local/state`). `status`'s "writes nothing" guarantee is for agentenv's own files.
+  `~/.local/state`). `status`'s "writes nothing" guarantee is for ahsm's own files.
 - Project scope is closed today: both providers take `-g`, that is they write only at user level. `list`
   also reads the inventory only at user scope; because the adapter does not give a scope per row, every row
   says `user`. When project scope opens the scope will come from the adapter per row, no separate code path
   is opened.
 - `list` cannot turn provider agents that have no `agentId` in the harness definitions into harnesses; it
-  shows them under the provider's own name (e.g. `hermes-agent`). Those are harnesses agentenv does not
-  manage — the list itself is not limited to what agentenv installed anyway.
+  shows them under the provider's own name (e.g. `hermes-agent`). Those are harnesses ahsm does not
+  manage — the list itself is not limited to what ahsm installed anyway.
 - `status`/`plan` counts an installation as "installed" only if the provider's own inventory verifies it; in
   a provider with no `verify` recipe it says `unknown` and the plan installs the item again.
 - `update` obeys what the provider calls "different", not what it calls "newer": `skills check` does not
@@ -375,7 +378,7 @@ the flow continues. The three rules below will apply only when the plugin/discov
     is deliberate.
   - The provider output is plain text (the `check` subcommand has no `--json`); unreadable output falls to
     `unknown`, not to a wrong `up-to-date`.
-  - `npx` can write its own download cache; the "writes nothing" guarantee is for agentenv's own files, the
+  - `npx` can write its own download cache; the "writes nothing" guarantee is for ahsm's own files, the
     provider's lockfile and the installed skill directories.
 - If the hook command changes the old entry is replaced in place (found with the `hookCommand` in the
   record); if the command was edited by hand the old entry stays — because hooks carry no identity in the
@@ -383,7 +386,7 @@ the flow continues. The three rules below will apply only when the plugin/discov
 - If `event`/`matcher`/`hookCommand` is missing in a hook the plan says `error`; an empty value is not
   written to the config.
 - Hooks only in harnesses configured with JSON (claude-code, codex). pi and opencode do hooks as an
-  extension/plugin — that is code; agentenv does not write code, the plan says `not covered`.
+  extension/plugin — that is code; ahsm does not write code, the plan says `not covered`.
 - MCP verification reads three formats: JSON, JSONC and TOML (codex). If a new format arrives, a reader is
   added to `verify`.
 - Hook merging is written only for JSONC targets; if another format is needed a new format is added to
@@ -392,7 +395,7 @@ the flow continues. The three rules below will apply only when the plugin/discov
   provider stays as a fallback but today is not selected in any harness (the API covers all four).
 - In Claude Code the single source of MCP is not `~/.claude.json`: `claude mcp list` also shows `plugin:…`
   entries. Our verification reads the records at **user scope**; the servers a plugin brings are not
-  agentenv's record.
+  ahsm's record.
 - The `agentId` field has to be valid for both `skills` and `add-mcp`. Today they overlap (`pi`, `codex`, …);
   if they diverge a per-provider id is needed in the harness definition.
 - `add-mcp` shares the `.mcp.json` file at project scope with Claude Code and GitHub Copilot CLI (removal

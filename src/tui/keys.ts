@@ -120,7 +120,7 @@ export interface UpdateKeys extends SlowRowsKeys {
   readonly planReady: boolean;
   /** How many entries the plan holds; with none, `y` has nothing to update. */
   readonly entries: number;
-  /** `y`: run the plan through `applyPlan`, exactly as `agentenv update --yes` does. */
+  /** `y`: run the plan through `applyPlan`, exactly as `ahsm update --yes` does. */
   runApply(): void;
 }
 
@@ -137,7 +137,7 @@ export interface RemoveKeys extends SlowRowsKeys {
   readonly applying: boolean;
   /** The write finished, so the surface shows the result rather than the plan. */
   readonly result: boolean;
-  /** `y`: run the plan through `applyRemovePlan`, exactly as `agentenv remove --yes` does. */
+  /** `y`: run the plan through `applyRemovePlan`, exactly as `ahsm remove --yes` does. */
   runApply(): void;
   /** `a`: the skill-name text mode, bound to the same slot as the filter. */
   readonly name: FilterKeys;

@@ -126,7 +126,7 @@ function writeLock(home: string, skills: Record<string, LockEntry>): void {
 
 /** A copy of the offline root with the extra skill items the update scenarios map stale skills onto. */
 function updateRoot(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-update-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-update-'));
   fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
   for (const [id, skill] of [
     ['skill-b', 'beta'],
@@ -255,7 +255,7 @@ test('the update plan holds only the stale skills, one row per skill and harness
     await openUpdate(tui, shared);
     const lines = tui.lines();
     expectFrame(lines, { width: 120, rows: 30 });
-    assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.update}`), true);
+    assert.equal(lines[0]?.startsWith(`ahsm  ${t.tui.surfaces.update}`), true);
     assert.equal(lines[2], t.tui.surfaces.update);
     assert.ok(at(lines, t.updateTitle) > 3, 'the UPDATE heading is not under the surface name');
 
@@ -346,23 +346,23 @@ test('n and Esc decline without writing, back to the surface u was opened from',
     await openUpdate(tui, shared, 'stale');
     // `n` lands on stale, which reads again: its own answer has to arrive before the next key.
     await readAgain(tui, shared, 'n', () => staleReady(tui));
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.stale}`), true, tui.lines()[0] ?? '');
     assert.deepEqual(shared.runner.installs, [], 'n wrote something');
 
     await openUpdate(tui, shared, 'stale');
     await readAgain(tui, shared, '\u001B', () => staleReady(tui));
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.stale}`), true, tui.lines()[0] ?? '');
     assert.deepEqual(shared.runner.installs, [], 'Esc wrote something');
 
     // Opened from the rail, the same key goes back to install instead. Stale has answered above, so
     // this Esc is the surface's back, not the stop-waiting key a read in flight would claim.
     await waitIdle(tui);
     await tui.press('\u001B');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
     await openUpdate(tui, shared);
     await waitIdle(tui);
     await tui.press('\u001B');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
     assert.deepEqual(shared.runner.installs, [], 'declining from the rail wrote something');
   } finally {
     await tui.stop();
@@ -449,7 +449,7 @@ test('the in-flight screen is the apply surface\'s: named, shaped, timed and ref
     assert.ok(at(tui.lines(), t.updateNoItem('gamma')) < at(tui.lines(), 'applying…'), busy);
     for (const key of ['q', '\u001B', 'n']) {
       await tui.press(key);
-      assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.update}`), true, `${key} left the write`);
+      assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.update}`), true, `${key} left the write`);
       assert.ok(tui.frame().includes(t.tui.applyRefusal), tui.frame());
     }
 
@@ -462,7 +462,7 @@ test('the in-flight screen is the apply surface\'s: named, shaped, timed and ref
     assert.ok(keybar.includes(`${t.tui.keyNames.return} ${t.tui.keys.exit}`), keybar);
     assert.ok(keybar.includes(`v ${t.tui.keys.staleAgain}`), keybar);
     await tui.press('v');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.stale}`), true, tui.lines()[0] ?? '');
   } finally {
     await tui.stop();
   }
@@ -499,7 +499,7 @@ test('r runs the provider check again and keeps the plan', async () => {
     await settle(tui, () => checkCalls(shared) > before && tui.frame().includes(t.updateTitle));
     assert.equal(checkCalls(shared), before + 1, 'r did not re-run the check exactly once');
     assert.deepEqual(planRows(tui.lines()), ['+ skill-a → fake [skill/fake-skills]', '+ skill-b → fake [skill/fake-skills]']);
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.update}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.update}`), true, tui.lines()[0] ?? '');
   } finally {
     await tui.stop();
   }
@@ -515,7 +515,7 @@ test('y is not offered when the plan has no entries, and pressing it says why', 
     assert.equal((tui.lines().at(-1) ?? '').includes('y apply'), false, tui.lines().at(-1) ?? '');
 
     await tui.press('y');
-    assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.update}`), true, tui.lines()[0] ?? '');
+    assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.update}`), true, tui.lines()[0] ?? '');
     // The refusal is the status line's, right above the keybar.
     assert.equal(tui.lines().at(-2), t.updateNone, tui.frame());
     assert.equal(tui.frame().includes(t.tui.resultTitle), false, `an empty plan produced a result: ${tui.frame()}`);

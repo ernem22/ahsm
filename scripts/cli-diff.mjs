@@ -26,7 +26,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const tsc = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 const offlineRoot = path.join(repo, 'test', 'fixtures', 'offline');
 /** Both scratch directories carry the pid, so two runs at once cannot empty each other's build. */
-const scratch = path.join(repo, 'node_modules', '.cache', `agentenv-cli-diff-${process.pid}`);
+const scratch = path.join(repo, 'node_modules', '.cache', `ahsm-diff-${process.pid}`);
 
 /** The commands whose output must not move; `--help` and one package variant cover the flag paths. */
 const COMMANDS = [
@@ -42,7 +42,7 @@ const COMMANDS = [
 ];
 
 /** A HOME both runs share, so no field of the output can differ only because the path did. */
-const home = path.join(os.tmpdir(), `agentenv-cli-diff-home-${process.pid}`);
+const home = path.join(os.tmpdir(), `ahsm-diff-home-${process.pid}`);
 
 /** The commands that have to answer on their own: two identical failures would prove nothing. */
 const READ_ONLY = new Set(['plan', 'status']);
@@ -96,7 +96,7 @@ function buildBase(rev) {
 function run(cli, argv) {
   const result = spawnSync(process.execPath, [cli, ...argv], {
     cwd: repo,
-    env: { ...process.env, HOME: home, USERPROFILE: home, AGENTENV_ROOT: offlineRoot },
+    env: { ...process.env, HOME: home, USERPROFILE: home, AHSM_ROOT: offlineRoot },
     encoding: 'utf8',
   });
   return { code: result.status ?? 1, out: result.stdout ?? '', err: result.stderr ?? '' };
@@ -159,7 +159,7 @@ const baseRuns = transcript(baseCli);
 const treeRuns = transcript(treeCli);
 for (let index = 0; index < COMMANDS.length; index += 1) {
   const argv = COMMANDS[index] ?? [];
-  const name = `agentenv ${argv.join(' ')}`.trim();
+  const name = `ahsm ${argv.join(' ')}`.trim();
   const left = baseRuns[index];
   const right = treeRuns[index];
   if (left === undefined || right === undefined) {

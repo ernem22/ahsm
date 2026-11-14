@@ -1,6 +1,6 @@
 # Contributing
 
-agentenv installs a list of skills, MCP servers and hooks into agent harnesses and keeps an honest
+ahsm installs a list of skills, MCP servers and hooks into agent harnesses and keeps an honest
 record of what landed. It delegates the installing: skills go through the `skills` package's API, MCP
 servers through `add-mcp`. The only file it writes by itself is a hook merged into a harness's config.
 
@@ -10,7 +10,7 @@ servers through `add-mcp`. The only file it writes by itself is a hook merged in
 npm ci
 npm run build          # dist/cli.js
 node dist/cli.js status
-npm link               # optional: puts `agentenv` on your PATH
+npm link               # optional: puts `ahsm` on your PATH
 ```
 
 Node 22.20 or newer — that is the `skills` package's floor.

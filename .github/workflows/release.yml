@@ -2,7 +2,7 @@ name: release
 
 # Publishes on a version tag (`v0.1.0`). Authentication is npm Trusted Publishing (OIDC): no
 # NPM_TOKEN secret exists, and the workflow must be registered once on npmjs.com as this package's
-# trusted publisher (repository `ernem22/agentenv`, workflow `release.yml`).
+# trusted publisher (repository `ernem22/ahsm`, workflow `release.yml`).
 # Requires npm CLI >= 11.5.1, which is why npm is upgraded below.
 
 on:

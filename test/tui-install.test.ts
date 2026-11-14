@@ -22,7 +22,7 @@ function target(lines: string[]): string | undefined {
 
 /** A copy of the offline root with `count` extra one-detail-line items in the default package. */
 function itemRoot(count: number): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-install-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-install-'));
   fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
   const items = Array.from({ length: count }, (_, at) => `extra-${at}`);
   for (const id of items) {
@@ -40,7 +40,7 @@ test('the install surface has three sections and folds the two it is not on', as
   const tui = await startTui({ ...fixture(true), width: 120 });
   try {
     const lines = tui.lines();
-    assert.equal(lines[0]?.startsWith('agentenv  install'), true);
+    assert.equal(lines[0]?.startsWith('ahsm  install'), true);
     assert.equal(target(lines), 'target: Fake Harness');
     assert.deepEqual(section(lines, t.tui.sections.harnesses), ['> [x] Fake Harness']);
     assert.deepEqual(section(lines, t.tui.sections.package), [`  ${t.tui.packageSummary('base', 3)}`]);
@@ -93,7 +93,7 @@ test('Enter walks the sections forward and its last step opens the plan', async 
     assert.equal(section(lines, t.tui.sections.items)[0]?.startsWith('> [x] skill-a'), true);
 
     await tui.press('\r');
-    assert.equal(tui.lines()[0]?.startsWith('agentenv  plan'), true);
+    assert.equal(tui.lines()[0]?.startsWith('ahsm  plan'), true);
   } finally {
     await tui.stop();
   }
@@ -214,7 +214,7 @@ test('Enter with no item chosen keeps the stage and says why', async () => {
   try {
     await tui.press('\r', '\r', 'a', '\r');
     const lines = tui.lines();
-    assert.equal(lines[0]?.startsWith('agentenv  install'), true);
+    assert.equal(lines[0]?.startsWith('ahsm  install'), true);
     assert.equal(lines[lines.length - 2], t.tui.nothingChosenItem);
   } finally {
     await tui.stop();
@@ -283,14 +283,14 @@ test('a package taller than the window scrolls: the header and the focused row s
       await tui.press('\r', '\r');
       let lines = tui.lines();
       expectFrame(lines, { width, rows });
-      assert.equal(lines[0]?.startsWith('agentenv  install'), true, 'the header scrolled away');
+      assert.equal(lines[0]?.startsWith('ahsm  install'), true, 'the header scrolled away');
       assert.ok(lines.includes(t.tui.sections.items), 'the items heading is not on screen');
       assert.equal(tui.frame().includes('extra-18'), false, 'the whole package fit: the window is not under test');
 
       for (let at = 0; at < 18; at += 1) await tui.press('\u001B[B');
       lines = tui.lines();
       expectFrame(lines, { width, rows });
-      assert.equal(lines[0]?.startsWith('agentenv  install'), true, 'the header scrolled away');
+      assert.equal(lines[0]?.startsWith('ahsm  install'), true, 'the header scrolled away');
       assert.ok(lines.includes(t.tui.sections.items), 'the items heading scrolled away');
 
       const focused = lines.filter((line) => line.startsWith('> '));

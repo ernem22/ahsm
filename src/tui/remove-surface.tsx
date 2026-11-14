@@ -17,7 +17,7 @@ export interface RemoveSurfaceProps {
  * `x`, the one destructive surface: the plan as `removePlanLines` writes it — every entry with the
  * harnesses it affects, the paths it touches and the command it runs — printed before `y` means
  * anything, with the record consequence stated on its own line. `a` opens the skill-name mode, `n` and
- * `Esc` decline, and `y` hands the plan to the core exactly as `agentenv remove --yes` does. The
+ * `Esc` decline, and `y` hands the plan to the core exactly as `ahsm remove --yes` does. The
  * in-flight and result halves are the apply surface's own components, so a failure is a row and the
  * remaining entries still run.
  */

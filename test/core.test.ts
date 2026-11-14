@@ -191,7 +191,7 @@ function withHarnessRequirement(): Data {
 }
 
 function tempHome(): string {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-test-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-test-'));
   fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
   return home;
 }
@@ -201,7 +201,7 @@ test('detect: config klasörü veya binary', () => {
   const { ctx } = setup(home);
   const data = fixture();
   assert.equal(detectHarnesses(data, ctx)[0]?.present, true);
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-empty-'));
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-empty-'));
   assert.equal(detectHarnesses(data, setup(empty).ctx)[0]?.present, false);
 });
 
@@ -684,7 +684,7 @@ test('status: asgari sürümün altındaki harness güncelleme komutunu önerir'
 });
 
 test('status: bulunmayan harness yok olarak görünür, sürüm komutu çalıştırılmaz', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-empty-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-empty-'));
   const runner = new RecordingRunner([{ code: 0, stdout: '2.5.0', stderr: '' }]);
   const ctx = createContext({ root: process.cwd(), home, runner, platform: 'linux' });
 
@@ -997,7 +997,7 @@ test('adapter: "already installed" yalnız envanter doğruladığında söylenir
   assert.equal(readState(ctx).state.entries.length, 0, 'zaten kurulu öğe bizim kurulumumuz gibi kaydedildi');
 });
 
-test('plan: agentenv dışında kurulmuş skill "recorded as installed" demez', async () => {
+test('plan: ahsm dışında kurulmuş skill "recorded as installed" demez', async () => {
   const home = tempHome();
   const data = adapterData();
   const ctx = adapterContext(home, {});

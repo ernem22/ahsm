@@ -59,7 +59,7 @@ function fixture(overrides: Partial<ProviderDef> = {}): Data {
 }
 
 function tempHome(): string {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-update-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-update-'));
   fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
   fs.mkdirSync(path.join(home, '.codex'), { recursive: true });
   return home;
@@ -130,7 +130,7 @@ function context(home: string, runner: Runner, skills?: Partial<SkillsAdapter>):
   return { ctx, advance: () => { now = T1; } };
 }
 
-/** What agentenv remembers about one installation, so the update has a harness to install for. */
+/** What ahsm remembers about one installation, so the update has a harness to install for. */
 function recordInstall(ctx: Ctx, itemId: string, harness: string, skill: string): void {
   const state: State = readState(ctx).state;
   recordEntry(ctx, state, {

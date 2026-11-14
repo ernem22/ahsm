@@ -50,7 +50,7 @@ async function openPlan(tui: TuiHarness): Promise<void> {
 /** A root whose only item has an id longer than a narrow frame: its entry row has to wrap. */
 const LONG_ID = `skill-${'a'.repeat(80)}`;
 function longIdRoot(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-plan-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-plan-'));
   fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
   fs.writeFileSync(
     path.join(root, 'catalog', `${LONG_ID}.yaml`),
@@ -71,7 +71,7 @@ const LONG_HOOK = `    ${t.hookEntry}: ${JSON.stringify({ matcher: 'Bash', hooks
 
 /** The offline root with that one long hook in place of the fixture's own. */
 function longHookRoot(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-plan-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-plan-'));
   fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
   const file = path.join(root, 'catalog', 'hook-a.yaml');
   const text = fs.readFileSync(file, 'utf8').replace(/^hookCommand: .*$/m, `hookCommand: ${JSON.stringify(LONG_COMMAND)}`);
@@ -81,7 +81,7 @@ function longHookRoot(): string {
 
 /** A copy of the offline root with `items` in the default package, so a plan can outgrow the window. */
 function longRoot(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-plan-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-plan-'));
   fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
   const items = Array.from({ length: 12 }, (_, at) => `extra-${at}`);
   for (const id of items) {
@@ -97,7 +97,7 @@ function longRoot(): string {
 
 /** A root whose only requirement cannot be installed on this platform: the plan must say so, not guess. */
 function noInstallerRoot(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-plan-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-tui-plan-'));
   fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
   const other = process.platform === 'win32' ? 'linux' : 'win32';
   fs.writeFileSync(
@@ -113,7 +113,7 @@ test('the plan body prints the formatter lines, and the count line sits above th
   try {
     await openPlan(tui);
     const lines = tui.lines();
-    assert.equal(lines[0]?.startsWith('agentenv  plan'), true);
+    assert.equal(lines[0]?.startsWith('ahsm  plan'), true);
     // Both requirements are satisfied, so there is nothing to mark and no mark key is offered.
     assert.equal(lines[lines.length - 1], 'Enter apply · r rebuild · ? keys · Esc back · q quit');
     assert.equal(lines[lines.length - 2], t.actions(3, 0, 0), 'the count line is not directly above the keybar');
@@ -292,7 +292,7 @@ test('p opens the plan read-only, and Esc returns with the selection intact', as
   try {
     await openPlan(tui);
     const before = tui.frame();
-    assert.equal(tui.lines()[0]?.startsWith('agentenv  plan'), true);
+    assert.equal(tui.lines()[0]?.startsWith('ahsm  plan'), true);
 
     // No write key is bound here: the keys that would approve or decline are not in this table.
     assert.equal(tui.lines()[tui.lines().length - 1], 'Enter apply · r rebuild · ? keys · Esc back · q quit');
@@ -303,7 +303,7 @@ test('p opens the plan read-only, and Esc returns with the selection intact', as
     await waitIdle(tui);
     await tui.press('\u001B');
     const lines = tui.lines();
-    assert.equal(lines[0]?.startsWith('agentenv  install'), true);
+    assert.equal(lines[0]?.startsWith('ahsm  install'), true);
     assert.equal(lines.includes(`  ${t.tui.chosenOf(3, 3)}`), true, 'the selection was lost on the way back');
   } finally {
     await tui.stop();
@@ -331,7 +331,7 @@ test('a slow read says building plan…, a failed one prints its message, and r 
     await broken.press('p');
     await settle(() => broken.frame().includes('the check died'));
     const lines = broken.lines();
-    assert.equal(lines[0]?.startsWith('agentenv  plan'), true, 'the failure left the surface');
+    assert.equal(lines[0]?.startsWith('ahsm  plan'), true, 'the failure left the surface');
     assert.equal(lines.includes('the check died'), true, lines.join('|'));
   } finally {
     await broken.stop();

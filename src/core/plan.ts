@@ -328,7 +328,7 @@ export async function buildPlan(data: Data, ctx: Ctx, selection: Selection): Pro
           via: adapterVia(item, item.skill, harness),
           record,
           // A record is not evidence: only say "recorded" when our record is the one that matches too.
-          // A skill installed outside agentenv is present and needs no install — but it is not ours.
+          // A skill installed outside ahsm is present and needs no install — but it is not ours.
           reason: matchesRecord && present ? t.recordedInstalled : undefined,
         });
         continue;

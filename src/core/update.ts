@@ -12,7 +12,7 @@ export interface UpdateSkip {
 }
 
 /**
- * What `agentenv update` would install: the stale rows the provider's own check found, turned into
+ * What `ahsm update` would install: the stale rows the provider's own check found, turned into
  * the very entries `apply` installs from. Nothing here writes — only an approved run does.
  */
 export interface UpdatePlan {
@@ -50,7 +50,7 @@ function skillItem(data: Data, row: StaleRow): ItemDef | undefined {
   return sameSource.find((item) => item.skill === row.name) ?? sameSource.find((item) => !item.skill);
 }
 
-/** The harnesses agentenv installed this item for: the record says where to install it again. */
+/** The harnesses ahsm installed this item for: the record says where to install it again. */
 function recordedHarnesses(entries: StateEntry[], itemId: string): string[] {
   return [...new Set(entries.filter((entry) => entry.itemId === itemId).map((entry) => entry.harness))].sort();
 }

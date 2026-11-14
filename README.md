@@ -1,12 +1,12 @@
-# agentenv
+# ahsm
 
-The npm package is `agentenv-cli`; the command it installs is `agentenv`.
+The npm package is `ahsm`; it installs the command `ahsm`.
 
 Install and track agent-harness setup — skills, MCP servers and hooks — from one package list, across
 **Claude Code, Codex, pi and opencode**, and keep an honest record of what landed where.
 
 ```
-$ agentenv status
+$ ahsm status
 harnesses
 ready  claude-code  2.1.322 · min 2.1
 ready  codex        0.166.0 · min 0.166
@@ -25,20 +25,20 @@ A setup is spread over four harnesses that each keep their own config: `~/.claud
 means editing four places by hand, and afterwards nothing tells you what is installed where — or whether
 the thing you installed last month is still there.
 
-agentenv keeps one list of what you want, installs it into the harnesses you pick, and answers "what is
+ahsm keeps one list of what you want, installs it into the harnesses you pick, and answers "what is
 installed, and is it actually installed?" from the providers' own records rather than from its own memory.
 
 ## What it does not do
 
 - **It does not install skills or MCP servers itself.** Skills go through the
   [`skills`](https://github.com/vercel-labs/skills) package's API; MCP servers through
-  [`add-mcp`](https://github.com/runeb/add-mcp). agentenv runs them, reads their results and records what
+  [`add-mcp`](https://github.com/runeb/add-mcp). ahsm runs them, reads their results and records what
   happened. The only file it writes by itself is a hook merged into a harness's config.
 - **It is not a registry.** It has no catalogue service and no ranking. Catalogues are files in this repo.
 - **It does not install harnesses beyond their own default command.** A harness it cannot install is
   reported, not worked around.
 
-agentenv is early and unpublished: `private: true`, no npm release yet, one development branch.
+ahsm is early and unpublished: `private: true`, no npm release yet, one development branch.
 
 ## Requirements
 
@@ -49,8 +49,8 @@ agentenv is early and unpublished: `private: true`, no npm release yet, one deve
 ## Run it
 
 ```bash
-npx agentenv-cli status         # run without installing
-npm i -g agentenv-cli           # then: agentenv status
+npx ahsm status             # run without installing
+npm i -g ahsm               # then: ahsm status
 ```
 
 From a checkout:
@@ -58,20 +58,20 @@ From a checkout:
 ```bash
 npm ci
 npm run build
-node dist/cli.js status         # or: npm link  →  agentenv status
+node dist/cli.js status         # or: npm link  →  ahsm status
 ```
 
 ## Use it
 
 ```bash
-agentenv              # the TUI (see below)
-agentenv status       # harnesses + what is installed, verified
-agentenv plan         # what would happen — writes nothing
-agentenv apply --yes  # do it
-agentenv list         # every skill the provider inventory reports (read-only)
-agentenv stale        # what is out of date (read-only)
-agentenv update --yes # reinstall the stale ones through the same path
-agentenv remove       # remove what is recorded
+ahsm              # the TUI (see below)
+ahsm status       # harnesses + what is installed, verified
+ahsm plan         # what would happen — writes nothing
+ahsm apply --yes  # do it
+ahsm list         # every skill the provider inventory reports (read-only)
+ahsm stale        # what is out of date (read-only)
+ahsm update --yes # reinstall the stale ones through the same path
+ahsm remove       # remove what is recorded
 ```
 
 Useful flags: `--package <id>` (default: the package marked `default`), `--harness <id,id>`,
@@ -83,7 +83,7 @@ will touch first, back up a config file before rewriting it, and record only wha
 
 ## The TUI
 
-`agentenv` with no argument opens the interactive surface. One rail, one key table per surface; the keybar
+`ahsm` with no argument opens the interactive surface. One rail, one key table per surface; the keybar
 and the help overlay are generated from the same table that dispatches the keys, so a listed key always
 does something.
 
@@ -170,7 +170,7 @@ package's settings page, which does not exist until the package does. So publish
 
 ```bash
 npm login
-npm publish                # publishes `agentenv-cli`
+npm publish                # publishes `ahsm`
 ```
 
 Then, on npmjs.com → the package → **Settings → Trusted publishers → GitHub Actions**:
@@ -178,7 +178,7 @@ Then, on npmjs.com → the package → **Settings → Trusted publishers → Git
 | field | value |
 |---|---|
 | Organization or user | `ernem22` |
-| Repository | `agentenv` |
+| Repository | `ahsm` |
 | Workflow filename | `release.yml` |
 | Environment name | *(empty)* |
 | Allowed actions | tick **npm publish** — new configurations default to staged publishing only |
@@ -206,7 +206,7 @@ version. If the workflow reports `ENEEDAUTH`, the workflow filename on npmjs.com
 
 ## Limitations
 
-- Not on npm yet: `npx agentenv` does not exist. Install from a tarball or a checkout.
+- Not on npm yet: `npx ahsm` does not exist. Install from a tarball or a checkout.
 - `update` can only refresh skills whose source appears in `catalog/`; anything installed from an
   uncatalogued source is reported as such rather than guessed at.
 - An update installs whatever the source holds — a difference is not a direction, so a rewind upstream

@@ -90,7 +90,7 @@ function says(tui: TuiHarness, text: string): boolean {
 /** The surface's answer has arrived: its header is current and no read or write is still named. */
 function ready(tui: TuiHarness, surface: string): boolean {
   const header = tui.lines()[0] ?? '';
-  if (!header.startsWith(`agentenv  ${surface}`)) return false;
+  if (!header.startsWith(`ahsm  ${surface}`)) return false;
   const body = flat(tui.frame());
   return !body.includes(flat(t.planBuilding)) && !body.includes('readingthe') && !body.includes('applying…');
 }
@@ -107,7 +107,7 @@ async function back(tui: TuiHarness): Promise<void> {
   // stopping the wait, whatever the width under test is.
   await waitIdle(tui);
   await tui.press('\u001B');
-  await settle(tui, () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`) === true);
+  await settle(tui, () => tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.install}`) === true);
 }
 
 /**

@@ -31,7 +31,7 @@ export interface ListOptions {
  * the rows the two keep. The read is the slow one, so it is stoppable; nothing here writes.
  */
 export function useListSurface({ data, ctx, harnessIds, width, height, active }: ListOptions): ListState {
-  // `list` reads the provider's own inventory: the slow read, exactly as `agentenv list` does.
+  // `list` reads the provider's own inventory: the slow read, exactly as `ahsm list` does.
   const read = useRead(() => readSkillInventory(data, ctx));
   const [window, setWindow] = useState<RowWindow>(emptyWindow);
   const [text, setText] = useState('');

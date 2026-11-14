@@ -55,8 +55,8 @@ function settled(ready: () => boolean): Promise<void> {
 
 async function opens(tui: TuiHarness, keys: string, surface: SurfaceId, ready: () => boolean): Promise<void> {
   if (keys !== '') await tui.press(...keys.split(''));
-  await settled(() => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces[surface]}`) === true && ready());
-  assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces[surface]}`), true, `${keys || 'start'} did not reach ${surface}`);
+  await settled(() => tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces[surface]}`) === true && ready());
+  assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces[surface]}`), true, `${keys || 'start'} did not reach ${surface}`);
 }
 
 /** Three `Enter`s walk the install form to the plan; a fourth opens the confirm. */
@@ -86,7 +86,7 @@ const CASES: Record<SurfaceId, Omit<SurfaceCase, 'id'>> = {
   apply: {
     open: async (tui) => {
       await toApply(tui);
-      await settled(() => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.apply}`) === true);
+      await settled(() => tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces.apply}`) === true);
     },
     own: ['y apply', 'n decline'],
     hidden: MOVES,
@@ -205,7 +205,7 @@ test('every surface lists its key once, in the overlay, and dispatches the entry
       // …and the entry it lists is the binding the key takes: Esc closes the overlay, not the surface.
       await tui.press('\u001B');
       assert.equal(tui.lines().includes(t.tui.helpTitle(t.tui.surfaces[surface.id])), false, `${surface.id}: Esc did not close the overlay`);
-      assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces[surface.id]}`), true, `${surface.id}: Esc closed the surface too`);
+      assert.equal(tui.lines()[0]?.startsWith(`ahsm  ${t.tui.surfaces[surface.id]}`), true, `${surface.id}: Esc closed the surface too`);
 
       // Back in the surface, each listed key is the first binding for that token, and Esc does what it says.
       const settledKeybar = entries(tui.lines().at(-1) ?? '');
@@ -219,7 +219,7 @@ test('every surface lists its key once, in the overlay, and dispatches the entry
       await tui.press('\u001B');
       const destination = surface.back === 'stay' ? t.tui.surfaces.install : t.tui.surfaces[surface.back];
       assert.equal(
-        tui.lines()[0]?.startsWith(`agentenv  ${destination}`),
+        tui.lines()[0]?.startsWith(`ahsm  ${destination}`),
         true,
         `${surface.id}: Esc went to ${tui.lines()[0] ?? ''}, not ${destination}`,
       );

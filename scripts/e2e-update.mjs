@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * End-to-end check of `agentenv update` — the write side of the stale check.
+ * End-to-end check of `ahsm update` — the write side of the stale check.
  *
  * The provider's own update check (ticket 06) says which installed skills are stale; `update` installs
  * exactly those again, through the same provider install path `apply` uses, and records them the same
@@ -48,7 +48,7 @@ const HASH = '0123456789abcdef0123456789abcdef01234567';
 
 /** A disposable HOME with the fixture harness present: `.fake/` is what its detect probe looks for. */
 function sandbox() {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-e2e-update-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ahsm-e2e-update-'));
   fs.mkdirSync(path.join(home, '.fake'), { recursive: true });
   fs.writeFileSync(path.join(home, '.fake', 'settings.json'), '{}\n', 'utf8');
   return home;
@@ -80,7 +80,7 @@ function markUpstream(home, name) {
 }
 
 function run(home, args) {
-  const env = { ...process.env, HOME: home, USERPROFILE: home, AGENTENV_ROOT: offlineRoot, DISABLE_TELEMETRY: '1' };
+  const env = { ...process.env, HOME: home, USERPROFILE: home, AHSM_ROOT: offlineRoot, DISABLE_TELEMETRY: '1' };
   const result = spawnSync(process.execPath, [cli, ...args], { cwd: repo, env, encoding: 'utf8' });
   return { code: result.status ?? 1, out: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
@@ -99,7 +99,7 @@ function treeHash(dir) {
 }
 
 /**
- * The state after `agentenv apply --yes`: all three items installed and recorded. The lockfile is then
+ * The state after `ahsm apply --yes`: all three items installed and recorded. The lockfile is then
  * rewritten the way the real provider writes it (hash + path), so the check has something to compare.
  */
 function applied(name) {
@@ -110,7 +110,7 @@ function applied(name) {
   return home;
 }
 
-console.log('agentenv update');
+console.log('ahsm update');
 
 check('update: bayat skill yoksa hiçbir şey yapmaz', () => {
   const home = applied('alpha');
