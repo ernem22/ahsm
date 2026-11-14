@@ -61,5 +61,14 @@
     "requires",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ernem22/agentenv.git"
+  },
+  "homepage": "https://github.com/ernem22/agentenv",
+  "bugs": {
+    "url": "https://github.com/ernem22/agentenv/issues"
+  },
+  "author": "ernem22"
 }
