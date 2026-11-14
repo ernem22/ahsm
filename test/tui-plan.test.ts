@@ -61,6 +61,24 @@ function longIdRoot(): string {
   return root;
 }
 
+/**
+ * A hook command longer than an 80-column frame on its own: the entry's `adds hook:` line then has to
+ * wrap under itself, whatever the home path it is installed into happens to be.
+ */
+const LONG_COMMAND = `node -e "require('fs').appendFileSync('hook.log', 'the focused hook entry wraps under itself at eighty columns')"`;
+/** The line the plan prints for that hook, as the formatter writes it. */
+const LONG_HOOK = `    ${t.hookEntry}: ${JSON.stringify({ matcher: 'Bash', hooks: [{ type: 'command', command: LONG_COMMAND }] })}`;
+
+/** The offline root with that one long hook in place of the fixture's own. */
+function longHookRoot(): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-plan-'));
+  fs.cpSync(OFFLINE_ROOT, root, { recursive: true });
+  const file = path.join(root, 'catalog', 'hook-a.yaml');
+  const text = fs.readFileSync(file, 'utf8').replace(/^hookCommand: .*$/m, `hookCommand: ${JSON.stringify(LONG_COMMAND)}`);
+  fs.writeFileSync(file, text, 'utf8');
+  return root;
+}
+
 /** A copy of the offline root with `items` in the default package, so a plan can outgrow the window. */
 function longRoot(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentenv-tui-plan-'));
@@ -211,7 +229,7 @@ test('the requirement rows carry the too old verdict, its update command and a m
 
 test('two columns at 120, one column at 80, and no line wider than the frame', async () => {
   for (const width of [120, 100, 80]) {
-    const tui = await startTui({ ...withRunner(ready()), width });
+    const tui = await startTui({ ...withRunner(ready(), longHookRoot()), width });
     try {
       await openPlan(tui);
       await tui.press('\u001B[B', '\u001B[B');
@@ -224,7 +242,17 @@ test('two columns at 120, one column at 80, and no line wider than the frame', a
       if (width >= 100) {
         assert.ok(lines.some((line) => line.slice(DETAIL_AT).startsWith(row)), 'the detail column does not open with the focused row');
       } else {
-        assert.ok(lines.some((line) => line.startsWith('      ') && line.includes('hooks.')), 'the focused entry did not wrap under itself');
+        // One column: the focused entry's own `adds hook:` line is wider than the frame, so it wraps
+        // under itself two columns in from the formatter's indent. Nothing here asks how long the
+        // home path is: the hook's own command is what does not fit.
+        assert.ok(LONG_HOOK.length > width, 'the hook line fits the frame: the wrap is not what is under test');
+        const tail = LONG_HOOK.slice(LONG_HOOK.lastIndexOf(' ') + 1);
+        assert.ok(
+          lines.some((line) => line.startsWith('      ') && line.endsWith(tail)),
+          `the focused entry did not wrap under itself:\n${lines.join('\n')}`,
+        );
+        // The wrap carries the line over rather than cutting it: the whole hook still reaches the frame.
+        expectFrameText(lines, LONG_HOOK.trimStart());
       }
     } finally {
       await tui.stop();

@@ -65,15 +65,35 @@ function checkOutput(options: Options): string {
 class FakeRunner implements Runner {
   readonly calls: string[][] = [];
   readonly installs: string[][] = [];
+  /** The check a test is holding open: until the release runs, the surface's busy line stays on screen. */
+  private held: Promise<void> | undefined;
 
   constructor(
     private readonly home: string,
     private readonly options: Options,
   ) {}
 
+  /**
+   * Holds the provider's next check until the returned release, so the frame says `provider update
+   * check` for as long as the test needs it to: an instant answer never renders a busy frame to wait on.
+   */
+  holdCheck(): () => void {
+    let release = (): void => {};
+    this.held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return () => {
+      this.held = undefined;
+      release();
+    };
+  }
+
   async run(argv: string[]): Promise<RunResult> {
     this.calls.push(argv);
-    if (argv[CHECK_AT]?.endsWith('check-skills.mjs')) return { code: 0, stdout: checkOutput(this.options), stderr: '' };
+    if (argv[CHECK_AT]?.endsWith('check-skills.mjs')) {
+      if (this.held) await this.held;
+      return { code: 0, stdout: checkOutput(this.options), stderr: '' };
+    }
     if (argv.join(' ') === 'node --version') return { code: 0, stdout: 'v22.1.0', stderr: '' };
     if (argv[1]?.endsWith('install-skill.mjs')) {
       if (this.options.gate) await this.options.gate.promise;
@@ -167,14 +187,42 @@ async function settle(tui: TuiHarness, done: () => boolean, deadlineMs = 1500): 
   assert.ok(done(), `the frame never said what it should:\n${tui.frame()}`);
 }
 
-/** `u`, then the plan itself: the surface names the check until the read resolves. */
-async function openUpdate(tui: TuiHarness, from: 'install' | 'stale' = 'install'): Promise<void> {
+/**
+ * A key that lands on a surface which reads on entry — `u`, `v`, `n`, `Esc` — and then that surface's
+ * own answer. A surface entered again still holds the answer of its last visit, and that answer is
+ * rendered for a frame before the read this visit started takes the frame, so the plan alone says
+ * nothing about whether the read has run. The provider's check is held instead: the busy line proves
+ * the read is the one on screen, and only then is the answer waited for. No key is pressed into a read
+ * that is still running, whatever the machine's speed.
+ */
+async function readAgain(tui: TuiHarness, shared: Setup, key: string, done: () => boolean): Promise<void> {
+  const release = shared.runner.holdCheck();
+  try {
+    await tui.press(key);
+    await settle(tui, () => tui.frame().includes(t.tui.updateCheck));
+  } finally {
+    release();
+  }
+  await settle(tui, done);
+}
+
+/** The stale surface has answered: its heading or its one-sentence empty answer is on the frame. */
+function staleReady(tui: TuiHarness): boolean {
+  return tui.frame().includes(t.staleTitle) || tui.frame().includes(t.staleEmpty);
+}
+
+/** The update surface has answered: its plan or its one-sentence answer is on the frame. */
+function updateReady(tui: TuiHarness): boolean {
+  return tui.frame().includes(t.updateTitle) || tui.frame().includes(t.updateNone);
+}
+
+/** `u`, then the plan its own check answered, never the one the surface still holds from the last visit. */
+async function openUpdate(tui: TuiHarness, shared: Setup, from: 'install' | 'stale' = 'install'): Promise<void> {
   if (from === 'stale') {
     await tui.press('v');
-    await settle(tui, () => tui.frame().includes(t.staleTitle) || tui.frame().includes(t.staleEmpty));
+    await settle(tui, () => staleReady(tui));
   }
-  await tui.press('u');
-  await settle(tui, () => tui.frame().includes(t.updateTitle) || tui.frame().includes(t.updateNone));
+  await readAgain(tui, shared, 'u', () => updateReady(tui));
 }
 
 /** The plan rows in the row column, focused or not: each is a whole formatter line (detail excluded). */
@@ -201,7 +249,7 @@ test('the update plan holds only the stale skills, one row per skill and harness
   const shared = mixed();
   const tui = await startTui({ ...shared, width: 120 });
   try {
-    await openUpdate(tui);
+    await openUpdate(tui, shared);
     const lines = tui.lines();
     expectFrame(lines, { width: 120, rows: 30 });
     assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.update}`), true);
@@ -236,7 +284,7 @@ test('y installs exactly the stale skills through the install path and records t
   const shared = mixed();
   const tui = await startTui({ ...shared, width: 120 });
   try {
-    await openUpdate(tui);
+    await openUpdate(tui, shared);
     await tui.press('y');
     const lines = await result(tui);
     expectFrame(lines, { width: 120, rows: 30 });
@@ -272,7 +320,7 @@ test('a partial failure is one row per skill: one installed, one error, and the 
   const shared = mixed({ fail: ['beta'] });
   const tui = await startTui({ ...shared, width: 120 });
   try {
-    await openUpdate(tui);
+    await openUpdate(tui, shared);
     await tui.press('y');
     const lines = await result(tui);
 
@@ -292,21 +340,22 @@ test('n and Esc decline without writing, back to the surface u was opened from',
   const shared = mixed();
   const tui = await startTui({ ...shared, width: 120 });
   try {
-    await openUpdate(tui, 'stale');
-    await tui.press('n');
+    await openUpdate(tui, shared, 'stale');
+    // `n` lands on stale, which reads again: its own answer has to arrive before the next key.
+    await readAgain(tui, shared, 'n', () => staleReady(tui));
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, tui.lines()[0] ?? '');
     assert.deepEqual(shared.runner.installs, [], 'n wrote something');
 
-    await openUpdate(tui, 'stale');
-    await tui.press('\u001B');
+    await openUpdate(tui, shared, 'stale');
+    await readAgain(tui, shared, '\u001B', () => staleReady(tui));
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, tui.lines()[0] ?? '');
     assert.deepEqual(shared.runner.installs, [], 'Esc wrote something');
 
-    // Opened from the rail, the same key goes back to install instead.
+    // Opened from the rail, the same key goes back to install instead. Stale has answered above, so
+    // this Esc is the surface's back, not the stop-waiting key a read in flight would claim.
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
-    await tui.press('u');
-    await settle(tui, () => tui.frame().includes(t.updateTitle));
+    await openUpdate(tui, shared);
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
     assert.deepEqual(shared.runner.installs, [], 'declining from the rail wrote something');
@@ -359,7 +408,7 @@ test('the honest answers: nothing stale, nothing mapped, nothing recorded, and a
     const shared = setup(scenario.options);
     const tui = await startTui({ ...shared, width: 120 });
     try {
-      await openUpdate(tui);
+      await openUpdate(tui, shared);
       expectFrame(tui.lines(), { width: 120, rows: 30 });
       const frame = tui.frame();
       for (const text of scenario.expected) assert.ok(frame.includes(text), `${scenario.name}: missing ${text}\n${frame}`);
@@ -384,7 +433,7 @@ test('the in-flight screen is the apply surface\'s: named, shaped, timed and ref
   });
   const tui = await startTui({ ...shared, width: 120 });
   try {
-    await openUpdate(tui);
+    await openUpdate(tui, shared);
     await tui.press('y');
     await settle(tui, () => /applying… \d+s/.test(tui.frame()));
     const busy = tui.frame();
@@ -418,7 +467,7 @@ test('the plan and its confirm name their keys: y apply, n decline, Esc back, r 
   const shared = mixed();
   const tui = await startTui({ ...shared, width: 120 });
   try {
-    await openUpdate(tui);
+    await openUpdate(tui, shared);
     const keybar = tui.lines().at(-1) ?? '';
     for (const entry of ['y apply', 'n decline', 'Esc back', '? keys', 'r refresh']) {
       assert.ok(keybar.includes(entry), keybar);
@@ -437,7 +486,7 @@ test('r runs the provider check again and keeps the plan', async () => {
   const shared = mixed();
   const tui = await startTui({ ...shared, width: 120 });
   try {
-    await openUpdate(tui);
+    await openUpdate(tui, shared);
     const before = checkCalls(shared);
     assert.ok(before >= 1, 'the surface never ran the check');
 
@@ -455,7 +504,7 @@ test('y is not offered when the plan has no entries, and pressing it says why', 
   const shared = setup({ lock: { fresh: locked('fixture/skills') } });
   const tui = await startTui({ ...shared, width: 120 });
   try {
-    await openUpdate(tui);
+    await openUpdate(tui, shared);
     assert.ok(tui.frame().includes(t.updateNone), tui.frame());
     // A bar never advertises a key that would run nothing.
     assert.equal((tui.lines().at(-1) ?? '').includes('y apply'), false, tui.lines().at(-1) ?? '');
@@ -475,7 +524,7 @@ test('at 40 columns the skips wrap, the rows stay whole and no line leaves the f
   const shared = mixed();
   const tui = await startTui({ ...shared, width: 40 });
   try {
-    await openUpdate(tui);
+    await openUpdate(tui, shared);
     const lines = tui.lines();
     expectFrame(lines, { width: 40, rows: 30 });
     // The skip is a sentence the user must read: it wraps instead of being cut with an ellipsis.
