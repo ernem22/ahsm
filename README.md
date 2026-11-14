@@ -49,16 +49,17 @@ ahsm is early and unpublished: `private: true`, no npm release yet, one developm
 ## Run it
 
 ```bash
-npx ahsm status             # run without installing
-npm i -g ahsm               # then: ahsm status
+npx @ernem22/ahsm status    # run without installing
+npm i -g @ernem22/ahsm      # then: ahsm status
 ```
 
-From a checkout:
+The first version is waiting for npm's staged-publish approval, so until it appears on the registry, run
+it from a checkout:
 
 ```bash
 npm ci
 npm run build
-node dist/cli.js status         # or: npm link  →  ahsm status
+node dist/cli.js status     # or: npm link  →  ahsm status
 ```
 
 ## Use it
@@ -165,15 +166,16 @@ Releases go through `.github/workflows/release.yml` on a `v*` tag, authenticated
 provenance generated automatically.
 
 **Once, for the very first version**, trusted publishing cannot be used: its configuration lives on the
-package's settings page, which does not exist until the package does. So publish `0.1.0` by hand
-(2FA code from your authenticator):
+package's settings page, which does not exist until the package does. A brand-new package's first publish
+also lands in npm's staging area instead of going live, so publish once and approve it:
 
 ```bash
-npm login
-npm publish                # publishes `ahsm`
+npm publish                # @ernem22/ahsm@0.1.0 → the staged area
 ```
 
-Then, on npmjs.com → the package → **Settings → Trusted publishers → GitHub Actions**:
+Then on npmjs.com: **Staged Packages** → approve the version (this needs 2FA; a security key such as
+Windows Hello is enough, no authenticator app), and under the package's
+**Settings → Trusted publishers → GitHub Actions**:
 
 | field | value |
 |---|---|
