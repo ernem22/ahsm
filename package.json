@@ -1,5 +1,5 @@
 {
-  "name": "agentenv",
+  "name": "agentenv-cli",
   "version": "0.1.0",
   "description": "Install and track agent-harness setup (skills, MCP servers, hooks) from one package list.",
   "type": "module",

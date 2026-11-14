@@ -1,5 +1,7 @@
 # agentenv
 
+The npm package is `agentenv-cli`; the command it installs is `agentenv`.
+
 Install and track agent-harness setup — skills, MCP servers and hooks — from one package list, across
 **Claude Code, Codex, pi and opencode**, and keep an honest record of what landed where.
 
@@ -46,19 +48,17 @@ agentenv is early and unpublished: `private: true`, no npm release yet, one deve
 
 ## Run it
 
-Not published yet, so from a checkout:
+```bash
+npx agentenv-cli status         # run without installing
+npm i -g agentenv-cli           # then: agentenv status
+```
+
+From a checkout:
 
 ```bash
 npm ci
 npm run build
-node dist/cli.js status        # or: npm link  →  agentenv status
-```
-
-To try it the way a published package would behave:
-
-```bash
-npm pack                        # agentenv-0.1.0.tgz
-npm i -g ./agentenv-0.1.0.tgz   # then: agentenv
+node dist/cli.js status         # or: npm link  →  agentenv status
 ```
 
 ## Use it
@@ -170,7 +170,7 @@ package's settings page, which does not exist until the package does. So publish
 
 ```bash
 npm login
-npm publish --otp 123456
+npm publish                # publishes `agentenv-cli`
 ```
 
 Then, on npmjs.com → the package → **Settings → Trusted publishers → GitHub Actions**:
