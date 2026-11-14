@@ -7,7 +7,7 @@ import { createContext, RecordingRunner, type Ctx, type Runner } from '../src/co
 import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
-import { expectFrame, expectFrameText, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, fixtureHome, OFFLINE_ROOT, startTui, waitIdle, type TuiHarness } from './tui-harness.js';
 
 const HASH = '0123456789abcdef0123456789abcdef01234567';
 /** The rows of the body start below the header's two lines and the surface's own name. */
@@ -87,6 +87,8 @@ async function openStale(tui: TuiHarness): Promise<void> {
     tui,
     () => tui.frame().includes(t.staleTitle) || tui.frame().includes(t.staleNotCovered) || tui.frame().includes(t.staleEmpty),
   );
+  // The report is on screen and the check is in: the next key is the surface's, not the wait's.
+  await waitIdle(tui);
 }
 
 /** One frame line as a string: an absent line is empty, so it fails the assertion it feeds. */
@@ -222,6 +224,8 @@ test('the slow read is named and timed, and Esc stops waiting without leaving', 
     assert.ok(tui.frame().includes(t.tui.stoppedWaiting), `no cancelled copy in:\n${tui.frame()}`);
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, 'Esc left the surface instead of stopping');
 
+    // The stopped check is a settled one: this Esc is the surface's, and it leaves.
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'the previous surface is not reachable');
     expectFrame(tui.lines(), { width: 120, rows: 30 });
@@ -280,9 +284,11 @@ test('slash narrows by name, states the matched count, and Esc clears before it 
     assert.equal(tui.frame().includes('stale  alpha'), false, 'the filter did not narrow');
 
     // Esc spends itself on the filter first, and the surface stays.
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal((tui.lines()[3] ?? '').includes('filter: none'), true, at(tui.lines(), 3));
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.stale}`), true, 'Esc cleared the surface, not the filter');
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'Esc did not leave the surface');
   } finally {
@@ -375,6 +381,7 @@ test('one Esc clears the name filter and the state filter together', async () =>
     assert.equal(stateRows(lines).length, 1, lines.join('\n'));
 
     // One step takes both filters: the spec's `Esc` clears the text and the state, not one of them.
+    await waitIdle(tui);
     await tui.press('\u001B');
     lines = tui.lines();
     assert.ok(at(lines, 3).includes('filter: none'), at(lines, 3));

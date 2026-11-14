@@ -8,7 +8,7 @@ import type { Plan } from '../src/core/plan.js';
 import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
 import { allUpdates, markableUpdates, toggleUpdate } from '../src/tui/plan.js';
-import { OFFLINE_ROOT, expectFrame, fixture, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
+import { OFFLINE_ROOT, expectFrame, fixture, fixtureHome, startTui, waitIdle, type TuiHarness } from './tui-harness.js';
 
 /** One string with every run of blanks collapsed: a wrap may move a space, never a word. */
 function flat(text: string): string {
@@ -318,6 +318,8 @@ test('n and Esc decline without writing, and the install selection is still ther
   try {
     await tui.press('\r', '\r', '\r');
     await settle(() => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`) ?? false);
+    // `a` marks the plan's requirement rows, so the plan has to be read before the key can act at all.
+    await waitIdle(tui);
     await tui.press('a');
 
     await tui.press('\r');
@@ -326,6 +328,8 @@ test('n and Esc decline without writing, and the install selection is still ther
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.plan}`), true, 'n did not decline back to the plan');
     assert.equal(ran(shared.runner, NODE_UPDATE), false, 'declining ran the marked update');
     assert.equal(ran(shared.runner, FAKE_UPDATE), false, 'declining ran an unmarked update');
+    // Coming back re-reads the plan, so the marks are only on the frame once that read is in again.
+    await waitIdle(tui);
     assert.ok(tui.frame().includes(t.updatesMarked), 'declining lost the marks');
 
     await tui.press('\r', '\u001B');
@@ -333,6 +337,8 @@ test('n and Esc decline without writing, and the install selection is still ther
     assert.equal(ran(shared.runner, NODE_UPDATE), false, 'Esc ran the marked update');
     assert.equal(ran(shared.runner, FAKE_UPDATE), false, 'Esc ran an unmarked update');
 
+    // The plan's own Esc leaves it: the plan is read, so the key is the surface's and not a wait's.
+    await waitIdle(tui);
     await tui.press('\u001B');
     const lines = tui.lines();
     assert.equal(lines[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true);

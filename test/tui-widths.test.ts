@@ -7,7 +7,7 @@ import { recordEntry, readState } from '../src/core/state.js';
 import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
-import { expectFrame, expectFrameText, fixture, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, fixture, fixtureHome, OFFLINE_ROOT, startTui, waitIdle, type TuiHarness } from './tui-harness.js';
 
 /** The widths the design names: the two layouts, their boundaries, and what sits either side. */
 const WIDTHS = [20, 30, 40, 59, 60, 80, 99, 100, 120];
@@ -103,6 +103,9 @@ async function settle(tui: TuiHarness, done: () => boolean, deadlineMs = 2000): 
 }
 
 async function back(tui: TuiHarness): Promise<void> {
+  // Every surface above is left by Esc only once its read is in: a busy frame would spend the key on
+  // stopping the wait, whatever the width under test is.
+  await waitIdle(tui);
   await tui.press('\u001B');
   await settle(tui, () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`) === true);
 }

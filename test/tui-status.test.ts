@@ -8,7 +8,7 @@ import { loadData } from '../src/data.js';
 import { readStatus } from '../src/core/status.js';
 import { t } from '../src/i18n.js';
 import { statusLines, type Line } from '../src/render.js';
-import { expectFrame, expectFrameText, fixture, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, fixture, fixtureHome, OFFLINE_ROOT, startTui, waitIdle, type TuiHarness } from './tui-harness.js';
 
 /** Where the detail column starts at 120 columns: the 50-column list, then the 2-column gutter. */
 const DETAIL_AT = 52;
@@ -62,6 +62,8 @@ async function openStatus(tui: TuiHarness, marker = t.harnesses): Promise<void> 
     tui,
     () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`) === true && tui.frame().includes(marker),
   );
+  // The report is on screen and the checks are in: the next key is the surface's, not the wait's.
+  await waitIdle(tui);
 }
 
 /** The detail column read as one string: wrapping may move a word, never drop one. */
@@ -218,9 +220,13 @@ test('no key on the status surface writes: the record and the tree are untouched
     const before = snapshot(shared.home);
     const calls = shared.runner.calls.length;
 
-    for (const key of ['\u001B[B', '\u001B[A', '\u001B[6~', '\u001B[5~', 'g', 'G', 'r', 'y', 'n', 'a', ' ', '?']) {
+    for (const key of ['\u001B[B', '\u001B[A', '\u001B[6~', '\u001B[5~', 'g', 'G', 'r', 'y', 'n', 'a', ' ']) {
       await tui.press(key);
     }
+    // `r` starts the read again and `?` opens the overlay: the check is waited for first, so the
+    // Esc that closes the overlay leaves a settled surface behind — one that still offers `Esc back`.
+    await waitIdle(tui);
+    await tui.press('?');
     await tui.press('\u001B');
     await settle(tui, () => tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`) === true);
 
@@ -257,6 +263,8 @@ test('the slow read is named and timed, and Esc stops waiting without leaving', 
     assert.ok(tui.frame().includes(t.tui.stoppedWaiting), `no cancelled copy in:\n${tui.frame()}`);
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.status}`), true, 'Esc left the surface instead of stopping');
 
+    // The stopped read is a settled one: this Esc is the surface's, and it leaves.
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'the previous surface is not reachable');
     expectFrame(tui.lines(), { width: 120, rows: 30 });

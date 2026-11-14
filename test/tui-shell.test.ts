@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { t } from '../src/i18n.js';
-import { expectFrame, fixture, startTui } from './tui-harness.js';
+import { expectFrame, fixture, startTui, waitIdle } from './tui-harness.js';
 
 const RAIL = 'i install · p plan · s status · l list · v stale · u update · x remove';
 
@@ -95,16 +95,15 @@ test('every letter of the rail reaches its surface, and Esc returns to install',
       ['l', 'list', t.skillsTitle],
       ['v', 'stale', t.staleEmpty],
       ['u', 'update', t.updateNone],
-      ['x', 'remove', t.tui.surfaces.remove],
+      ['x', 'remove', t.tui.removeEmpty],
     ];
     for (const [key, name, marker] of rail) {
       await tui.press(key);
+      // The surface is reached when its read is in, not when the header names it: a key pressed into
+      // the wait is the wait's, so the answer is waited for before anything is asserted or pressed.
+      await waitIdle(tui);
       assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${name}`), true, `${key} did not reach ${name}`);
       assert.equal(tui.lines()[2], name, `${name} did not print its own name`);
-
-      // The read answers before the key: a settled surface spends Esc on leaving, not on a wait.
-      const deadline = Date.now() + 1500;
-      while (!tui.frame().includes(marker) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
       assert.ok(tui.frame().includes(marker), `${name} never answered:\n${tui.frame()}`);
       assert.ok((tui.lines().at(-1) ?? '').includes('Esc back'), `${name} does not offer Esc back:\n${tui.frame()}`);
 
@@ -146,6 +145,7 @@ test('at 40 columns the rail is gone and every letter still moves surfaces', asy
   try {
     for (const [key, name] of [['l', 'list'], ['v', 'stale'], ['x', 'remove'], ['i', 'install']] as [string, string][]) {
       await tui.press(key);
+      await waitIdle(tui);
       assert.equal(tui.lines()[0], `agentenv  ${name}`, `${key} did not reach ${name} at 40 columns`);
     }
   } finally {

@@ -79,6 +79,16 @@ class FakeStdin extends PassThrough {
 const LONE_ESCAPE = '\u001B';
 /** Upper bound for that buffered key to arrive; the wait ends the moment its frame does. */
 const ESCAPE_FLUSH_TIMEOUT_MS = 250;
+/** Upper bound for a surface to leave its busy frame; the wait ends the moment it does. */
+const IDLE_TIMEOUT_MS = 2500;
+
+/**
+ * The Esc step a slow rows surface advertises while its read runs: pressing it would stop the wait.
+ * Every rows table lists it first, so it leads the keybar and survives the cut at any width.
+ */
+const STOP_WAITING = `${t.tui.keyNames.escape} ${t.tui.keys.stopWaiting}`;
+/** What a body says while work is in flight — the reads (`reading the …`), the plan, the writes. */
+const BUSY = ['reading the', t.planBuilding, t.tui.applying(0).replace(/\s*\d+s$/, '')];
 
 export interface TuiOptions {
   data: Data;
@@ -152,6 +162,33 @@ export async function startTui(options: TuiOptions): Promise<TuiHarness> {
       await instance.waitUntilExit();
     },
   };
+}
+
+/**
+ * Waits until the surface on screen has nothing in flight, so the next key is the surface's own key.
+ *
+ * A read is a promise, and the frame that names it stays until the answer arrives; while it does, `Esc`
+ * belongs to the wait rather than to the surface (stop the read, then clear the filter, then go back).
+ * A test that pressed `Esc` into that frame asserts the cancel, not the navigation — and whether it did
+ * is a race with the machine's speed. Every test that presses a key to leave waits here first, and so
+ * does every test whose next key is only bound by the answer (`a` on a plan with nothing read yet).
+ *
+ * A rows surface leads its keybar with the waiting step, so its absence is what says the surface is
+ * idle — at any width, including one too narrow to print `Esc back` at all — and the body's own busy
+ * line is checked beside it, for the plan and the writes that have no waiting step to stop. The two
+ * reads that never answer are left open on purpose: those tests press `Esc` to stop the read and then
+ * wait here, which sees the settled `stopped` frame like any other answer.
+ */
+export async function waitIdle(tui: TuiHarness, deadlineMs = IDLE_TIMEOUT_MS): Promise<void> {
+  const keybar = (): string => tui.lines().at(-1) ?? '';
+  const busy = (): boolean => keybar().includes(STOP_WAITING) || BUSY.some((line) => tui.frame().includes(line));
+  const deadline = Date.now() + deadlineMs;
+  while (busy() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(
+    busy(),
+    false,
+    `the surface never went idle: its frame still names work in flight, so a key would cancel it instead of acting:\n${tui.frame()}`,
+  );
 }
 
 /** A disposable home; `detected: true` plants the fixture harness's detect path in it. */

@@ -7,7 +7,7 @@ import { readState, statePath, writeState, type StateEntry } from '../src/core/s
 import { t } from '../src/i18n.js';
 import type { InstalledSkill, SkillsAdapter } from '../src/providers/skills-api.js';
 import type { Data, Kind } from '../src/types.js';
-import { expectFrame, expectFrameText, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, fixtureHome, startTui, waitIdle, type TuiHarness } from './tui-harness.js';
 
 const HOOK_COMMAND = `node -e "require('fs').appendFileSync('hook.log','x')"`;
 
@@ -178,6 +178,8 @@ async function openRemove(tui: TuiHarness): Promise<void> {
       tui.frame().includes(t.tui.removeEmpty) ||
       tui.frame().includes(t.tui.removeUnremovable),
   );
+  // The plan is on screen and its read is in: the next key is the surface's, not the wait's.
+  await waitIdle(tui);
 }
 
 /** The rows in the row column, focused or not: each entry begins with the formatter's `- id [kind]`. */
@@ -338,6 +340,7 @@ test('n and Esc decline without writing, and Esc in the name mode cancels the mo
     assert.equal(tui.frame().includes(`${t.tui.removeNamePrompt} ghost`), false, 'the cancelled name is still there');
 
     // In the settled plan, Esc leaves the surface without writing.
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
 

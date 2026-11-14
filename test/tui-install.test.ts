@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { t } from '../src/i18n.js';
-import { expectFrame, OFFLINE_ROOT, fixture, startTui } from './tui-harness.js';
+import { expectFrame, OFFLINE_ROOT, fixture, startTui, waitIdle } from './tui-harness.js';
 
 /** The rows under one section heading, up to the blank line that separates it from the next section. */
 function section(lines: string[], heading: string): string[] {
@@ -319,6 +319,8 @@ test('the row marks and the part separator are the ones i18n holds', async () =>
 
     // The plan body leads every row with the same focus mark, from the same table.
     await tui.press('\r');
+    // `Enter` opens the plan, and the plan is read before it has a row to lead with.
+    await waitIdle(tui);
     assert.equal(tui.lines().some((line) => line.startsWith(t.tui.marks.focused)), true, tui.frame());
   } finally {
     await tui.stop();

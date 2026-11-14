@@ -10,7 +10,7 @@ import { t } from '../src/i18n.js';
 import { planLines } from '../src/render.js';
 import { orderedPlan } from '../src/tui/plan.js';
 import type { Data } from '../src/types.js';
-import { expectFrame, expectFrameText, OFFLINE_ROOT, fixture, fixtureHome, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, OFFLINE_ROOT, fixture, fixtureHome, startTui, waitIdle, type TuiHarness } from './tui-harness.js';
 
 const ITEMS = ['skill-a', 'mcp-a', 'hook-a'];
 /** Where the detail column starts at 120 columns: the 50-column list, then the 2-column gutter. */
@@ -299,6 +299,8 @@ test('p opens the plan read-only, and Esc returns with the selection intact', as
     await tui.press('y', 'n');
     assert.equal(tui.frame(), before, 'a key wrote to or re-read the plan surface');
 
+    // The plan is read before Esc has the surface's own step to take, which is what the keybar says.
+    await waitIdle(tui);
     await tui.press('\u001B');
     const lines = tui.lines();
     assert.equal(lines[0]?.startsWith('agentenv  install'), true);

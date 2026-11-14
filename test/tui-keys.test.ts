@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { t } from '../src/i18n.js';
 import { entryText, RAIL as RAIL_ROWS, SURFACES as SURFACE_IDS, type SurfaceId } from '../src/tui/keys.js';
-import { expectFrame, fixture, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, fixture, startTui, waitIdle, type TuiHarness } from './tui-harness.js';
 
 /**
  * One row per surface: how to reach it, when its own read has settled, the keys it names in its own
@@ -213,6 +213,9 @@ test('every surface lists its key once, in the overlay, and dispatches the entry
         if (MODE.has(token(entry))) continue;
         assert.equal(rows.find((row) => token(row) === token(entry)), entry, `${surface.id} lists ${entry}, not the binding dispatch takes`);
       }
+      // The surface's read answered before the overlay opened, and nothing started one since: this Esc
+      // is the one the settled keybar lists, not the stop-waiting step a read in flight would claim.
+      await waitIdle(tui);
       await tui.press('\u001B');
       const destination = surface.back === 'stay' ? t.tui.surfaces.install : t.tui.surfaces[surface.back];
       assert.equal(

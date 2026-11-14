@@ -8,7 +8,7 @@ import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
 import type { InstalledSkill, SkillsAdapter } from '../src/providers/skills-api.js';
 import type { Data } from '../src/types.js';
-import { expectFrame, expectFrameText, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, expectFrameText, fixtureHome, OFFLINE_ROOT, startTui, waitIdle, type TuiHarness } from './tui-harness.js';
 
 /** Where the detail column starts at 120 columns: the 50-column list, then the 2-column gutter. */
 const DETAIL_AT = 52;
@@ -150,11 +150,14 @@ test('slash filters as you type, states the matched count, and Esc clears before
     assert.equal(tui.frame().includes('z-001'), false, 'the filter did not narrow');
     assert.ok(tui.frame().includes('ask-sonner'), 'a matching row was filtered out');
 
-    // Esc clears the filter and stays; a second Esc leaves the surface.
+    // Esc clears the filter and stays; a second Esc leaves the surface. Both presses are the
+    // surface's, not the wait's: the surface is idle before either one.
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.ok((tui.lines()[3] ?? '').includes('filter: none'), at(tui.lines(), 3));
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'Esc cleared the surface, not the filter');
     assert.equal(tui.frame().includes(match), false, 'the cleared filter still counts matches');
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'Esc did not leave the surface');
   } finally {
@@ -218,6 +221,7 @@ test('Esc clears the carrier filter too, in the same step as the name filter', a
     assert.ok((tui.lines()[3] ?? '').includes('filter: a'), at(tui.lines(), 3));
 
     // One step takes the typed filter and the carrier toggle: `f` and `/` are both cleared.
+    await waitIdle(tui);
     await tui.press('\u001B');
     const lines = tui.lines();
     assert.ok((lines[3] ?? '').includes('filter: none'), at(lines, 3));
@@ -240,6 +244,9 @@ test('with the overlay open the surface owns no Esc: the overlay closes, the fil
     assert.ok(filtered.includes('filter: s'), filtered);
     assert.ok((tui.lines().at(-1) ?? '').startsWith('Esc clear filter'), tui.lines().at(-1) ?? '');
 
+    // The read is in before the overlay opens, so the keybar Esc closes will be the overlay's own:
+    // closing it leaves a settled surface behind, and the frame after is the one asserted.
+    await waitIdle(tui);
     await tui.press('?');
     const lines = tui.lines();
     const heading = lines.indexOf(t.tui.helpTitle(t.tui.surfaces.list));
@@ -314,6 +321,8 @@ test('the slow read is named and timed, and Esc stops waiting without leaving', 
     assert.ok(tui.frame().includes(t.tui.stoppedWaiting), `no stopped copy in:\n${tui.frame()}`);
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.list}`), true, 'Esc left the surface instead of stopping');
 
+    // The stopped read is a settled one: this Esc is the surface's, and it leaves.
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith('agentenv  install'), true, 'the previous surface is not reachable');
     expectFrame(tui.lines(), { width: 120, rows: 30 });
@@ -348,7 +357,11 @@ test('the list is read-only: a visit writes nothing and runs nothing', async () 
   const tui = await startTui({ ...shared, width: 120 });
   try {
     await openList(tui);
-    for (const key of ['\u001B[B', '\u001B[6~', 'G', '/', 's', '\u001B', '\u001B', 'l', 'f', 'f', 'r']) await tui.press(key);
+    for (const key of ['\u001B[B', '\u001B[6~', 'G', '/', 's']) await tui.press(key);
+    // One Esc clears the filter and the next one leaves: both are the surface's own, not the wait's.
+    await waitIdle(tui);
+    await tui.press('\u001B', '\u001B');
+    for (const key of ['l', 'f', 'f', 'r']) await tui.press(key);
     await settle(tui, () => tui.frame().includes(t.listCount(103)));
     assert.equal(snapshot(shared.home), before, 'the list surface wrote to the home');
     assert.deepEqual(shared.runner.calls, [], 'the list surface ran a command');

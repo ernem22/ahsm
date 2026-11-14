@@ -9,7 +9,7 @@ import { buildUpdatePlan } from '../src/core/update.js';
 import { loadData } from '../src/data.js';
 import { t } from '../src/i18n.js';
 import type { Data } from '../src/types.js';
-import { expectFrame, fixtureHome, OFFLINE_ROOT, startTui, type TuiHarness } from './tui-harness.js';
+import { expectFrame, fixtureHome, OFFLINE_ROOT, startTui, waitIdle, type TuiHarness } from './tui-harness.js';
 
 const HASH = '0123456789abcdef0123456789abcdef01234567';
 /** The provider's check as the in-memory runner answers it: what the surface's read depends on. */
@@ -198,6 +198,9 @@ async function settle(tui: TuiHarness, done: () => boolean, deadlineMs = 1500): 
 async function readAgain(tui: TuiHarness, shared: Setup, key: string, done: () => boolean): Promise<void> {
   const release = shared.runner.holdCheck();
   try {
+    // The key that lands on the next surface is only that surface's once this one has answered: a read
+    // still in flight would spend an `Esc` on stopping itself instead of declining.
+    await waitIdle(tui);
     await tui.press(key);
     await settle(tui, () => tui.frame().includes(t.tui.updateCheck));
   } finally {
@@ -353,9 +356,11 @@ test('n and Esc decline without writing, back to the surface u was opened from',
 
     // Opened from the rail, the same key goes back to install instead. Stale has answered above, so
     // this Esc is the surface's back, not the stop-waiting key a read in flight would claim.
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
     await openUpdate(tui, shared);
+    await waitIdle(tui);
     await tui.press('\u001B');
     assert.equal(tui.lines()[0]?.startsWith(`agentenv  ${t.tui.surfaces.install}`), true, tui.lines()[0] ?? '');
     assert.deepEqual(shared.runner.installs, [], 'declining from the rail wrote something');
