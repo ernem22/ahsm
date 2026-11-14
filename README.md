@@ -160,19 +160,40 @@ capturing output stream, asserting on frames with ANSI stripped.
 
 ## Releasing
 
-Authentication is [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/): no token
-secret, no OTP. One-time setup on npmjs.com — package (or account) → **Trusted Publishers** → GitHub —
-with repository `ernem22/agentenv`, workflow `release.yml`, environment left empty.
+Releases go through `.github/workflows/release.yml` on a `v*` tag, authenticated by
+[npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) — no token secret, no OTP, and
+provenance generated automatically.
 
-Then:
+**Once, for the very first version**, trusted publishing cannot be used: its configuration lives on the
+package's settings page, which does not exist until the package does. So publish `0.1.0` by hand
+(2FA code from your authenticator):
 
 ```bash
-npm version patch       # or minor/major — bumps package.json and makes the commit + tag
-git push --follow-tags  # the `release` workflow runs the gate and publishes with provenance
+npm login
+npm publish --otp 123456
 ```
 
-The workflow refuses a tag that does not match `package.json`, so a mistaken tag cannot publish the
-wrong version.
+Then, on npmjs.com → the package → **Settings → Trusted publishers → GitHub Actions**:
+
+| field | value |
+|---|---|
+| Organization or user | `ernem22` |
+| Repository | `agentenv` |
+| Workflow filename | `release.yml` |
+| Environment name | *(empty)* |
+| Allowed actions | tick **npm publish** — new configurations default to staged publishing only |
+
+The configuration must complete a first publish within two days or it expires. After that, every release
+is:
+
+```bash
+npm version patch       # or minor/major — bumps package.json, commits, tags
+git push --follow-tags  # the release workflow runs the check gate and publishes
+```
+
+The workflow refuses a tag that does not match `package.json`, so a mistaken tag cannot publish the wrong
+version. If the workflow reports `ENEEDAUTH`, the workflow filename on npmjs.com does not match
+`release.yml` exactly — npm does not validate that field when it is saved.
 
 ## Documentation
 
