@@ -158,6 +158,22 @@ npm run cli:diff       # assert the CLI's output did not move (--base <rev> to c
 The TUI is tested through `test/tui-harness.ts`: the real app rendered against a fake input stream and a
 capturing output stream, asserting on frames with ANSI stripped.
 
+## Releasing
+
+Authentication is [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/): no token
+secret, no OTP. One-time setup on npmjs.com — package (or account) → **Trusted Publishers** → GitHub —
+with repository `ernem22/agentenv`, workflow `release.yml`, environment left empty.
+
+Then:
+
+```bash
+npm version patch       # or minor/major — bumps package.json and makes the commit + tag
+git push --follow-tags  # the `release` workflow runs the gate and publishes with provenance
+```
+
+The workflow refuses a tag that does not match `package.json`, so a mistaken tag cannot publish the
+wrong version.
+
 ## Documentation
 
 - `goal-and-requirements.md` — what the product is for and what it refuses to do.

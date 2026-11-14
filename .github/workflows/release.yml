@@ -1,0 +1,48 @@
+name: release
+
+# Publishes on a version tag (`v0.1.0`). Authentication is npm Trusted Publishing (OIDC): no
+# NPM_TOKEN secret exists, and the workflow must be registered once on npmjs.com as this package's
+# trusted publisher (repository `ernem22/agentenv`, workflow `release.yml`).
+# Requires npm CLI >= 11.5.1, which is why npm is upgraded below.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Deliberately no `registry-url`: it writes an .npmrc holding an empty NODE_AUTH_TOKEN, which
+      # takes precedence over the OIDC exchange.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.20'
+          cache: npm
+
+      - run: npm install -g npm@latest
+      - run: npm --version
+
+      - run: npm ci
+
+      - name: The tag must match package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package.json version $version" >&2
+            exit 1
+          fi
+
+      # The same gate every pull request runs: line endings, script syntax, both typechecks, the
+      # unit suite and the five offline end-to-end suites.
+      - run: npm run check
+
+      - run: npm publish --provenance --access public
